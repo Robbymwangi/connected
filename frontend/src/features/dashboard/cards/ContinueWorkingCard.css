@@ -1,0 +1,11 @@
+/* Continue Working card: brand gradient with a soft highlight, built from the primary
+   token so it follows the palette rather than carrying its own colours. */
+.continue-card {
+  background:
+    radial-gradient(ellipse 80% 60% at 80% 40%, color-mix(in srgb, var(--primary-foreground) 7%, transparent) 0%, transparent 65%),
+    linear-gradient(118deg, color-mix(in srgb, var(--primary) 82%, transparent) 0%, color-mix(in srgb, var(--primary) 78%, var(--foreground) 10%) 55%, color-mix(in srgb, var(--primary) 72%, var(--foreground) 18%) 100%);
+  backdrop-filter: blur(18px) saturate(130%);
+  box-shadow:
+    0 4px 32px color-mix(in srgb, var(--primary) 28%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--primary-foreground) 22%, transparent);
+}

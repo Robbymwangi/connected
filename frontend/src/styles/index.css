@@ -1,0 +1,51 @@
+@import "tailwindcss";
+@import "./fonts.css";
+@import "./tokens.css";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+/* Fraunces is for display and headings only; everything else stays in Figtree. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+}
+
+/* Marks, totals, and anything columnar: equal-width digits so figures line up. */
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Dialog motion, shared by every modal. */
+@keyframes dialog-enter {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes dialog-exit {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(24px) scale(0.97); }
+}
+@keyframes backdrop-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes backdrop-exit  { from { opacity: 1; } to { opacity: 0; } }
+
+.dialog-backdrop--open  { animation: backdrop-enter 220ms ease forwards; }
+.dialog-backdrop--close { animation: backdrop-exit 180ms ease forwards; }
+.dialog-panel--open     { animation: dialog-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.dialog-panel--close    { animation: dialog-exit 180ms ease-in forwards; }

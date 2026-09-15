@@ -4,7 +4,19 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <title>ConnectED</title>
+    <script>
+      /* Apply the stored theme before the first paint so a user who chose dark never
+         sees a white flash. Reads local storage only; it must never need the network.
+         The storage key is shared with src/lib/theme.ts. */
+      try {
+        if (localStorage.getItem('theme') === 'dark') {
+          document.documentElement.classList.add('dark')
+        }
+      } catch {
+        /* Storage unavailable (private mode, blocked). Fall through to light. */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,0 +1,122 @@
+/* Design tokens. Two layers:
+
+   1. Semantic CSS custom properties, light in :root and dark under .dark. These are
+      the only place a colour value is written. The .dark class is set on <html> by the
+      inline script in index.html before React mounts, and toggled by the theme control.
+   2. A Tailwind @theme block that exposes each property as a utility (bg-card,
+      text-muted-foreground, font-display, and so on). Components use the utilities, or
+      var(--name) inside SVG and inline styles where a utility cannot reach; never a
+      raw hex value. */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #fdfbf7;
+  --foreground: #2d2926;
+  --card: rgba(255, 255, 255, 0.72);
+  --card-foreground: #2d2926;
+  --primary: #c1440e;
+  --primary-foreground: #ffffff;
+  --secondary: #e6e2d8;
+  --secondary-foreground: #4a4541;
+  --muted: rgba(45, 41, 38, 0.06);
+  --muted-foreground: #78736e;
+  --border: rgba(45, 41, 38, 0.1);
+  --shell: #e8e3dc;
+  --overlay: rgba(0, 0, 0, 0.18);
+
+  /* Status. Green for connectivity and success, red for alerts and destructive
+     actions, amber and blue for the two bell-curve markers and neutral notices. */
+  --success: #16a34a;
+  --success-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+  --info: #3b82f6;
+  --info-foreground: #ffffff;
+  --danger: #dc2626;
+  --danger-foreground: #ffffff;
+
+  /* Charts. */
+  --chart-line: #c1440e;
+  --chart-fill: rgba(193, 68, 14, 0.13);
+  --chart-mean: #3b82f6;
+  --chart-cohort: #d97706;
+  --chart-grid: rgba(0, 0, 0, 0.1);
+  --chart-axis-text: #78736e;
+  --tooltip: #1a1816;
+  --tooltip-foreground: #ffffff;
+}
+
+.dark {
+  --background: #1a1816;
+  --foreground: #f4f0ec;
+  --card: rgba(40, 36, 33, 0.74);
+  --card-foreground: #f4f0ec;
+  --primary: #c1440e;
+  --primary-foreground: #ffffff;
+  --secondary: #332f2c;
+  --secondary-foreground: #d1cbc5;
+  --muted: rgba(255, 255, 255, 0.06);
+  --muted-foreground: #a39c96;
+  --border: rgba(255, 255, 255, 0.1);
+  --shell: #110f0e;
+  --overlay: rgba(0, 0, 0, 0.18);
+
+  --success: #4ade80;
+  --success-foreground: #1a1816;
+  --warning: #fbbf24;
+  --warning-foreground: #1a1816;
+  --info: #60a5fa;
+  --info-foreground: #1a1816;
+  --danger: #ef4444;
+  --danger-foreground: #ffffff;
+
+  --chart-line: #c1440e;
+  --chart-fill: rgba(193, 68, 14, 0.22);
+  --chart-mean: #60a5fa;
+  --chart-cohort: #fbbf24;
+  --chart-grid: rgba(255, 255, 255, 0.1);
+  --chart-axis-text: #a39c96;
+  --tooltip: #332f2c;
+  --tooltip-foreground: #ffffff;
+}
+
+@theme {
+  /* Type. --font-sans is what Tailwind's default utilities and Preflight use, so
+     pointing it at Figtree makes body type the default everywhere. */
+  --font-sans: "Figtree", system-ui, sans-serif;
+  --font-body: "Figtree", system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-shell: var(--shell);
+  --color-overlay: var(--overlay);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+
+  --color-chart-line: var(--chart-line);
+  --color-chart-fill: var(--chart-fill);
+  --color-chart-mean: var(--chart-mean);
+  --color-chart-cohort: var(--chart-cohort);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis-text: var(--chart-axis-text);
+  --color-tooltip: var(--tooltip);
+  --color-tooltip-foreground: var(--tooltip-foreground);
+}
