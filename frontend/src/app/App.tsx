@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Dashboard } from '../features/dashboard/Dashboard'
 import { AppShell } from '../layout/AppShell'
 import type { NavId } from '../layout/navigation'
 
@@ -9,14 +10,16 @@ export default function App() {
 
   return (
     <AppShell active={active} onNavigate={setActive}>
-      <div className="px-4 pt-4 pb-8 lg:px-5">
-        <div className="mx-auto max-w-7xl">
-          <h2 className="text-2xl font-semibold text-foreground capitalize">{active}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Dashboard cards arrive in session three.
-          </p>
+      {active === 'dashboard' ? (
+        <Dashboard onNavigate={setActive} />
+      ) : (
+        <div className="px-4 pt-4 pb-8 lg:px-5">
+          <div className="mx-auto max-w-7xl">
+            <h2 className="text-2xl font-semibold text-foreground capitalize">{active}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Not built yet.</p>
+          </div>
         </div>
-      </div>
+      )}
     </AppShell>
   )
 }
