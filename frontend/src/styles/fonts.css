@@ -1,0 +1,38 @@
+/* Self-hosted variable fonts. Both families are SIL OFL; licences sit beside the files.
+   Vite fingerprints these into the build, and the service worker precache picks them
+   up from there, so a device that has never been online still has them.
+
+   Fraunces axes: opsz 9..144, wght 100..900 (SOFT and WONK are left at their
+   defaults). Figtree axes: wght 300..900. */
+
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/Fraunces-VF.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Fraunces";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/Fraunces-Italic-VF.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("./fonts/Figtree-VF.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Figtree";
+  font-style: italic;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("./fonts/Figtree-Italic-VF.woff2") format("woff2");
+}

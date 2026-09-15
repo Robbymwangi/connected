@@ -1,0 +1,34 @@
+@import "tailwindcss";
+@import "./fonts.css";
+@import "./tokens.css";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+/* Fraunces is for display and headings only; everything else stays in Figtree. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+}
+
+/* Marks, totals, and anything columnar: equal-width digits so figures line up. */
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
