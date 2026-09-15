@@ -1,45 +1,55 @@
 import { Ellipsis, LogOut, X } from 'lucide-react'
+import { useState } from 'react'
 import { Button } from '../components/Button'
 import { NavItem } from '../components/NavItem'
 import { currentUser } from '../fixtures/user'
 import { NAV_MAIN, NAV_TOOLS, type NavId } from './navigation'
+import { UserMenu } from './UserMenu'
 
 type SidebarProps = {
   open: boolean
+  /* Pinned means opened by a click and held until closed. An unpinned open panel
+     is a hover peek: no scrim, no close button, and it retracts on mouse leave. */
+  pinned: boolean
   onClose: () => void
+  onHoverEnd: () => void
   active: NavId
   onNavigate: (id: NavId) => void
 }
 
-/* The sidebar is a drawer at every breakpoint: a scrim over the page and a panel that
-   slides in from the left. Choosing a destination closes it. */
-export function Sidebar({ open, onClose, active, onNavigate }: SidebarProps) {
+export function Sidebar({ open, pinned, onClose, onHoverEnd, active, onNavigate }: SidebarProps) {
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const scrim = open && pinned
+
   return (
     <>
       <div
         aria-hidden
         onClick={onClose}
         className={`fixed inset-0 z-40 bg-overlay backdrop-blur-sm transition-opacity duration-300 ${
-          open ? 'opacity-100' : 'pointer-events-none opacity-0'
+          scrim ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
       />
 
       <aside
         aria-label="Main navigation"
         aria-hidden={!open}
+        onMouseLeave={onHoverEnd}
         className={`fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col shadow-2xl backdrop-blur-xl transition-transform duration-300 ease-in-out ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="absolute top-4 right-4 z-50">
-          <Button
-            onClick={onClose}
-            aria-label="Close navigation"
-            className="rounded-full bg-card/80 shadow-sm backdrop-blur-md"
-          >
-            <X className="size-5" />
-          </Button>
-        </div>
+        {pinned && (
+          <div className="absolute top-4 right-4 z-50">
+            <Button
+              onClick={onClose}
+              aria-label="Close navigation"
+              className="rounded-full bg-card/80 shadow-sm backdrop-blur-md"
+            >
+              <X className="size-5" />
+            </Button>
+          </div>
+        )}
 
         <div className="sidebar-drawer-glass flex h-full flex-col border-r border-border/50 transition-colors">
           <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-5">
@@ -61,7 +71,7 @@ export function Sidebar({ open, onClose, active, onNavigate }: SidebarProps) {
                   active={active === id}
                   onClick={() => {
                     onNavigate(id)
-                    onClose()
+                    if (pinned) onClose()
                   }}
                 />
               ))}
@@ -80,9 +90,16 @@ export function Sidebar({ open, onClose, active, onNavigate }: SidebarProps) {
                   </p>
                   <p className="text-xs text-muted-foreground">{currentUser.role}</p>
                 </div>
-                <Button aria-label="Account options">
-                  <Ellipsis className="size-5" />
-                </Button>
+                <div className="relative">
+                  <Button
+                    aria-label="Account options"
+                    aria-expanded={userMenuOpen}
+                    onClick={() => setUserMenuOpen((v) => !v)}
+                  >
+                    <Ellipsis className="size-5" />
+                  </Button>
+                  <UserMenu open={userMenuOpen} onClose={() => setUserMenuOpen(false)} />
+                </div>
               </div>
               <Button
                 variant="danger"

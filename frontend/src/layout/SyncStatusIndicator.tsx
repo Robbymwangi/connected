@@ -11,10 +11,11 @@ type SyncStatusIndicatorProps = {
 }
 
 /* Two facts, shown separately. The pill reports connectivity and nothing else. The
-   line beneath reports sync state: a pending count when the outbox holds mutations,
-   otherwise when it was last drained. A device can be online with queued work, and
-   a green pill on its own would misrepresent that, so the pending line is set in the
-   warning colour and weight to take precedence. */
+   line beneath reports sync state: when the outbox was last drained, always, because
+   the gap between that time and now is how a user estimates drift from the server;
+   and a pending count in front of it when the outbox holds mutations. A device can be
+   online with queued work, and a green pill on its own would misrepresent that, so
+   the count is set in the warning colour and weight to take precedence. */
 export function SyncStatusIndicator({
   isOnline,
   pendingCount,
@@ -44,15 +45,12 @@ export function SyncStatusIndicator({
       ) : (
         pill
       )}
-      {pendingCount > 0 ? (
-        <span className="text-[11px] font-semibold text-warning tabular">
-          {pendingCount} pending
-        </span>
-      ) : (
-        <span className="text-[11px] font-medium text-muted-foreground">
-          Synced {formatRelative(lastSyncedAt)}
-        </span>
-      )}
+      <span className="text-[11px] font-medium text-muted-foreground">
+        {pendingCount > 0 && (
+          <span className="font-semibold text-warning tabular">{pendingCount} pending, </span>
+        )}
+        synced {formatRelative(lastSyncedAt)}
+      </span>
     </div>
   )
 }

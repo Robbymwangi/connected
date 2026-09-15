@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
 
-export type StatusTone = 'success' | 'neutral' | 'warning' | 'danger'
+export type StatusTone = 'success' | 'info' | 'neutral' | 'warning' | 'danger'
 
 const TONE_CLASSES: Record<StatusTone, string> = {
   success: 'border-success/20 bg-success/10 text-success',
+  info: 'border-info/20 bg-info/10 text-info',
   neutral: 'border-border bg-muted text-muted-foreground',
   warning: 'border-warning/20 bg-warning/10 text-warning',
   danger: 'border-danger/20 bg-danger/10 text-danger',

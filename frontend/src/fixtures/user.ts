@@ -4,4 +4,5 @@ export const currentUser = {
   fullName: 'John Doe',
   initials: 'JD',
   role: 'Teacher',
+  email: 'john.doe@school.edu',
 }
