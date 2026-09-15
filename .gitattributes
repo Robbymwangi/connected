@@ -1,0 +1,9 @@
+# Normalise line endings to LF in the repository and the working copy on every
+# platform, regardless of a developer's global core.autocrlf setting.
+* text=auto eol=lf
+
+# Binary assets: never touch.
+*.woff2 binary
+*.png binary
+*.jpg binary
+*.ico binary
