@@ -32,3 +32,20 @@ h6 {
 @utility tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* Dialog motion, shared by every modal. */
+@keyframes dialog-enter {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes dialog-exit {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(24px) scale(0.97); }
+}
+@keyframes backdrop-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes backdrop-exit  { from { opacity: 1; } to { opacity: 0; } }
+
+.dialog-backdrop--open  { animation: backdrop-enter 220ms ease forwards; }
+.dialog-backdrop--close { animation: backdrop-exit 180ms ease forwards; }
+.dialog-panel--open     { animation: dialog-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.dialog-panel--close    { animation: dialog-exit 180ms ease-in forwards; }

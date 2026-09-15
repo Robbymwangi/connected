@@ -10,6 +10,7 @@ const DOT_CLASSES: Record<StatusTone, string> = {
   neutral: 'bg-muted-foreground',
   warning: 'bg-warning',
   danger: 'bg-danger',
+  primary: 'bg-primary',
 }
 
 type NotificationsPopupProps = {

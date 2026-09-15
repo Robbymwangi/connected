@@ -1,11 +1,15 @@
 import { useRef, type ReactNode } from 'react'
 import { useClickOutside } from '../lib/useClickOutside'
 
-type Anchor = 'top-right' | 'bottom-left'
+type Anchor = 'top-left' | 'top-right' | 'bottom-left'
 
 /* Where the panel sits relative to its positioned parent, and which way it slides
    in from. */
 const ANCHOR_CLASSES: Record<Anchor, { position: string; closed: string }> = {
+  'top-left': {
+    position: 'top-[calc(100%+6px)] left-0 origin-top-left',
+    closed: '-translate-y-2 scale-[0.97]',
+  },
   'top-right': {
     position: 'top-[calc(100%+8px)] right-0 origin-top-right',
     closed: '-translate-y-2 scale-[0.97]',

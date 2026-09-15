@@ -1,23 +1,30 @@
 import { useState } from 'react'
+import { AssessmentsScreen } from '../features/assessments/AssessmentsScreen'
 import { Dashboard } from '../features/dashboard/Dashboard'
 import { AppShell } from '../layout/AppShell'
 import type { NavId } from '../layout/navigation'
+import { home, type Location } from './location'
 
-/* Navigation is local state until a router lands; only the dashboard exists yet, so
-   the other destinations show a placeholder. */
 export default function App() {
-  const [active, setActive] = useState<NavId>('dashboard')
+  const [location, setLocation] = useState<Location>(home)
+  const navigate = (screen: NavId) =>
+    setLocation(screen === 'assessments' ? { screen: 'assessments' } : { screen })
 
   return (
-    <AppShell active={active} onNavigate={setActive}>
-      {active === 'dashboard' ? (
-        <Dashboard onNavigate={setActive} />
-      ) : (
-        <div className="px-4 pt-4 pb-8 lg:px-5">
-          <div className="mx-auto max-w-7xl">
-            <h2 className="text-2xl font-semibold text-foreground capitalize">{active}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Not built yet.</p>
-          </div>
+    <AppShell active={location.screen} onNavigate={navigate}>
+      {location.screen === 'dashboard' && <Dashboard onNavigate={navigate} />}
+      {location.screen === 'assessments' && (
+        <AssessmentsScreen
+          assessmentId={location.assessmentId}
+          view={location.view}
+          onOpen={(assessmentId, view) => setLocation({ screen: 'assessments', assessmentId, view })}
+          onBackToList={() => setLocation({ screen: 'assessments' })}
+        />
+      )}
+      {location.screen !== 'dashboard' && location.screen !== 'assessments' && (
+        <div className="px-5 pt-6 pb-10 lg:px-8">
+          <h1 className="text-2xl font-bold text-foreground capitalize">{location.screen}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Not built yet.</p>
         </div>
       )}
     </AppShell>
