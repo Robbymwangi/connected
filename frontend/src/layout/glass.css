@@ -1,0 +1,37 @@
+/* Layered glass treatments used by the shell. Every colour is a token; the only
+   literal values are the shadow and highlight alphas, which are part of the effect
+   rather than the palette. */
+
+/* Top bar: brand-tinted gradient that fades to plain card glass on the right. */
+.topbar-glass {
+  background: linear-gradient(
+    112deg,
+    color-mix(in srgb, var(--primary) 35%, color-mix(in srgb, var(--card) 85%, transparent)) 0%,
+    color-mix(in srgb, var(--primary) 20%, color-mix(in srgb, var(--card) 80%, transparent)) 44%,
+    color-mix(in srgb, var(--card) 74%, transparent) 100%
+  );
+}
+
+/* The drawer stays translucent as a whole; its two content panes use the same
+   restrained treatment so dashboard content remains visible underneath. */
+.sidebar-drawer-glass {
+  background: color-mix(in srgb, var(--card) 52%, transparent);
+  backdrop-filter: blur(18px) saturate(118%);
+}
+
+.sidebar-nav-glass,
+.sidebar-footer-glass {
+  background: color-mix(in srgb, var(--card) 54%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 8px 28px rgba(45, 41, 38, 0.035);
+  backdrop-filter: blur(10px);
+}
+
+.dark .sidebar-nav-glass,
+.dark .sidebar-footer-glass {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 8px 28px rgba(0, 0, 0, 0.12);
+}
