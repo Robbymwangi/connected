@@ -18,7 +18,8 @@ type MarkCellProps = {
 
 /* One cell of the marking grid.
 
-   Editing: a text input (not type=number, so "A" for absent is typeable). Every
+   Editing: a text input with the default keyboard: type=number cannot take "A" for
+   absent, and inputMode=numeric can hide the letter keys on a tablet. Every
    keystroke is parsed; a valid value commits at once, an invalid one stays in the
    box with a danger ring and commits nothing. Esc puts back what the cell held when
    it was focused; blur drops any invalid text.
@@ -85,7 +86,6 @@ export function MarkCell({
       <input
         ref={inputRef}
         type="text"
-        inputMode="numeric"
         autoComplete="off"
         value={shown}
         aria-invalid={invalid || undefined}

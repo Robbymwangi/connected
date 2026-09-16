@@ -7,7 +7,7 @@ import { Toast, type ToastKind } from '../../../components/Toast'
 import type { Assessment } from '../../../fixtures/assessments'
 import { classes } from '../../../fixtures/classes'
 import type { ActiveConflict } from '../../../fixtures/conflicts'
-import { emptyGrid, marksByAssessment, type Grid } from '../../../fixtures/marks'
+import type { Grid } from '../../../fixtures/marks'
 import { rubricFor } from '../../../fixtures/rubrics'
 import { initials, rosterFor } from '../../../fixtures/students'
 import { useConnectivity } from '../../../lib/connectivity'
@@ -21,6 +21,9 @@ type Focus = { studentId: string; criterionId: string }
 
 type MarkingGridProps = {
   assessment: Assessment
+  /* The marks live in the session store, not here, so edits survive navigation. */
+  grid: Grid
+  onUpdateGrid: (update: (grid: Grid) => Grid) => void
   /* Conflicts for this assessment only. */
   conflicts: ActiveConflict[]
   onResolveConflict: (id: string) => void
@@ -28,18 +31,21 @@ type MarkingGridProps = {
   onBack: () => void
 }
 
-export function MarkingGrid({ assessment, conflicts, onResolveConflict, onFinalize, onBack }: MarkingGridProps) {
+export function MarkingGrid({
+  assessment,
+  grid,
+  onUpdateGrid: setGrid,
+  conflicts,
+  onResolveConflict,
+  onFinalize,
+  onBack,
+}: MarkingGridProps) {
   const rubric = rubricFor(assessment.subject)
   const maxTotal = rubric.reduce((sum, c) => sum + c.max, 0)
   const cls = classes.find((c) => c.stream === assessment.stream)
   const roster = rosterFor(cls?.id ?? '')
   const finalized = assessment.status === 'finalized' || assessment.status === 'reports-generated'
 
-  const [grid, setGrid] = useState<Grid>(
-    () =>
-      marksByAssessment[assessment.id] ??
-      emptyGrid(roster.map((s) => s.id), rubric.map((c) => c.id)),
-  )
   const [editing, setEditing] = useState(false)
   const [focus, setFocus] = useState<Focus | null>(null)
   const [openConflictId, setOpenConflictId] = useState<string | null>(null)

@@ -67,7 +67,7 @@ export function ConflictDialog({ conflict, mine, max, onKeepMine, onAcceptTheirs
             />
           </div>
           <p className="text-center text-xs leading-relaxed text-muted-foreground">
-            Accepting replaces your entry and marks the cell as synced.
+            Accepting replaces your entry and queues the result for sync.
           </p>
         </>
       )}

@@ -1,8 +1,8 @@
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
-import { assessments as seed, type Assessment } from '../../fixtures/assessments'
+import type { SessionStore } from '../../app/useSessionStore'
+import type { Assessment } from '../../fixtures/assessments'
 import { classes } from '../../fixtures/classes'
-import type { ActiveConflict } from '../../fixtures/conflicts'
 import { DEFAULT_FILTERS, filterAssessments, type QueueFilters } from '../../lib/assessmentQueue'
 import { MarkingGrid } from './grid/MarkingGrid'
 import { AssessmentPlaceholder } from './AssessmentPlaceholder'
@@ -13,42 +13,39 @@ import { QueueList } from './QueueList'
 type View = 'queue' | 'browse'
 
 type AssessmentsScreenProps = {
+  store: SessionStore
   /* Set when the user is inside one assessment; undefined on the list. */
   assessmentId?: string
   view?: 'grid' | 'report'
   /* Arrive with the create dialog already open, from the dashboard. */
   creating?: boolean
-  conflicts: ActiveConflict[]
-  onResolveConflict: (id: string) => void
   onOpen: (assessmentId: string, view: 'grid' | 'report') => void
   onBackToList: () => void
 }
 
 export function AssessmentsScreen({
+  store,
   assessmentId,
   view,
   creating: creatingOnArrival = false,
-  conflicts,
-  onResolveConflict,
   onOpen,
   onBackToList,
 }: AssessmentsScreenProps) {
-  const [list, setList] = useState<Assessment[]>(seed)
+  const { assessments: list, conflicts } = store
   const [listView, setListView] = useState<View>('queue')
   const [filters, setFilters] = useState<QueueFilters>(DEFAULT_FILTERS)
   const [creating, setCreating] = useState(creatingOnArrival)
-
-  const finalize = (id: string) =>
-    setList((prev) => prev.map((a) => (a.id === id ? { ...a, status: 'finalized', sync: 'pending' } : a)))
 
   const open = assessmentId ? list.find((a) => a.id === assessmentId) : undefined
   if (open && view === 'grid') {
     return (
       <MarkingGrid
         assessment={open}
+        grid={store.gridFor(open.id)}
+        onUpdateGrid={(update) => store.updateGrid(open.id, update)}
         conflicts={conflicts.filter((k) => k.assessmentId === open.id)}
-        onResolveConflict={onResolveConflict}
-        onFinalize={finalize}
+        onResolveConflict={store.resolveConflict}
+        onFinalize={store.finalizeAssessment}
         onBack={onBackToList}
       />
     )
@@ -62,14 +59,13 @@ export function AssessmentsScreen({
 
   /* One scheduled assessment per chosen stream. Term comes from the dialog and the
      year from the chosen date's calendar year; neither is inferred from the other,
-     because no school-calendar rule exists yet to map dates onto terms. Ids are
-     placeholders for the client-generated UUIDs the store will assign. */
+     because no school-calendar rule exists yet to map dates onto terms. The store
+     assigns each record its UUID. */
   const create = (draft: NewAssessment) => {
-    const created: Assessment[] = draft.classIds.flatMap((classId) => {
+    const created: Omit<Assessment, 'id'>[] = draft.classIds.flatMap((classId) => {
       const cls = classes.find((c) => c.id === classId)
       if (!cls) return []
       return [{
-        id: `new-${classId}-${Date.now()}`,
         subject: draft.subject,
         stream: cls.stream,
         name: draft.name,
@@ -82,7 +78,7 @@ export function AssessmentsScreen({
         sync: 'pending',
       }]
     })
-    setList((prev) => [...created, ...prev])
+    store.addAssessments(created)
     /* Show the year the new records landed in, so they are not filtered out of view. */
     setFilters((f) => ({ ...f, year: Number(draft.date.slice(0, 4)) }))
   }
