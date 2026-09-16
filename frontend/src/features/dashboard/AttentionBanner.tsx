@@ -3,7 +3,8 @@ import type { ActiveConflict } from '../../fixtures/conflicts'
 
 type AttentionBannerProps = {
   conflicts: ActiveConflict[]
-  onView: () => void
+  /* With a single conflict, the Sync screen is asked to highlight it. */
+  onView: (highlight?: string) => void
 }
 
 /* Sticky beneath the top bar so the cards scroll behind it. The whole banner is the
@@ -17,7 +18,7 @@ export function AttentionBanner({ conflicts, onView }: AttentionBannerProps) {
     <div className="sticky top-16 z-20 mx-4 mt-3 lg:mx-5">
       <button
         type="button"
-        onClick={onView}
+        onClick={() => onView(conflicts.length === 1 ? first.id : undefined)}
         className="flex w-full items-center gap-3 rounded-xl border border-danger/20 bg-danger/8 px-4 py-2.5 text-left backdrop-blur-sm transition-colors hover:bg-danger/12 dark:bg-danger/6"
       >
         <TriangleAlert className="size-4 shrink-0 text-danger" />

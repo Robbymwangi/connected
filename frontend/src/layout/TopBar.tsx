@@ -86,7 +86,6 @@ export function TopBar({ menuPinned, onMenuHover, onMenuClick }: TopBarProps) {
         <div className="flex items-center px-4 lg:px-5">
           <SyncStatusIndicator
             isOnline={isOnline}
-            pendingCount={syncState.pendingCount}
             lastSyncedAt={syncState.lastSyncedAt}
             onToggleOverride={toggleOverride}
           />
