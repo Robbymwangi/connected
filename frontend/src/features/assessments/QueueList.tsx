@@ -1,5 +1,5 @@
 import { FilterDropdown } from '../../components/FilterDropdown'
-import type { Assessment } from '../../fixtures/assessments'
+import { TERMS as SCHOOL_TERMS, type Assessment } from '../../fixtures/assessments'
 import { subjects } from '../../fixtures/rubrics'
 import {
   ALL_SUBJECTS,
@@ -13,7 +13,9 @@ import {
 import { AssessmentRow } from './AssessmentRow'
 
 const YEARS = ['2025', '2024'] as const
-const TERMS = [ALL_TERMS, 'Term 1', 'Term 2'] as const
+/* Derived from the same list the create dialog offers, so every term a record can
+   carry is one the queue can filter for. */
+const TERMS = [ALL_TERMS, ...SCHOOL_TERMS] as const
 const SUBJECTS = [ALL_SUBJECTS, ...subjects] as const
 const STATUSES = Object.keys(STATUS_GROUPS) as StatusGroup[]
 
