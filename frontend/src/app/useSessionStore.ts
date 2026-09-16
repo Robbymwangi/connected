@@ -28,10 +28,11 @@ export function useSessionStore() {
   return {
     assessments,
     /* Primary keys are client-generated UUIDs, assigned here at creation; a record
-       made offline cannot wait for a server to number it. */
-    addAssessments: (drafts: Omit<Assessment, 'id'>[]) =>
+       made offline cannot wait for a server to number it. Version 0 means the server
+       has never acknowledged it (ADR 0001). */
+    addAssessments: (drafts: Omit<Assessment, 'id' | 'version'>[]) =>
       setAssessments((prev) => [
-        ...drafts.map((d) => ({ ...d, id: crypto.randomUUID() })),
+        ...drafts.map((d) => ({ ...d, id: crypto.randomUUID(), version: 0 })),
         ...prev,
       ]),
     finalizeAssessment: (id: string) =>
