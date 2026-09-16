@@ -1,4 +1,4 @@
-import { activeConflicts } from '../../fixtures/conflicts'
+import type { ActiveConflict } from '../../fixtures/conflicts'
 import { currentUser } from '../../fixtures/user'
 import type { NavId } from '../../layout/navigation'
 import { formatLongDate, greetingFor } from '../../lib/time'
@@ -10,18 +10,19 @@ import { ProgressCard } from './cards/ProgressCard'
 import { RecentCard } from './cards/RecentCard'
 
 type DashboardProps = {
+  conflicts: ActiveConflict[]
   onNavigate: (id: NavId) => void
   onCreateAssessment: () => void
 }
 
 /* Static cards. Each card's only way out is to the section that owns its data;
    interactive analytics live in Reports. */
-export function Dashboard({ onNavigate, onCreateAssessment }: DashboardProps) {
+export function Dashboard({ conflicts, onNavigate, onCreateAssessment }: DashboardProps) {
   const now = new Date()
 
   return (
     <>
-      <AttentionBanner conflicts={activeConflicts} onView={() => onNavigate('sync')} />
+      <AttentionBanner conflicts={conflicts} onView={() => onNavigate('sync')} />
       <div className="px-5 pt-6 pb-10 lg:px-8">
         <div className="mb-4">
           <h1 className="text-2xl leading-tight font-bold tracking-tight text-foreground">

@@ -2,7 +2,9 @@ import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import { assessments as seed, type Assessment } from '../../fixtures/assessments'
 import { classes } from '../../fixtures/classes'
+import type { ActiveConflict } from '../../fixtures/conflicts'
 import { DEFAULT_FILTERS, filterAssessments, type QueueFilters } from '../../lib/assessmentQueue'
+import { MarkingGrid } from './grid/MarkingGrid'
 import { AssessmentPlaceholder } from './AssessmentPlaceholder'
 import { BrowseTree } from './BrowseTree'
 import { CreateAssessmentDialog, type NewAssessment } from './CreateAssessmentDialog'
@@ -16,6 +18,8 @@ type AssessmentsScreenProps = {
   view?: 'grid' | 'report'
   /* Arrive with the create dialog already open, from the dashboard. */
   creating?: boolean
+  conflicts: ActiveConflict[]
+  onResolveConflict: (id: string) => void
   onOpen: (assessmentId: string, view: 'grid' | 'report') => void
   onBackToList: () => void
 }
@@ -24,6 +28,8 @@ export function AssessmentsScreen({
   assessmentId,
   view,
   creating: creatingOnArrival = false,
+  conflicts,
+  onResolveConflict,
   onOpen,
   onBackToList,
 }: AssessmentsScreenProps) {
@@ -32,9 +38,23 @@ export function AssessmentsScreen({
   const [filters, setFilters] = useState<QueueFilters>(DEFAULT_FILTERS)
   const [creating, setCreating] = useState(creatingOnArrival)
 
+  const finalize = (id: string) =>
+    setList((prev) => prev.map((a) => (a.id === id ? { ...a, status: 'finalized', sync: 'pending' } : a)))
+
   const open = assessmentId ? list.find((a) => a.id === assessmentId) : undefined
-  if (open && view) {
-    return <AssessmentPlaceholder assessment={open} view={view} onBack={onBackToList} />
+  if (open && view === 'grid') {
+    return (
+      <MarkingGrid
+        assessment={open}
+        conflicts={conflicts.filter((k) => k.assessmentId === open.id)}
+        onResolveConflict={onResolveConflict}
+        onFinalize={finalize}
+        onBack={onBackToList}
+      />
+    )
+  }
+  if (open && view === 'report') {
+    return <AssessmentPlaceholder assessment={open} onBack={onBackToList} />
   }
 
   const shown = filterAssessments(list, filters).length
