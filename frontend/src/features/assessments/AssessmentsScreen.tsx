@@ -45,6 +45,9 @@ export function AssessmentsScreen({
         onUpdateGrid={(update) => store.updateGrid(open.id, update)}
         conflicts={conflicts.filter((k) => k.assessmentId === open.id)}
         onResolveConflict={store.resolveConflict}
+        onProposeResolution={store.proposeResolution}
+        onAcceptProposal={store.acceptProposal}
+        onReferConflict={store.referConflict}
         onFinalize={store.finalizeAssessment}
         onBack={onBackToList}
       />

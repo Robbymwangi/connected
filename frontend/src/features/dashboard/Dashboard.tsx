@@ -13,16 +13,17 @@ type DashboardProps = {
   conflicts: ActiveConflict[]
   onNavigate: (id: NavId) => void
   onCreateAssessment: () => void
+  onViewConflicts: (highlight?: string) => void
 }
 
 /* Static cards. Each card's only way out is to the section that owns its data;
    interactive analytics live in Reports. */
-export function Dashboard({ conflicts, onNavigate, onCreateAssessment }: DashboardProps) {
+export function Dashboard({ conflicts, onNavigate, onCreateAssessment, onViewConflicts }: DashboardProps) {
   const now = new Date()
 
   return (
     <>
-      <AttentionBanner conflicts={conflicts} onView={() => onNavigate('sync')} />
+      <AttentionBanner conflicts={conflicts} onView={onViewConflicts} />
       <div className="px-5 pt-6 pb-10 lg:px-8">
         <div className="mb-4">
           <h1 className="text-2xl leading-tight font-bold tracking-tight text-foreground">

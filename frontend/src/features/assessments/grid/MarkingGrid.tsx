@@ -6,7 +6,7 @@ import { StatusPill } from '../../../components/StatusPill'
 import { Toast, type ToastKind } from '../../../components/Toast'
 import type { Assessment } from '../../../fixtures/assessments'
 import { classes } from '../../../fixtures/classes'
-import type { ActiveConflict } from '../../../fixtures/conflicts'
+import type { ActiveConflict, Choice } from '../../../fixtures/conflicts'
 import type { Grid } from '../../../fixtures/marks'
 import { rubricFor } from '../../../fixtures/rubrics'
 import { initials, rosterFor } from '../../../fixtures/students'
@@ -24,9 +24,12 @@ type MarkingGridProps = {
   /* The marks live in the session store, not here, so edits survive navigation. */
   grid: Grid
   onUpdateGrid: (update: (grid: Grid) => Grid) => void
-  /* Conflicts for this assessment only. */
+  /* Conflicts for this assessment only, and the three ways to move one (ADR 0002). */
   conflicts: ActiveConflict[]
-  onResolveConflict: (id: string) => void
+  onResolveConflict: (id: string, choice: Choice, note: string) => void
+  onProposeResolution: (id: string, choice: Choice, note: string) => void
+  onAcceptProposal: (id: string) => void
+  onReferConflict: (id: string) => void
   onFinalize: (assessmentId: string) => void
   onBack: () => void
 }
@@ -37,6 +40,9 @@ export function MarkingGrid({
   onUpdateGrid: setGrid,
   conflicts,
   onResolveConflict,
+  onProposeResolution,
+  onAcceptProposal,
+  onReferConflict,
   onFinalize,
   onBack,
 }: MarkingGridProps) {
@@ -109,30 +115,6 @@ export function MarkingGrid({
   const conflictAt = (studentId: string, criterionId: string) =>
     conflicts.find((k) => k.studentId === studentId && k.criterionId === criterionId)
   const openConflict = conflicts.find((k) => k.id === openConflictId) ?? null
-  const openConflictMax = openConflict
-    ? (rubric.find((c) => c.id === openConflict.criterionId)?.max ?? 0)
-    : 0
-
-  /* Resolving is itself a mutation: the chosen value goes to the outbox with the
-     conflict's stale base version, so the cell is local (queued) rather than synced
-     until the server acknowledges it. The conflict leaves the active list now, on
-     this device, because the teacher has decided; the sync engine owns what
-     happens if the server rejects the resolution. */
-  const keepMine = () => {
-    if (!openConflict) return
-    setMark(openConflict.studentId, openConflict.criterionId, grid[openConflict.studentId][openConflict.criterionId].mark)
-    onResolveConflict(openConflict.id)
-    setOpenConflictId(null)
-  }
-  const acceptTheirs = () => {
-    if (!openConflict) return
-    setMark(openConflict.studentId, openConflict.criterionId, openConflict.otherMark, {
-      author: openConflict.otherTeacher,
-    })
-    onResolveConflict(openConflict.id)
-    setOpenConflictId(null)
-    showToast('resolved', 5000)
-  }
 
   const finalize = () => {
     onFinalize(assessment.id)
@@ -283,10 +265,19 @@ export function MarkingGrid({
 
       <ConflictDialog
         conflict={openConflict}
-        mine={openConflict ? grid[openConflict.studentId][openConflict.criterionId].mark : null}
-        max={openConflictMax}
-        onKeepMine={keepMine}
-        onAcceptTheirs={acceptTheirs}
+        subject={assessment.subject}
+        onResolve={(choice, note) => {
+          if (!openConflict) return
+          onResolveConflict(openConflict.id, choice, note)
+          showToast('resolved', 5000)
+        }}
+        onPropose={(choice, note) => openConflict && onProposeResolution(openConflict.id, choice, note)}
+        onAccept={() => {
+          if (!openConflict) return
+          onAcceptProposal(openConflict.id)
+          showToast('resolved', 5000)
+        }}
+        onRefer={() => openConflict && onReferConflict(openConflict.id)}
         onClose={() => setOpenConflictId(null)}
       />
       <FinalizeDialog open={finalizeOpen} onClose={() => setFinalizeOpen(false)} onConfirm={finalize} />

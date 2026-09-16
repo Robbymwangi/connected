@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatLongDate, formatRelative, greetingFor } from './time'
+import { formatDateTime, formatLongDate, formatRelative, greetingFor } from './time'
 
 const at = (hour: number) => new Date(2026, 7, 28, hour, 0, 0)
 
@@ -21,6 +21,12 @@ describe('greetingFor', () => {
 describe('formatLongDate', () => {
   it('writes weekday, day, month, and year in British order', () => {
     expect(formatLongDate(new Date(2026, 7, 28))).toBe('Friday, 28 August 2026')
+  })
+})
+
+describe('formatDateTime', () => {
+  it('writes a compact British date with a 24-hour time', () => {
+    expect(formatDateTime('2026-08-27T14:32:00')).toBe('27 Aug 2026, 14:32')
   })
 })
 

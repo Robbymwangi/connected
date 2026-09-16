@@ -31,3 +31,14 @@ export function formatRelative(from: Date, now: Date = new Date()): string {
   if (hours < 24) return `${hours}h ago`
   return `${Math.floor(hours / 24)}d ago`
 }
+
+/* "27 Aug 2026, 14:32", for the audit-style timestamps on conflicts. */
+export function formatDateTime(iso: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(iso))
+}

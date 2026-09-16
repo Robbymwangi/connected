@@ -1,27 +1,22 @@
 import { Cloud, CloudOff } from 'lucide-react'
 import { StatusPill } from '../components/StatusPill'
 import { formatRelative } from '../lib/time'
+import { useNow } from '../lib/useNow'
 
 type SyncStatusIndicatorProps = {
   isOnline: boolean
-  pendingCount: number
   lastSyncedAt: Date
   /* Present only in development builds; see useConnectivity. */
   onToggleOverride?: () => void
 }
 
 /* Two facts, shown separately. The pill reports connectivity and nothing else. The
-   line beneath reports sync state: when the outbox was last drained, always, because
-   the gap between that time and now is how a user estimates drift from the server;
-   and a pending count in front of it when the outbox holds mutations. A device can be
-   online with queued work, and a green pill on its own would misrepresent that, so
-   the count is set in the warning colour and weight to take precedence. */
-export function SyncStatusIndicator({
-  isOnline,
-  pendingCount,
-  lastSyncedAt,
-  onToggleOverride,
-}: SyncStatusIndicatorProps) {
+   line beneath reports when the outbox was last drained: the gap between that time
+   and now is how a user estimates drift from the server. The pending count lives on
+   the dashboard's My Progress card, not here. */
+export function SyncStatusIndicator({ isOnline, lastSyncedAt, onToggleOverride }: SyncStatusIndicatorProps) {
+  const now = useNow()
+
   const pill = (
     <StatusPill
       tone={isOnline ? 'success' : 'neutral'}
@@ -32,7 +27,7 @@ export function SyncStatusIndicator({
   )
 
   return (
-    <div className="flex flex-col items-center gap-0.5">
+    <div className="flex flex-col items-center gap-1">
       {onToggleOverride ? (
         <button
           type="button"
@@ -45,11 +40,8 @@ export function SyncStatusIndicator({
       ) : (
         pill
       )}
-      <span className="text-[11px] font-medium text-muted-foreground">
-        {pendingCount > 0 && (
-          <span className="font-semibold text-warning tabular">{pendingCount} pending, </span>
-        )}
-        synced {formatRelative(lastSyncedAt)}
+      <span className="text-[11px] leading-none font-medium whitespace-nowrap text-muted-foreground">
+        Synced {formatRelative(lastSyncedAt, now)}
       </span>
     </div>
   )
