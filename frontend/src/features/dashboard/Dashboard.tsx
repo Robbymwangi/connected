@@ -11,11 +11,12 @@ import { RecentCard } from './cards/RecentCard'
 
 type DashboardProps = {
   onNavigate: (id: NavId) => void
+  onCreateAssessment: () => void
 }
 
 /* Static cards. Each card's only way out is to the section that owns its data;
    interactive analytics live in Reports. */
-export function Dashboard({ onNavigate }: DashboardProps) {
+export function Dashboard({ onNavigate, onCreateAssessment }: DashboardProps) {
   const now = new Date()
 
   return (
@@ -40,7 +41,10 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             onExpand={() => onNavigate('classes')}
             onOpen={(item) => onNavigate(item.to)}
           />
-          <PendingAssessmentsCard onExpand={() => onNavigate('assessments')} />
+          <PendingAssessmentsCard
+            onExpand={() => onNavigate('assessments')}
+            onCreate={onCreateAssessment}
+          />
         </div>
       </div>
     </>

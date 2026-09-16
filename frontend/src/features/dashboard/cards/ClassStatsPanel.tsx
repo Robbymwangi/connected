@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp } from 'lucide-react'
-import { classStats } from '../../../fixtures/dashboard'
+import type { ClassStats } from '../../../fixtures/dashboard'
 
 type Figure = { current: number; previous: number }
 
@@ -42,16 +42,16 @@ function StatTile({ label, figure, accentClass }: StatTileProps) {
   )
 }
 
-export function ClassStatsPanel() {
+export function ClassStatsPanel({ stats }: { stats: ClassStats }) {
   return (
     <div className="flex flex-1 flex-col gap-4 px-5 pt-4 pb-5">
       <p className="text-xs text-muted-foreground">
-        Assessment: <span className="font-semibold text-foreground">{classStats.assessment}</span>
-        <span className="text-muted-foreground/60"> vs. {classStats.comparedTo}</span>
+        Assessment: <span className="font-semibold text-foreground">{stats.assessment}</span>
+        <span className="text-muted-foreground/60"> vs. {stats.comparedTo}</span>
       </p>
       <div className="grid grid-cols-2 gap-3">
-        <StatTile label="Class Mean" figure={classStats.mean} accentClass="text-info" />
-        <StatTile label="Your Cohort" figure={classStats.cohort} accentClass="text-warning" />
+        <StatTile label="Class Mean" figure={stats.mean} accentClass="text-info" />
+        <StatTile label="Your Cohort" figure={stats.cohort} accentClass="text-warning" />
       </div>
     </div>
   )

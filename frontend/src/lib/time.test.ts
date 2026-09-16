@@ -48,6 +48,17 @@ describe('formatRelative', () => {
     expect(formatRelative(ago(day), now)).toBe('1d ago')
     expect(formatRelative(ago(10 * day), now)).toBe('10d ago')
   })
+  /* A unit is reported only once it has fully passed: just under a threshold still
+     reads as the smaller unit, so the line never overstates the drift. */
+  it('floors rather than rounds at every threshold', () => {
+    expect(formatRelative(ago(59_999), now)).toBe('just now')
+    expect(formatRelative(ago(minute - 1), now)).toBe('just now')
+    expect(formatRelative(ago(2 * minute - 1), now)).toBe('1m ago')
+    expect(formatRelative(ago(hour - 1), now)).toBe('59m ago')
+    expect(formatRelative(ago(2 * hour - 1), now)).toBe('1h ago')
+    expect(formatRelative(ago(day - 1), now)).toBe('23h ago')
+    expect(formatRelative(ago(2 * day - 1), now)).toBe('1d ago')
+  })
   it('never reports the future, which clock skew between devices can produce', () => {
     expect(formatRelative(new Date(now.getTime() + 5 * minute), now)).toBe('just now')
   })

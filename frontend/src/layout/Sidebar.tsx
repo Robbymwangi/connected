@@ -1,5 +1,5 @@
 import { Ellipsis, LogOut, X } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from '../components/Button'
 import { NavItem } from '../components/NavItem'
 import { currentUser } from '../fixtures/user'
@@ -19,6 +19,7 @@ type SidebarProps = {
 
 export function Sidebar({ open, pinned, onClose, onHoverEnd, active, onNavigate }: SidebarProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuTrigger = useRef<HTMLButtonElement>(null)
   const scrim = open && pinned
 
   return (
@@ -35,6 +36,7 @@ export function Sidebar({ open, pinned, onClose, onHoverEnd, active, onNavigate 
         aria-label="Main navigation"
         aria-hidden={!open}
         onMouseLeave={onHoverEnd}
+        inert={!open}
         className={`fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col shadow-2xl backdrop-blur-xl transition-transform duration-300 ease-in-out ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
@@ -92,13 +94,18 @@ export function Sidebar({ open, pinned, onClose, onHoverEnd, active, onNavigate 
                 </div>
                 <div className="relative">
                   <Button
+                    ref={userMenuTrigger}
                     aria-label="Account options"
                     aria-expanded={userMenuOpen}
                     onClick={() => setUserMenuOpen((v) => !v)}
                   >
                     <Ellipsis className="size-5" />
                   </Button>
-                  <UserMenu open={userMenuOpen} onClose={() => setUserMenuOpen(false)} />
+                  <UserMenu
+                    open={userMenuOpen}
+                    onClose={() => setUserMenuOpen(false)}
+                    triggerRef={userMenuTrigger}
+                  />
                 </div>
               </div>
               <Button

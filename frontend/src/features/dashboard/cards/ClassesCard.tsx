@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Card } from '../../../components/Card'
-import { classOptions } from '../../../fixtures/dashboard'
+import { classOptions, classStats } from '../../../fixtures/dashboard'
 import { ClassStatsPanel } from './ClassStatsPanel'
 
 type ClassesCardProps = {
@@ -30,7 +30,7 @@ export function ClassesCard({ onExpand }: ClassesCardProps) {
         </select>
       }
     >
-      <ClassStatsPanel />
+      <ClassStatsPanel stats={classStats[selected]} />
     </Card>
   )
 }

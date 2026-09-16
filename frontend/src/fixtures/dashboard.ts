@@ -14,15 +14,43 @@ export const progress = {
   enteredToday: 20,
 }
 
-export const classOptions = ['Grade 4, English', 'Grade 4, Math', 'Grade 5, All', 'Grade 5, Science']
-
-/* Current assessment against the previous one for the selected class. */
-export const classStats = {
-  assessment: 'CAT 2, 2nd Term',
-  comparedTo: 'CAT 1',
-  mean: { current: 58.5, previous: 54.2 },
-  cohort: { current: 40.4, previous: 43.1 },
+export type ClassStats = {
+  assessment: string
+  comparedTo: string
+  mean: { current: number; previous: number }
+  cohort: { current: number; previous: number }
 }
+
+/* Current assessment against the previous one, per class. The card's selector picks
+   the entry; every class has its own figures. */
+export const classStats: Record<string, ClassStats> = {
+  'Grade 4, English': {
+    assessment: 'CAT 2, 2nd Term',
+    comparedTo: 'CAT 1',
+    mean: { current: 58.5, previous: 54.2 },
+    cohort: { current: 40.4, previous: 43.1 },
+  },
+  'Grade 4, Maths': {
+    assessment: 'CAT 2, 2nd Term',
+    comparedTo: 'CAT 1',
+    mean: { current: 64.1, previous: 66.8 },
+    cohort: { current: 52.3, previous: 49.7 },
+  },
+  'Grade 5, All': {
+    assessment: 'End of Term, 1st Term',
+    comparedTo: 'CAT 2',
+    mean: { current: 61.7, previous: 58.9 },
+    cohort: { current: 47.2, previous: 44.0 },
+  },
+  'Grade 5, Science': {
+    assessment: 'Practical 1, 2nd Term',
+    comparedTo: 'Practical 0',
+    mean: { current: 55.4, previous: 55.1 },
+    cohort: { current: 38.9, previous: 41.6 },
+  },
+}
+
+export const classOptions = Object.keys(classStats)
 
 export type RecentItem = {
   primary: string

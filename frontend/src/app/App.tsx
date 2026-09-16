@@ -12,11 +12,17 @@ export default function App() {
 
   return (
     <AppShell active={location.screen} onNavigate={navigate}>
-      {location.screen === 'dashboard' && <Dashboard onNavigate={navigate} />}
+      {location.screen === 'dashboard' && (
+        <Dashboard
+          onNavigate={navigate}
+          onCreateAssessment={() => setLocation({ screen: 'assessments', creating: true })}
+        />
+      )}
       {location.screen === 'assessments' && (
         <AssessmentsScreen
           assessmentId={location.assessmentId}
           view={location.view}
+          creating={location.creating}
           onOpen={(assessmentId, view) => setLocation({ screen: 'assessments', assessmentId, view })}
           onBackToList={() => setLocation({ screen: 'assessments' })}
         />
