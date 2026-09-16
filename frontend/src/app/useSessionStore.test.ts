@@ -35,6 +35,23 @@ describe('resolveConflict', () => {
   })
 })
 
+describe('choice validation at the store boundary', () => {
+  it('rejects a side that is not one of the conflict\'s edits', () => {
+    expect(reduce(seed, { type: 'resolveConflict', id: ownEdits.id, choice: { kind: 'side', editId: 'nope' }, note: '', user: me, at })).toBe(seed)
+    expect(reduce(seed, { type: 'proposeResolution', id: open.id, choice: { kind: 'side', editId: 'nope' }, note: 'n', user: me, at })).toBe(seed)
+  })
+  it('rejects a corrected mark over the criterion maximum or empty', () => {
+    const over = { kind: 'corrected' as const, mark: score(99) }
+    expect(reduce(seed, { type: 'resolveConflict', id: ownEdits.id, choice: over, note: '', user: me, at })).toBe(seed)
+    expect(reduce(seed, { type: 'proposeResolution', id: open.id, choice: over, note: 'n', user: me, at })).toBe(seed)
+  })
+  it('a non-party cannot propose or accept', () => {
+    const other = { id: 'u-9', name: 'Mr. Otieno', canModerate: false }
+    expect(reduce(seed, { type: 'proposeResolution', id: open.id, choice: theirsOf(open), note: 'n', user: other, at })).toBe(seed)
+    expect(reduce(seed, { type: 'acceptProposal', id: proposed.id, user: other, at })).toBe(seed)
+  })
+})
+
 describe('proposeResolution and acceptProposal', () => {
   it('a proposal applies nothing yet and needs a note', () => {
     expect(reduce(seed, { type: 'proposeResolution', id: open.id, choice: theirsOf(open), note: '', user: me, at })).toBe(seed)

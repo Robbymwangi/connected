@@ -19,6 +19,7 @@ import {
   canRefer,
   chosenMark,
   directResolution,
+  isValidChoice,
   MAX_PROPOSALS,
   toHistory,
   type Resolver,
@@ -72,6 +73,13 @@ function gridOf(state: State, assessmentId: string): Grid {
   return state.marks[assessmentId] ?? emptyGridFor(state, assessmentId)
 }
 
+/* The maximum for the criterion a conflict is about; 0 when unknown, which makes
+   every corrected score invalid rather than accepting one blindly. */
+function criterionMax(state: State, conflict: ActiveConflict): number {
+  const a = state.assessments.find((x) => x.id === conflict.assessmentId)
+  return a ? (rubricFor(a.subject).find((c) => c.id === conflict.criterionId)?.max ?? 0) : 0
+}
+
 export function reduce(state: State, action: Action): State {
   switch (action.type) {
     /* Primary keys are client-generated UUIDs, assigned here at creation; a record
@@ -107,6 +115,7 @@ export function reduce(state: State, action: Action): State {
       const ability = abilityOf(conflict, action.user)
       if (ability.kind !== 'resolve') return state
       if (ability.noteRequired && action.note.trim() === '') return state
+      if (!isValidChoice(conflict, action.choice, criterionMax(state, conflict))) return state
       return settle(state, conflict, directResolution(conflict, action.choice, action.user, action.note), action.at)
     }
 
@@ -119,6 +128,7 @@ export function reduce(state: State, action: Action): State {
       const ability = abilityOf(conflict, action.user)
       const may = ability.kind === 'propose' || (ability.kind === 'respond' && ability.canCounter)
       if (!may || action.note.trim() === '') return state
+      if (!isValidChoice(conflict, action.choice, criterionMax(state, conflict))) return state
       const proposal = { byId: action.user.id, by: action.user.name, choice: action.choice, note: action.note, at: action.at }
       const proposals = [...conflict.proposals, proposal]
       return {
@@ -147,6 +157,9 @@ export function reduce(state: State, action: Action): State {
       if (!conflict) return state
       const ability = abilityOf(conflict, action.user)
       if (ability.kind !== 'respond') return state
+      /* Stored proposals were validated on entry; checked again so the settlement
+         path cannot throw on a record that arrived by sync. */
+      if (!isValidChoice(conflict, ability.proposal.choice, criterionMax(state, conflict))) return state
       return settle(state, conflict, agreedResolution(ability.proposal, action.user), action.at)
     }
   }

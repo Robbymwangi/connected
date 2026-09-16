@@ -32,6 +32,8 @@ export function ConflictActions({ conflict, subject, onResolve, onPropose, onAcc
   /* A choice is picked first, then confirmed, with a note where the policy needs
      one. 'corrected' means the mark is still being typed. */
   const [picked, setPicked] = useState<Choice | 'corrected' | null>(null)
+  /* A counter-proposal starts from the same three choices as a first proposal. */
+  const [countering, setCountering] = useState(false)
   const [text, setText] = useState('')
   const [note, setNote] = useState('')
 
@@ -46,6 +48,7 @@ export function ConflictActions({ conflict, subject, onResolve, onPropose, onAcc
 
   const reset = () => {
     setPicked(null)
+    setCountering(false)
     setText('')
     setNote('')
   }
@@ -69,6 +72,15 @@ export function ConflictActions({ conflict, subject, onResolve, onPropose, onAcc
     </button>
   )
 
+  if (ability.kind === 'observer') {
+    return (
+      <div className="px-4 pt-1 pb-4">
+        {conflict.proposals.length > 0 && <ProposalThread proposals={conflict.proposals} describe={describe} />}
+        <p className="mt-2 text-xs font-medium text-muted-foreground">Between the two markers; nothing for you to do here.</p>
+      </div>
+    )
+  }
+
   if (ability.kind === 'referred') {
     return (
       <div className="px-4 pt-1 pb-4">
@@ -90,7 +102,7 @@ export function ConflictActions({ conflict, subject, onResolve, onPropose, onAcc
     )
   }
 
-  if (picked === null && ability.kind === 'respond') {
+  if (picked === null && ability.kind === 'respond' && !countering) {
     return (
       <div className="px-4 pt-1 pb-4">
         <ProposalThread proposals={conflict.proposals} describe={describe} />
@@ -99,7 +111,7 @@ export function ConflictActions({ conflict, subject, onResolve, onPropose, onAcc
             Accept
           </button>
           {ability.canCounter ? (
-            <button type="button" onClick={() => setPicked('corrected')} className={`${ACTION} border-border text-foreground hover:bg-muted`}>
+            <button type="button" onClick={() => setCountering(true)} className={`${ACTION} border-border text-foreground hover:bg-muted`}>
               Counter-propose
             </button>
           ) : (
@@ -124,7 +136,16 @@ export function ConflictActions({ conflict, subject, onResolve, onPropose, onAcc
             {settling ? 'Enter corrected' : 'Propose corrected'}
           </button>
         </div>
-        {!settling && <div className="mt-2">{referLink}</div>}
+        {!settling && (
+          <div className="mt-2 flex items-center gap-3">
+            {countering && (
+              <button type="button" onClick={reset} className="text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+                Back
+              </button>
+            )}
+            {referLink}
+          </div>
+        )}
       </div>
     )
   }
@@ -207,11 +228,20 @@ function proposalVerb(proposal: Proposal, pending: boolean): string {
 }
 
 /* Every proposal so far, oldest first; the last is the pending one. */
-export function ProposalThread({ proposals, describe }: { proposals: Proposal[]; describe: (c: Choice) => string }) {
+export function ProposalThread({
+  proposals,
+  describe,
+  lastIsPending = true,
+}: {
+  proposals: Proposal[]
+  describe: (c: Choice) => string
+  /* False on a settled conflict: nothing is pending there. */
+  lastIsPending?: boolean
+}) {
   return (
     <div className="flex flex-col gap-2">
       {proposals.map((proposal, i) => {
-        const pending = i === proposals.length - 1
+        const pending = lastIsPending && i === proposals.length - 1
         return (
           <div
             key={`${proposal.byId}-${proposal.at}`}

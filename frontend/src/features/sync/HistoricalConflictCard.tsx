@@ -52,7 +52,7 @@ export function HistoricalConflictCard({ conflict }: HistoricalConflictCardProps
 
       {(conflict.proposals.length > 0 || conflict.referral || note) && (
         <div className="flex flex-col gap-2 px-4 pb-4">
-          {conflict.proposals.length > 0 && <ProposalThread proposals={conflict.proposals} describe={describe} />}
+          {conflict.proposals.length > 0 && <ProposalThread proposals={conflict.proposals} describe={describe} lastIsPending={false} />}
           {conflict.referral && (
             <p className="text-xs font-medium text-warning">{describeReferral(conflict.referral)}</p>
           )}

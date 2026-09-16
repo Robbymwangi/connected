@@ -4,6 +4,7 @@ import {
   abilityOf,
   agreedResolution,
   canRefer,
+  isValidChoice,
   chosenMark,
   directResolution,
   isAutoResolvable,
@@ -82,6 +83,12 @@ describe('abilityOf', () => {
     expect(abilityOf(referred, me)).toEqual({ kind: 'referred', referral: referred.referral })
     expect(abilityOf(referred, hod)).toEqual({ kind: 'resolve', noteRequired: true })
   })
+  it('someone who is neither a party nor a moderator can only observe', () => {
+    const other = { id: 'u-9', name: 'Mr. Otieno', canModerate: false }
+    expect(abilityOf(crossTeacher, other)).toEqual({ kind: 'observer' })
+    expect(abilityOf({ ...crossTeacher, proposals: [proposalByHer] }, other)).toEqual({ kind: 'observer' })
+    expect(canRefer(crossTeacher, other)).toBe(false)
+  })
   it('a party may refer any cross-teacher conflict that is not already referred', () => {
     expect(canRefer(crossTeacher, me)).toBe(true)
     expect(canRefer(ownEdits, me)).toBe(false)
@@ -97,6 +104,19 @@ describe('chosenMark', () => {
   })
   it('a correction is authored by whoever settled it', () => {
     expect(chosenMark(crossTeacher, { kind: 'corrected', mark: ABSENT }, 'Mr. Kamau')).toEqual({ mark: ABSENT, author: 'Mr. Kamau' })
+  })
+})
+
+describe('isValidChoice', () => {
+  it('accepts only the conflict\'s own edits as sides', () => {
+    expect(isValidChoice(crossTeacher, { kind: 'side', editId: 'e-m' }, 20)).toBe(true)
+    expect(isValidChoice(crossTeacher, { kind: 'side', editId: 'nope' }, 20)).toBe(false)
+  })
+  it('accepts a corrected score within the maximum, or absent, never empty', () => {
+    expect(isValidChoice(crossTeacher, { kind: 'corrected', mark: score(20) }, 20)).toBe(true)
+    expect(isValidChoice(crossTeacher, { kind: 'corrected', mark: score(21) }, 20)).toBe(false)
+    expect(isValidChoice(crossTeacher, { kind: 'corrected', mark: ABSENT }, 20)).toBe(true)
+    expect(isValidChoice(crossTeacher, { kind: 'corrected', mark: EMPTY }, 20)).toBe(false)
   })
 })
 

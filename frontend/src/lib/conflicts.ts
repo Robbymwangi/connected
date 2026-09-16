@@ -42,17 +42,24 @@ export function pendingProposal(conflict: ActiveConflict): Proposal | undefined 
    respond:  a proposal from the other party is waiting: accept it, counter it if a
              round remains, or refer it.
    awaiting: this user's own proposal is waiting for the other party.
-   referred: with a moderator; parties can only watch. */
+   referred: with a moderator; parties can only watch.
+   observer: neither a party nor a moderator; can only watch. */
 export type Ability =
   | { kind: 'resolve'; noteRequired: boolean }
   | { kind: 'propose' }
   | { kind: 'respond'; proposal: Proposal; canCounter: boolean }
   | { kind: 'awaiting'; proposal: Proposal }
   | { kind: 'referred'; referral: Referral }
+  | { kind: 'observer' }
+
+export function isParty(conflict: ActiveConflict, user: Resolver): boolean {
+  return conflict.mine.userId === user.id || conflict.theirs.userId === user.id
+}
 
 export function abilityOf(conflict: ActiveConflict, user: Resolver): Ability {
+  if (user.canModerate && !isSelfConflict(conflict)) return { kind: 'resolve', noteRequired: true }
+  if (!isParty(conflict, user)) return { kind: 'observer' }
   if (isSelfConflict(conflict)) return { kind: 'resolve', noteRequired: false }
-  if (user.canModerate) return { kind: 'resolve', noteRequired: true }
   if (conflict.referral) return { kind: 'referred', referral: conflict.referral }
   const proposal = pendingProposal(conflict)
   if (!proposal) return { kind: 'propose' }
@@ -63,7 +70,18 @@ export function abilityOf(conflict: ActiveConflict, user: Resolver): Ability {
 /* Whether a party may refer this to a moderator: any time before it is settled or
    already referred, and never for their own two-device edits. */
 export function canRefer(conflict: ActiveConflict, user: Resolver): boolean {
-  return !isSelfConflict(conflict) && !user.canModerate && !conflict.referral
+  return isParty(conflict, user) && !isSelfConflict(conflict) && !user.canModerate && !conflict.referral
+}
+
+/* Whether a choice can be applied to this conflict: a side must be one of its two
+   edits; a corrected mark must be a value (not empty) within the criterion's
+   maximum. The screens enforce this too, but the store is the boundary. */
+export function isValidChoice(conflict: ActiveConflict, choice: Choice, max: number): boolean {
+  if (choice.kind === 'side') return sideOf(conflict, choice.editId) !== undefined
+  const { mark } = choice
+  if (mark.kind === 'empty') return false
+  if (mark.kind === 'absent') return true
+  return Number.isInteger(mark.value) && mark.value >= 0 && mark.value <= max
 }
 
 /* The side a choice names, on whichever device it is read. */
