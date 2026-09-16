@@ -14,15 +14,23 @@ type AssessmentsScreenProps = {
   /* Set when the user is inside one assessment; undefined on the list. */
   assessmentId?: string
   view?: 'grid' | 'report'
+  /* Arrive with the create dialog already open, from the dashboard. */
+  creating?: boolean
   onOpen: (assessmentId: string, view: 'grid' | 'report') => void
   onBackToList: () => void
 }
 
-export function AssessmentsScreen({ assessmentId, view, onOpen, onBackToList }: AssessmentsScreenProps) {
+export function AssessmentsScreen({
+  assessmentId,
+  view,
+  creating: creatingOnArrival = false,
+  onOpen,
+  onBackToList,
+}: AssessmentsScreenProps) {
   const [list, setList] = useState<Assessment[]>(seed)
   const [listView, setListView] = useState<View>('queue')
   const [filters, setFilters] = useState<QueueFilters>(DEFAULT_FILTERS)
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useState(creatingOnArrival)
 
   const open = assessmentId ? list.find((a) => a.id === assessmentId) : undefined
   if (open && view) {
@@ -32,8 +40,10 @@ export function AssessmentsScreen({ assessmentId, view, onOpen, onBackToList }: 
   const shown = filterAssessments(list, filters).length
   const inProgress = list.filter((a) => a.status === 'in-progress').length
 
-  /* One scheduled assessment per chosen stream. Ids are placeholders for the
-     client-generated UUIDs the store will assign. */
+  /* One scheduled assessment per chosen stream. Term comes from the dialog and the
+     year from the chosen date's calendar year; neither is inferred from the other,
+     because no school-calendar rule exists yet to map dates onto terms. Ids are
+     placeholders for the client-generated UUIDs the store will assign. */
   const create = (draft: NewAssessment) => {
     const created: Assessment[] = draft.classIds.flatMap((classId) => {
       const cls = classes.find((c) => c.id === classId)
@@ -43,8 +53,9 @@ export function AssessmentsScreen({ assessmentId, view, onOpen, onBackToList }: 
         subject: draft.subject,
         stream: cls.stream,
         name: draft.name,
-        term: 'Term 2',
-        year: 2025,
+        term: draft.term,
+        year: Number(draft.date.slice(0, 4)),
+        date: draft.date,
         entered: 0,
         total: cls.enrolment,
         status: 'scheduled',
@@ -52,6 +63,8 @@ export function AssessmentsScreen({ assessmentId, view, onOpen, onBackToList }: 
       }]
     })
     setList((prev) => [...created, ...prev])
+    /* Show the year the new records landed in, so they are not filtered out of view. */
+    setFilters((f) => ({ ...f, year: Number(draft.date.slice(0, 4)) }))
   }
 
   return (

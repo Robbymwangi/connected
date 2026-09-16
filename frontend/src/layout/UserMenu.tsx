@@ -1,4 +1,5 @@
 import { Settings, ShieldCheck, UserRound, type LucideIcon } from 'lucide-react'
+import type { RefObject } from 'react'
 import { Popover } from '../components/Popover'
 import { currentUser } from '../fixtures/user'
 
@@ -11,12 +12,19 @@ const ITEMS: { icon: LucideIcon; label: string }[] = [
 type UserMenuProps = {
   open: boolean
   onClose: () => void
+  triggerRef: RefObject<HTMLElement | null>
 }
 
 /* Entries are inert until those screens exist. */
-export function UserMenu({ open, onClose }: UserMenuProps) {
+export function UserMenu({ open, onClose, triggerRef }: UserMenuProps) {
   return (
-    <Popover open={open} onClose={onClose} anchor="bottom-left" className="w-52 bg-card">
+    <Popover
+      open={open}
+      onClose={onClose}
+      anchor="bottom-left"
+      triggerRef={triggerRef}
+      className="w-52 bg-card"
+    >
       <div className="border-b border-border/60 px-4 py-3">
         <p className="text-sm font-semibold text-foreground">{currentUser.fullName}</p>
         <p className="text-xs text-muted-foreground">{currentUser.email}</p>

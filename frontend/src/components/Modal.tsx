@@ -1,8 +1,12 @@
 import { X } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react'
 import { Button } from './Button'
 
 const EXIT_MS = 180
+
+/* Everything that can hold keyboard focus inside the dialog. */
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 type ModalProps = {
   open: boolean
@@ -18,6 +22,11 @@ type ModalProps = {
 /* Centred dialog over a blurred scrim. Stays mounted through its exit animation,
    then unmounts. Esc and a click on the scrim both close it. */
 export function Modal({ open, onClose, title, headerExtra, children, footer, size = 'md' }: ModalProps) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  /* The latest onClose, callable from the effect without being a dependency of it.
+     Callers often pass a fresh function each render, and re-running the focus
+     effect on every keystroke would yank focus out of the field being typed in. */
+  const requestClose = useEffectEvent(() => onClose())
   const [mounted, setMounted] = useState(open)
   /* Opening mounts immediately, adjusted during render; closing waits for the exit
      animation, so that side is a timer. */
@@ -29,14 +38,51 @@ export function Modal({ open, onClose, title, headerExtra, children, footer, siz
     return () => clearTimeout(timer)
   }, [open])
 
+  /* A dialog takes the keyboard while it is open: focus moves in, Tab cycles within
+     it, and focus returns to whatever opened it on close. Without the trap, Tab
+     walks off into the page behind the scrim, which is still fully operable.
+     See WAI-ARIA Authoring Practices, Dialog (Modal) pattern. */
   useEffect(() => {
     if (!open) return
+
+    const opener = document.activeElement as HTMLElement | null
+    /* tabIndex filters out controls opted out of the tab order with tabindex="-1",
+       which the selector alone would still match. */
+    const focusables = () =>
+      Array.from(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []).filter(
+        (el) => el.tabIndex >= 0,
+      )
+
+    focusables()[0]?.focus()
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        requestClose()
+        return
+      }
+      if (e.key !== 'Tab') return
+
+      const items = focusables()
+      if (items.length === 0) return
+      const first = items[0]
+      const last = items[items.length - 1]
+      const active = document.activeElement
+
+      if (e.shiftKey && (active === first || !panelRef.current?.contains(active))) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
+
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      opener?.focus()
+    }
+  }, [open])
 
   if (!mounted) return null
   const phase = open ? 'open' : 'close'
@@ -49,6 +95,7 @@ export function Modal({ open, onClose, title, headerExtra, children, footer, siz
       }}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}

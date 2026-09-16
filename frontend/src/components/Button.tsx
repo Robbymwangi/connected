@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, Ref } from 'react'
 
 type Variant = 'ghost' | 'danger'
 
@@ -13,16 +13,20 @@ const VARIANT_CLASSES: Record<Variant, string> = {
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant
+  /* React 19 passes ref as an ordinary prop; no forwardRef needed. */
+  ref?: Ref<HTMLButtonElement>
 }
 
 export function Button({
   variant = 'ghost',
   className = '',
   type = 'button',
+  ref,
   ...rest
 }: ButtonProps) {
   return (
     <button
+      ref={ref}
       type={type}
       className={`${VARIANT_CLASSES[variant]} ${className}`}
       {...rest}

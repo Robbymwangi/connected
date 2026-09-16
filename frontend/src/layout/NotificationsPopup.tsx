@@ -1,5 +1,5 @@
 import { Bell, X } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type RefObject } from 'react'
 import { Popover } from '../components/Popover'
 import type { StatusTone } from '../components/StatusPill'
 import { notifications as seed } from '../fixtures/notifications'
@@ -16,9 +16,10 @@ const DOT_CLASSES: Record<StatusTone, string> = {
 type NotificationsPopupProps = {
   open: boolean
   onClose: () => void
+  triggerRef: RefObject<HTMLElement | null>
 }
 
-export function NotificationsPopup({ open, onClose }: NotificationsPopupProps) {
+export function NotificationsPopup({ open, onClose, triggerRef }: NotificationsPopupProps) {
   const [items, setItems] = useState(seed)
   const unreadCount = items.filter((n) => n.unread).length
 
@@ -26,7 +27,13 @@ export function NotificationsPopup({ open, onClose }: NotificationsPopupProps) {
   const dismiss = (id: string) => setItems((prev) => prev.filter((n) => n.id !== id))
 
   return (
-    <Popover open={open} onClose={onClose} anchor="top-right" className="w-80 bg-background">
+    <Popover
+      open={open}
+      onClose={onClose}
+      anchor="top-right"
+      triggerRef={triggerRef}
+      className="w-80 bg-background"
+    >
       <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-foreground">Notifications</span>
@@ -78,7 +85,7 @@ export function NotificationsPopup({ open, onClose }: NotificationsPopupProps) {
               type="button"
               onClick={() => dismiss(n.id)}
               aria-label="Dismiss"
-              className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:text-foreground"
+              className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground"
             >
               <X className="size-3" />
             </button>

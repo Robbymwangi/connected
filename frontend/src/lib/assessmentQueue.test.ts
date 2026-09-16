@@ -9,6 +9,7 @@ const make = (id: string, over: Partial<Assessment> = {}): Assessment => ({
   name: 'CAT 1',
   term: 'Term 1',
   year: 2025,
+  date: '2025-03-10',
   entered: 0,
   total: 28,
   status: 'scheduled',

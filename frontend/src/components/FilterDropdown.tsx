@@ -1,5 +1,5 @@
 import { Check, ChevronDown } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Popover } from './Popover'
 
 type FilterDropdownProps<T extends string> = {
@@ -18,10 +18,12 @@ export function FilterDropdown<T extends string>({
   label,
 }: FilterDropdownProps<T>) {
   const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   return (
     <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={disabled}
@@ -36,6 +38,7 @@ export function FilterDropdown<T extends string>({
         open={open}
         onClose={() => setOpen(false)}
         anchor="top-left"
+        triggerRef={triggerRef}
         className="min-w-40 bg-card backdrop-blur-lg"
       >
         <div className="py-1.5" role="listbox">

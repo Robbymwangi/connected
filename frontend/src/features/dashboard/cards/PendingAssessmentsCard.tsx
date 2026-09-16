@@ -5,18 +5,19 @@ import { pendingAssessments } from '../../../fixtures/dashboard'
 
 type PendingAssessmentsCardProps = {
   onExpand: () => void
+  onCreate: () => void
 }
 
-export function PendingAssessmentsCard({ onExpand }: PendingAssessmentsCardProps) {
+export function PendingAssessmentsCard({ onExpand, onCreate }: PendingAssessmentsCardProps) {
   return (
     <Card
       title="Pending Assessments"
       onExpand={onExpand}
       expandLabel="Open assessments"
       action={
-        /* Designed scope with nothing behind it yet, like Log Out. */
         <button
           type="button"
+          onClick={onCreate}
           className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
         >
           <Plus className="size-3.5" /> New

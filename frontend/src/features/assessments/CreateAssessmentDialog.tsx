@@ -1,12 +1,14 @@
 import { Check } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Modal } from '../../components/Modal'
+import { TERMS } from '../../fixtures/assessments'
 import { classes } from '../../fixtures/classes'
 import { rubricFor, subjects, type Subject } from '../../fixtures/rubrics'
 
 export type NewAssessment = {
   subject: Subject
   name: string
+  term: string
   date: string
   classIds: string[]
 }
@@ -14,11 +16,12 @@ export type NewAssessment = {
 type Draft = {
   subject: Subject | null
   name: string
+  term: string
   date: string
   classIds: string[]
 }
 
-const EMPTY: Draft = { subject: null, name: '', date: '', classIds: [] }
+const EMPTY: Draft = { subject: null, name: '', term: TERMS[0], date: '', classIds: [] }
 const STEPS = 4
 
 type CreateAssessmentDialogProps = {
@@ -49,9 +52,20 @@ export function CreateAssessmentDialog({ open, onClose, onCreate }: CreateAssess
     : step === 2 ? draft.classIds.length > 0
     : true
 
+  /* Only classes that teach the chosen subject can sit it. */
+  const eligibleClasses = draft.subject
+    ? classes.filter((c) => c.subjects.includes(draft.subject as string))
+    : []
+
   const create = () => {
     if (!draft.subject) return
-    onCreate({ subject: draft.subject, name: draft.name.trim(), date: draft.date, classIds: draft.classIds })
+    onCreate({
+      subject: draft.subject,
+      name: draft.name.trim(),
+      term: draft.term,
+      date: draft.date,
+      classIds: draft.classIds,
+    })
     setStep(3)
   }
 
@@ -109,7 +123,10 @@ export function CreateAssessmentDialog({ open, onClose, onCreate }: CreateAssess
             <button
               key={s}
               type="button"
-              onClick={() => setDraft((d) => ({ ...d, subject: s }))}
+              onClick={() =>
+                setDraft((d) => (d.subject === s ? d : { ...d, subject: s, classIds: [] }))
+              }
+              aria-pressed={draft.subject === s}
               className={choiceClass(draft.subject === s)}
             >
               <span>
@@ -125,7 +142,7 @@ export function CreateAssessmentDialog({ open, onClose, onCreate }: CreateAssess
 
       {step === 1 && (
         <div className="flex flex-col gap-3">
-          <p className="mb-1 text-sm font-semibold text-foreground">Name and date</p>
+          <p className="mb-1 text-sm font-semibold text-foreground">Name, term, and date</p>
           <input
             value={draft.name}
             onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
@@ -133,6 +150,16 @@ export function CreateAssessmentDialog({ open, onClose, onCreate }: CreateAssess
             aria-label="Assessment name"
             className={inputClass}
           />
+          <select
+            value={draft.term}
+            onChange={(e) => setDraft((d) => ({ ...d, term: e.target.value }))}
+            aria-label="Term"
+            className={inputClass}
+          >
+            {TERMS.map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
           <input
             type="date"
             value={draft.date}
@@ -146,7 +173,7 @@ export function CreateAssessmentDialog({ open, onClose, onCreate }: CreateAssess
       {step === 2 && (
         <div className="flex flex-col gap-3">
           <p className="mb-1 text-sm font-semibold text-foreground">Select streams</p>
-          {classes.map((c) => {
+          {eligibleClasses.map((c) => {
             const selected = draft.classIds.includes(c.id)
             return (
               <button
@@ -180,7 +207,8 @@ export function CreateAssessmentDialog({ open, onClose, onCreate }: CreateAssess
           <p className="text-sm text-muted-foreground">
             <strong>{draft.name}</strong> · {draft.subject}
             <br />
-            {draft.classIds.length} stream{draft.classIds.length !== 1 ? 's' : ''} · {draft.date}
+            {draft.term} · {draft.classIds.length} stream
+            {draft.classIds.length !== 1 ? 's' : ''} · {draft.date}
           </p>
         </div>
       )}

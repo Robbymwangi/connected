@@ -1,5 +1,5 @@
 import { Bell, Menu, Moon, Search, Sun } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { syncState } from '../fixtures/sync'
 import { useConnectivity } from '../lib/connectivity'
 import { useTheme } from '../lib/theme'
@@ -16,6 +16,7 @@ export function TopBar({ menuPinned, onMenuHover, onMenuClick }: TopBarProps) {
   const { theme, toggleTheme } = useTheme()
   const { isOnline, toggleOverride } = useConnectivity()
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const notificationsTrigger = useRef<HTMLButtonElement>(null)
 
   return (
     <header className="topbar-glass sticky top-0 z-30 flex h-16 items-stretch border-b border-border/60 backdrop-blur-md transition-colors">
@@ -65,9 +66,11 @@ export function TopBar({ menuPinned, onMenuHover, onMenuClick }: TopBarProps) {
 
         <div className="relative flex h-full items-center">
           <button
+            ref={notificationsTrigger}
             type="button"
             onClick={() => setNotificationsOpen((v) => !v)}
             aria-expanded={notificationsOpen}
+            aria-label="Notifications"
             className="flex h-full items-center gap-2 px-4 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <Bell className="size-5" />
@@ -76,6 +79,7 @@ export function TopBar({ menuPinned, onMenuHover, onMenuClick }: TopBarProps) {
           <NotificationsPopup
             open={notificationsOpen}
             onClose={() => setNotificationsOpen(false)}
+            triggerRef={notificationsTrigger}
           />
         </div>
 

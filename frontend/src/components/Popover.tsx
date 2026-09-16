@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react'
+import { useMemo, useRef, type ReactNode, type RefObject } from 'react'
 import { useClickOutside } from '../lib/useClickOutside'
 
 type Anchor = 'top-left' | 'top-right' | 'bottom-left'
@@ -24,20 +24,31 @@ type PopoverProps = {
   open: boolean
   onClose: () => void
   anchor: Anchor
+  /* The control that opens this panel. Inside the outside-click boundary, so that
+     clicking it while open closes rather than reopens. */
+  triggerRef?: RefObject<HTMLElement | null>
   className?: string
   children: ReactNode
 }
 
 /* Anchored panel that stays mounted and animates in and out, dismissed by a click
-   outside it. The parent must be position: relative. */
-export function Popover({ open, onClose, anchor, className = '', children }: PopoverProps) {
-  const ref = useRef<HTMLDivElement>(null)
-  useClickOutside(ref, onClose)
+   outside it. The parent must be position: relative.
+
+   Closed, it is inert: the panel keeps its children mounted for the animation, and
+   neither aria-hidden nor pointer-events removes them from the tab order. */
+export function Popover({ open, onClose, anchor, triggerRef, className = '', children }: PopoverProps) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  const refs = useMemo(
+    () => (triggerRef ? [panelRef, triggerRef] : [panelRef]),
+    [triggerRef],
+  )
+  useClickOutside(refs, onClose)
   const { position, closed } = ANCHOR_CLASSES[anchor]
 
   return (
     <div
-      ref={ref}
+      ref={panelRef}
+      inert={!open}
       aria-hidden={!open}
       className={`absolute z-50 overflow-hidden rounded-2xl border border-border shadow-2xl transition-[opacity,transform] duration-200 ease-out ${position} ${
         open ? 'opacity-100' : `pointer-events-none opacity-0 ${closed}`
