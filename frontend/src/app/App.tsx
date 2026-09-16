@@ -4,22 +4,26 @@ import { Dashboard } from '../features/dashboard/Dashboard'
 import { AppShell } from '../layout/AppShell'
 import type { NavId } from '../layout/navigation'
 import { home, type Location } from './location'
+import { useSessionStore } from './useSessionStore'
 
 export default function App() {
   const [location, setLocation] = useState<Location>(home)
   const navigate = (screen: NavId) =>
     setLocation(screen === 'assessments' ? { screen: 'assessments' } : { screen })
+  const store = useSessionStore()
 
   return (
     <AppShell active={location.screen} onNavigate={navigate}>
       {location.screen === 'dashboard' && (
         <Dashboard
+          conflicts={store.conflicts}
           onNavigate={navigate}
           onCreateAssessment={() => setLocation({ screen: 'assessments', creating: true })}
         />
       )}
       {location.screen === 'assessments' && (
         <AssessmentsScreen
+          store={store}
           assessmentId={location.assessmentId}
           view={location.view}
           creating={location.creating}

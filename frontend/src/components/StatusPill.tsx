@@ -23,11 +23,13 @@ type StatusPillProps = {
   icon?: ReactNode
   children: ReactNode
   className?: string
+  'aria-label'?: string
 }
 
-export function StatusPill({ tone, size = 'md', icon, children, className = '' }: StatusPillProps) {
+export function StatusPill({ tone, size = 'md', icon, children, className = '', ...aria }: StatusPillProps) {
   return (
     <span
+      {...aria}
       className={`inline-flex items-center rounded-full border transition-all ${SIZE_CLASSES[size]} ${TONE_CLASSES[tone]} ${className}`}
     >
       {icon}
