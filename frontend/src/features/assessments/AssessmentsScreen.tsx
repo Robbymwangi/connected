@@ -62,7 +62,7 @@ export function AssessmentsScreen({
      because no school-calendar rule exists yet to map dates onto terms. The store
      assigns each record its UUID. */
   const create = (draft: NewAssessment) => {
-    const created: Omit<Assessment, 'id'>[] = draft.classIds.flatMap((classId) => {
+    const created: Omit<Assessment, 'id' | 'version'>[] = draft.classIds.flatMap((classId) => {
       const cls = classes.find((c) => c.id === classId)
       if (!cls) return []
       return [{

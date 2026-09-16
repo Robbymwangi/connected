@@ -9,6 +9,9 @@ import { score, type Mark } from '../lib/grading'
 export type ActiveConflict = {
   id: string
   assessmentId: string
+  /* The record version this device's edit was made against; the server's copy
+     has moved past it. See docs/adr/0001-record-versioning.md. */
+  baseVersion: number
   studentId: string
   criterionId: string
   student: string
@@ -26,6 +29,7 @@ export const activeConflicts: ActiveConflict[] = [
   {
     id: 'c-1',
     assessmentId: 'a1',
+    baseVersion: 6,
     studentId: 's1',
     criterionId: 'c3',
     student: 'Wanjiku Njoroge',
@@ -40,6 +44,7 @@ export const activeConflicts: ActiveConflict[] = [
   {
     id: 'c-2',
     assessmentId: 'a1',
+    baseVersion: 6,
     studentId: 's2',
     criterionId: 'c2',
     student: 'Kofi Mensah',
