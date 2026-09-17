@@ -27,6 +27,9 @@ export function AiDialog({ open, onClose, report }: AiDialogProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
+  /* The ring turns twice when the dialog opens, keeps turning while thinking, and
+     is off otherwise. The dialog is remounted per opening, so 'once' is initial. */
+  const [ring, setRing] = useState<'once' | 'live' | 'off'>('once')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -43,14 +46,23 @@ export function AiDialog({ open, onClose, report }: AiDialogProps) {
     setMessages((m) => [...m, { role: 'user', text: q }])
     setInput('')
     setThinking(true)
+    setRing('live')
     timer.current = setTimeout(() => {
       setMessages((m) => [...m, { role: 'assistant', answer: answer(q, report) }])
       setThinking(false)
+      setRing('off')
     }, THINK_MS)
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Ask about this report" size="md" headerExtra={<Sparkles className="size-4 text-primary" />}>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Ask about this report"
+      size="md"
+      headerExtra={<Sparkles className="size-4 text-primary" />}
+      frameClassName={`orbit ${ring === 'live' ? 'orbit--live' : ring === 'once' ? 'orbit--once' : ''}`}
+    >
       <div className="-mx-6 -my-5 flex max-h-[70vh] flex-col">
         {!isOnline ? (
           <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">

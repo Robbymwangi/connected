@@ -38,6 +38,8 @@ export function ReportsScreen({ store, onOpenStudent }: ReportsScreenProps) {
   const [cmpFilters, setCmpFilters] = useState<ReportFilters>({ term: YEAR_TO_DATE, assessment: '' })
   const [metric, setMetric] = useState<'passRate' | 'meanPct'>('passRate')
   const [aiOpen, setAiOpen] = useState(false)
+  /* Remount the dialog per opening so its conversation and ring start fresh. */
+  const [aiOpenings, setAiOpenings] = useState(0)
 
   const report = useReport(scope, filters, store)
   const cmp = useReport(comparing ? cmpScope : null, cmpFilters, store)
@@ -80,14 +82,19 @@ export function ReportsScreen({ store, onOpenStudent }: ReportsScreenProps) {
           >
             <GitCompareArrows className="size-4" /> Compare
           </button>
-          <button
-            type="button"
-            onClick={() => setAiOpen(true)}
-            disabled={!report}
-            className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-40"
-          >
-            <Sparkles className="size-4" /> Ask AI
-          </button>
+          <span className={`orbit rounded-xl ${report ? 'orbit--slow' : ''}`}>
+            <button
+              type="button"
+              onClick={() => {
+                setAiOpenings((n) => n + 1)
+                setAiOpen(true)
+              }}
+              disabled={!report}
+              className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-40"
+            >
+              <Sparkles className="size-4" /> Ask AI
+            </button>
+          </span>
         </div>
       </div>
 
@@ -104,6 +111,7 @@ export function ReportsScreen({ store, onOpenStudent }: ReportsScreenProps) {
       {report && <ReportBody report={report} cmp={cmp} metric={metric} onMetric={setMetric} onOpenStudent={onOpenStudent} />}
       {report && (
         <AiDialog
+          key={aiOpenings}
           open={aiOpen}
           onClose={() => setAiOpen(false)}
           report={{ scopeLabel: scopeLabel(report.scope), summary: report.summary, criteria: report.criteria, trend: report.trend, attention: report.attention, roster: report.roster }}
