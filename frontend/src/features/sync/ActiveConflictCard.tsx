@@ -72,5 +72,5 @@ export function ActiveConflictCard({ conflict, subject, highlighted, onResolve, 
     </div>
   )
 
-  return highlighted ? <div className="conflict-orbit">{card}</div> : card
+  return highlighted ? <div className="orbit orbit--live rounded-2xl">{card}</div> : card
 }

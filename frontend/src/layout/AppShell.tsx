@@ -3,6 +3,7 @@ import './glass.css'
 import type { NavId } from './navigation'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
+import { UpdateReady } from './UpdateReady'
 
 type AppShellProps = {
   active: NavId
@@ -49,6 +50,7 @@ export function AppShell({ active, onNavigate, children }: AppShellProps) {
       )}
 
       <div className="min-w-0 flex-1 overflow-y-auto bg-background transition-colors duration-300">
+        <UpdateReady />
         <TopBar
           menuPinned={pinned}
           onMenuHover={() => setHovering(true)}

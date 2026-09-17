@@ -1,4 +1,4 @@
-import { GitCompareArrows } from 'lucide-react'
+import { GitCompareArrows, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import type { SessionStore } from '../../app/useSessionStore'
 import { BarChart, LineChart, type Series } from '../../components/charts'
@@ -15,6 +15,7 @@ import { Panel } from '../classes/Panel'
 import { BarList, type BarListRow } from './BarList'
 import { ReportKpiTile } from './ReportKpiTile'
 import { ScopePicker } from './ScopePicker'
+import { AiDialog } from './AiDialog'
 import { useReport, type Report } from './useReport'
 
 const TERM_OPTIONS = [YEAR_TO_DATE, ...TERMS] as const
@@ -36,6 +37,9 @@ export function ReportsScreen({ store, onOpenStudent }: ReportsScreenProps) {
   const [cmpScope, setCmpScope] = useState<Scope | null>(null)
   const [cmpFilters, setCmpFilters] = useState<ReportFilters>({ term: YEAR_TO_DATE, assessment: '' })
   const [metric, setMetric] = useState<'passRate' | 'meanPct'>('passRate')
+  const [aiOpen, setAiOpen] = useState(false)
+  /* Remount the dialog per opening so its conversation and ring start fresh. */
+  const [aiOpenings, setAiOpenings] = useState(0)
 
   const report = useReport(scope, filters, store)
   const cmp = useReport(comparing ? cmpScope : null, cmpFilters, store)
@@ -55,7 +59,17 @@ export function ReportsScreen({ store, onOpenStudent }: ReportsScreenProps) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ScopePicker label="Scope" value={scope} onChange={(s) => { setScope(s); setFilters((f) => ({ ...f, assessment: '' })) }} teacher={me} />
+          <ScopePicker
+            label="Scope"
+            value={scope}
+            onChange={(s) => {
+              setScope(s)
+              setFilters((f) => ({ ...f, assessment: '' }))
+              /* The compare scope is only meaningful within the same grade. */
+              if (cmpScope && gradeOf(cmpScope.stream) !== gradeOf(s.stream)) setCmpScope(null)
+            }}
+            teacher={me}
+          />
           <FilterDropdown label="Term" value={filters.term as (typeof TERM_OPTIONS)[number]} options={TERM_OPTIONS} onChange={(term) => setFilters({ term, assessment: '' })} />
           <FilterDropdown label="Assessment" value={filters.assessment || 'All assessments'} options={namesFor(scope, filters.term).map((n) => n || 'All assessments')} onChange={(n) => setFilters((f) => ({ ...f, assessment: n === 'All assessments' ? '' : n }))} />
           <button
@@ -68,6 +82,19 @@ export function ReportsScreen({ store, onOpenStudent }: ReportsScreenProps) {
           >
             <GitCompareArrows className="size-4" /> Compare
           </button>
+          <span className={`orbit rounded-xl ${report ? 'orbit--slow' : ''}`}>
+            <button
+              type="button"
+              onClick={() => {
+                setAiOpenings((n) => n + 1)
+                setAiOpen(true)
+              }}
+              disabled={!report}
+              className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-40"
+            >
+              <Sparkles className="size-4" /> Ask AI
+            </button>
+          </span>
         </div>
       </div>
 
@@ -82,6 +109,14 @@ export function ReportsScreen({ store, onOpenStudent }: ReportsScreenProps) {
       )}
 
       {report && <ReportBody report={report} cmp={cmp} metric={metric} onMetric={setMetric} onOpenStudent={onOpenStudent} />}
+      {report && (
+        <AiDialog
+          key={aiOpenings}
+          open={aiOpen}
+          onClose={() => setAiOpen(false)}
+          report={{ scopeLabel: scopeLabel(report.scope), summary: report.summary, criteria: report.criteria, trend: report.trend, attention: report.attention, roster: report.roster }}
+        />
+      )}
     </div>
   )
 }
@@ -114,10 +149,25 @@ function ReportBody({ report, cmp, metric, onMetric, onOpenStudent }: { report: 
     { id: 'p', label: pLabel, color: 'primary', values: s.histogram.map((b) => b.count) },
     ...(c ? [{ id: 'c', label: cLabel ?? '', color: 'muted' as const, values: c.histogram.map((b) => b.count) }] : []),
   ]
-  /* Two scopes may have sat different assessments; align the lines by assessment
-     label, with a gap where one scope has no result, rather than by position. */
-  const trendCategories = [...new Set([...report.trend, ...(cmp?.trend ?? [])].map((t) => t.label))]
-  const along = (points: Report['trend']) => trendCategories.map((label) => points.find((t) => t.label === label)?.[metric] ?? null)
+  /* Two scopes may have sat different assessments; align the lines by the point's
+     key (subject, name, term), with a gap where one scope has no result, rather
+     than by position. Labels carry the subject when a scope spans subjects. */
+  const allPoints = [...report.trend, ...(cmp?.trend ?? [])]
+  /* One entry per distinct assessment (by key), ordered by the earliest date that
+     key appears on, so a compare-only assessment slots into the timeline rather
+     than being appended at the end. */
+  const byKey = new Map<string, { date: string; point: (typeof allPoints)[number] }>()
+  for (const t of allPoints) {
+    const seen = byKey.get(t.key)
+    if (!seen || t.date < seen.date) byKey.set(t.key, { date: t.date, point: t })
+  }
+  const keys = [...byKey.entries()].sort((a, b) => a[1].date.localeCompare(b[1].date)).map(([k]) => k)
+  const multiSubject = new Set(allPoints.map((t) => t.subject)).size > 1
+  const trendCategories = keys.map((k) => {
+    const t = byKey.get(k)!.point
+    return multiSubject ? `${t.subject} ${t.label}` : t.label
+  })
+  const along = (points: Report['trend']) => keys.map((k) => points.find((t) => t.key === k)?.[metric] ?? null)
   const trendSeries: Series[] = [
     { id: 'p', label: pLabel, color: 'primary', values: along(report.trend) },
     ...(cmp ? [{ id: 'c', label: cLabel ?? '', color: 'muted' as const, values: along(cmp.trend) }] : []),
