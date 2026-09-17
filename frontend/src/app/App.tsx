@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AssessmentsScreen } from '../features/assessments/AssessmentsScreen'
 import { ClassesScreen } from '../features/classes/ClassesScreen'
 import { Dashboard } from '../features/dashboard/Dashboard'
+import { ReportsScreen } from '../features/reports/ReportsScreen'
 import { SyncScreen } from '../features/sync/SyncScreen'
 import { AppShell } from '../layout/AppShell'
 import type { NavId } from '../layout/navigation'
@@ -62,10 +63,10 @@ export default function App() {
         />
       )}
       {location.screen === 'reports' && (
-        <div className="px-5 pt-6 pb-10 lg:px-8">
-          <h1 className="text-2xl font-bold text-foreground capitalize">{location.screen}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Not built yet.</p>
-        </div>
+        <ReportsScreen
+          store={store}
+          onOpenStudent={(classId, studentId) => setLocation({ screen: 'classes', classId, studentId })}
+        />
       )}
     </AppShell>
   )
