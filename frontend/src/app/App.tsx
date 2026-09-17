@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { AssessmentsScreen } from '../features/assessments/AssessmentsScreen'
+import { ClassesScreen } from '../features/classes/ClassesScreen'
 import { Dashboard } from '../features/dashboard/Dashboard'
 import { SyncScreen } from '../features/sync/SyncScreen'
 import { AppShell } from '../layout/AppShell'
@@ -13,6 +14,7 @@ export default function App() {
     setLocation(
       screen === 'assessments' ? { screen: 'assessments' }
       : screen === 'sync' ? { screen: 'sync' }
+      : screen === 'classes' ? { screen: 'classes' }
       : { screen },
     )
   const store = useSessionStore()
@@ -37,6 +39,20 @@ export default function App() {
           onBackToList={() => setLocation({ screen: 'assessments' })}
         />
       )}
+      {location.screen === 'classes' && (
+        <ClassesScreen
+          store={store}
+          classId={location.classId}
+          studentId={location.studentId}
+          teacherId={location.teacherId}
+          onOpenClass={(classId) => setLocation({ screen: 'classes', classId })}
+          onOpenStudent={(classId, studentId) => setLocation({ screen: 'classes', classId, studentId })}
+          onOpenTeacher={(teacherId) => setLocation({ screen: 'classes', teacherId })}
+          onBackToList={() => setLocation({ screen: 'classes' })}
+          onOpenGrid={(assessmentId) => setLocation({ screen: 'assessments', assessmentId, view: 'grid' })}
+          onOpenReport={(assessmentId) => setLocation({ screen: 'assessments', assessmentId, view: 'report' })}
+        />
+      )}
       {location.screen === 'sync' && (
         <SyncScreen
           key={location.highlight ?? ''}
@@ -45,7 +61,7 @@ export default function App() {
           onOpenGrid={(assessmentId) => setLocation({ screen: 'assessments', assessmentId, view: 'grid' })}
         />
       )}
-      {location.screen !== 'dashboard' && location.screen !== 'assessments' && location.screen !== 'sync' && (
+      {location.screen === 'reports' && (
         <div className="px-5 pt-6 pb-10 lg:px-8">
           <h1 className="text-2xl font-bold text-foreground capitalize">{location.screen}</h1>
           <p className="mt-1 text-sm text-muted-foreground">Not built yet.</p>

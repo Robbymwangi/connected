@@ -96,13 +96,12 @@ export function AssessmentsScreen({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-xl border border-border bg-muted/60 p-1" role="tablist">
+          <div className="flex items-center gap-1 rounded-xl border border-border bg-muted/60 p-1" role="group" aria-label="View">
             {(['queue', 'browse'] as const).map((v) => (
               <button
                 key={v}
                 type="button"
-                role="tab"
-                aria-selected={listView === v}
+                aria-pressed={listView === v}
                 onClick={() => setListView(v)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
                   listView === v ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
