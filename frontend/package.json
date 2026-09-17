@@ -9,7 +9,8 @@
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "test": "vitest run",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "offline": "vite build && vite preview --port 4173"
   },
   "dependencies": {
     "lucide-react": "^1.46.0",
