@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDateTime, formatLongDate, formatRelative, greetingFor } from './time'
+import { count, formatDateTime, formatLongDate, formatRelative, greetingFor } from './time'
 
 const at = (hour: number) => new Date(2026, 7, 28, hour, 0, 0)
 
@@ -67,5 +67,13 @@ describe('formatRelative', () => {
   })
   it('never reports the future, which clock skew between devices can produce', () => {
     expect(formatRelative(new Date(now.getTime() + 5 * minute), now)).toBe('just now')
+  })
+})
+
+describe('count', () => {
+  it('pluralises everything but one', () => {
+    expect(count(1, 'student')).toBe('1 student')
+    expect(count(0, 'student')).toBe('0 students')
+    expect(count(28, 'student')).toBe('28 students')
   })
 })

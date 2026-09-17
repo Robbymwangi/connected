@@ -42,3 +42,8 @@ export function formatDateTime(iso: string): string {
     minute: '2-digit',
   }).format(new Date(iso))
 }
+
+/* "1 student", "28 students". */
+export function count(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? '' : 's'}`
+}

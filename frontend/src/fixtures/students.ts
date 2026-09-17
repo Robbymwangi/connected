@@ -6,9 +6,9 @@ export type Student = {
   dob: string
 }
 
-/* Grade 4W roster: 28 students, matching the class's enrolment. The first eight
-   have hand-written marks in fixtures/marks.ts; the rest get generated ones. */
-export const students: Student[] = [
+/* Grade 4W roster, hand-written: 28 students, matching the class's enrolment. The
+   first eight have hand-written marks in fixtures/marks.ts. */
+const roster4W: Student[] = [
   { id: 's1', classId: 'class-4w', name: 'Wanjiku Njoroge', gender: 'F', dob: '2016-03-12' },
   { id: 's2', classId: 'class-4w', name: 'Kofi Mensah', gender: 'M', dob: '2016-07-04' },
   { id: 's3', classId: 'class-4w', name: 'Amina Osei', gender: 'F', dob: '2016-01-19' },
@@ -37,7 +37,39 @@ export const students: Student[] = [
   { id: 's26', classId: 'class-4w', name: 'Diana Auma', gender: 'F', dob: '2016-03-18' },
   { id: 's27', classId: 'class-4w', name: 'Felix Rotich', gender: 'M', dob: '2015-12-13' },
   { id: 's28', classId: 'class-4w', name: 'Hannah Moraa', gender: 'F', dob: '2016-07-07' },
+
 ]
+
+/* The other streams' rosters are generated to their enrolment from two name pools,
+   deterministically, so every stream shows its own students rather than 4W's. */
+const FIRST = ['Achieng', 'Baraka', 'Chebet', 'Dalila', 'Eshe', 'Farouk', 'Gathoni', 'Hamisi', 'Imani', 'Jabari', 'Kendi', 'Lulu', 'Makena', 'Nyambura', 'Odhiambo', 'Pendo', 'Rehema', 'Simiyu', 'Taji', 'Wanjala', 'Zawadi', 'Amani', 'Bahati', 'Chege', 'Dede', 'Elimu', 'Furaha', 'Gikuyu', 'Halima', 'Issa']
+const LAST = ['Mwangi', 'Odhiambo', 'Wanjiru', 'Kiprop', 'Nyong\'o', 'Otieno', 'Wambua', 'Cheruiyot', 'Muthoni', 'Omondi', 'Njeri', 'Kilonzo', 'Achieng', 'Kariuki', 'Barasa', 'Wekesa', 'Maina', 'Koech', 'Auma', 'Njoroge']
+const GENERATED: Array<{ classId: string; prefix: string; size: number }> = [
+  { classId: 'class-4e', prefix: 'e', size: 26 },
+  { classId: 'class-5a', prefix: 'a', size: 30 },
+  { classId: 'class-5b', prefix: 'b', size: 29 },
+  { classId: 'class-6a', prefix: 'g', size: 25 },
+]
+
+function generated(): Student[] {
+  const out: Student[] = []
+  GENERATED.forEach(({ classId, prefix, size }, c) => {
+    for (let i = 0; i < size; i++) {
+      const k = c * 7 + i
+      const year = classId.includes('-6') ? 2014 : classId.includes('-5') ? 2015 : 2016
+      out.push({
+        id: `${prefix}${i + 1}`,
+        classId,
+        name: `${FIRST[(k * 11) % FIRST.length]} ${LAST[(k * 7 + i) % LAST.length]}`,
+        gender: i % 2 === 0 ? 'F' : 'M',
+        dob: `${year}-${String((k % 12) + 1).padStart(2, '0')}-${String((k % 27) + 1).padStart(2, '0')}`,
+      })
+    }
+  })
+  return out
+}
+
+export const students: Student[] = [...roster4W, ...generated()]
 
 export function rosterFor(classId: string): Student[] {
   return students.filter((s) => s.classId === classId)

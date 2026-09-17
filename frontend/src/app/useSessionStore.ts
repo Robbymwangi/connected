@@ -203,6 +203,7 @@ export function useSessionStore() {
 
   return {
     assessments: state.assessments,
+    marks: state.marks,
     conflicts: state.conflicts,
     history: state.history,
 
