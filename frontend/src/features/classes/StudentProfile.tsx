@@ -6,7 +6,7 @@ import type { SchoolClass } from '../../fixtures/classes'
 import { results as records } from '../../fixtures/results'
 import { initials, type Student } from '../../fixtures/students'
 import { resultsForStudent, trendBySubject } from '../../lib/results'
-import { formatLongDate } from '../../lib/time'
+import { formatLongDate, parseLocalDate } from '../../lib/time'
 import { Panel } from './Panel'
 
 type StudentProfileProps = {
@@ -37,7 +37,7 @@ export function StudentProfile({ student, cls, store, onBack, onBackToList }: St
         <div className="min-w-0 flex-1">
           <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">{student.name}</h1>
           <p className="mt-1.5 text-xs text-muted-foreground">
-            Born {formatLongDate(new Date(student.dob))} · {student.gender === 'F' ? 'Female' : 'Male'} · {cls.grade} · Stream {cls.stream}
+            Born {formatLongDate(parseLocalDate(student.dob))} · {student.gender === 'F' ? 'Female' : 'Male'} · {cls.grade} · Stream {cls.stream}
           </p>
         </div>
       </div>

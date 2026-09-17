@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 import { useWidth } from '../../lib/useSize'
 import { linear, niceTicks } from '../../lib/scale'
 import { CHART_COLORS, MARGIN, type ChartProps } from './chartTypes'
@@ -29,6 +29,7 @@ export function ChartFrame({ categories, series, max, referenceLine, height = 16
   const containerRef = useRef<HTMLDivElement>(null)
   const width = useWidth(containerRef)
   const [active, setActive] = useState<number | null>(null)
+  const helpId = useId()
 
   const top = max ?? Math.max(referenceLine?.value ?? 0, ...series.flatMap((s) => s.values.filter((v): v is number => v !== null)), 0)
   const ticks = niceTicks(top)
@@ -70,6 +71,9 @@ export function ChartFrame({ categories, series, max, referenceLine, height = 16
           ))}
         </ul>
       )}
+      <p id={helpId} className="sr-only">
+        Focus the chart and use the left and right arrow keys to read each value; Escape clears the selection.
+      </p>
       <div ref={containerRef} className="relative w-full" style={{ height }}>
         {width > 0 && (
           <svg
@@ -77,6 +81,7 @@ export function ChartFrame({ categories, series, max, referenceLine, height = 16
             height={height}
             role="img"
             aria-label={label}
+            aria-describedby={helpId}
             tabIndex={0}
             onKeyDown={onKey}
             onBlur={() => setActive(null)}

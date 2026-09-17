@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { count, formatDateTime, formatLongDate, formatRelative, greetingFor } from './time'
+import { count, formatDateTime, formatLongDate, formatRelative, greetingFor, parseLocalDate } from './time'
 
 const at = (hour: number) => new Date(2026, 7, 28, hour, 0, 0)
 
@@ -75,5 +75,13 @@ describe('count', () => {
     expect(count(1, 'student')).toBe('1 student')
     expect(count(0, 'student')).toBe('0 students')
     expect(count(28, 'student')).toBe('28 students')
+  })
+})
+
+describe('parseLocalDate', () => {
+  it('reads a date-only string as local midnight, not UTC', () => {
+    const d = parseLocalDate('2016-03-12')
+    expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()]).toEqual([2016, 2, 12, 0])
+    expect(formatLongDate(d)).toBe('Saturday, 12 March 2016')
   })
 })

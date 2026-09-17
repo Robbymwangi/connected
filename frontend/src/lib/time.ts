@@ -47,3 +47,10 @@ export function formatDateTime(iso: string): string {
 export function count(n: number, noun: string): string {
   return `${n} ${noun}${n === 1 ? '' : 's'}`
 }
+
+/* A date-only ISO string (yyyy-mm-dd) as a local calendar date. new Date("2016-03-12")
+   would parse it as UTC midnight, which west of Greenwich formats as the day before. */
+export function parseLocalDate(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}

@@ -74,13 +74,12 @@ export function ClassesScreen(props: ClassesScreenProps) {
         </div>
         <div className="flex items-center gap-2">
           <FilterDropdown label="Year" value={year} options={YEARS} onChange={setYear} />
-          <div className="flex items-center gap-1 rounded-xl border border-border bg-muted/60 p-1" role="tablist">
+          <div className="flex items-center gap-1 rounded-xl border border-border bg-muted/60 p-1" role="group" aria-label="Show">
             {TABS.map((t) => (
               <button
                 key={t}
                 type="button"
-                role="tab"
-                aria-selected={tab === t}
+                aria-pressed={tab === t}
                 onClick={() => setTab(t)}
                 className={`rounded-lg px-4 py-1.5 text-xs font-semibold capitalize transition-colors ${
                   tab === t ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
