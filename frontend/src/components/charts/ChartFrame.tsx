@@ -106,7 +106,16 @@ export function ChartFrame({ categories, series, max, referenceLine, height = 16
             {referenceLine && (
               <g>
                 <line x1={plot.x0} x2={plot.x1} y1={y(referenceLine.value)} y2={y(referenceLine.value)} stroke={CHART_COLORS[referenceLine.color ?? 'warning']} strokeWidth={1} strokeDasharray="4 3" />
-                <text x={plot.x1} y={y(referenceLine.value) - 4} textAnchor="end" fontSize={10} fill={CHART_COLORS[referenceLine.color ?? 'warning']}>
+                <text
+                  x={plot.x1}
+                  y={y(referenceLine.value) - 4}
+                  textAnchor="end"
+                  fontSize={10}
+                  fill={CHART_COLORS[referenceLine.color ?? 'warning']}
+                  stroke="var(--card)"
+                  strokeWidth={3}
+                  paintOrder="stroke"
+                >
                   {referenceLine.label}
                 </text>
               </g>
