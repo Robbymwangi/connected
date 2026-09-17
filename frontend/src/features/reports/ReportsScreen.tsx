@@ -1,4 +1,4 @@
-import { GitCompareArrows } from 'lucide-react'
+import { GitCompareArrows, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import type { SessionStore } from '../../app/useSessionStore'
 import { BarChart, LineChart, type Series } from '../../components/charts'
@@ -15,6 +15,7 @@ import { Panel } from '../classes/Panel'
 import { BarList, type BarListRow } from './BarList'
 import { ReportKpiTile } from './ReportKpiTile'
 import { ScopePicker } from './ScopePicker'
+import { AiDialog } from './AiDialog'
 import { useReport, type Report } from './useReport'
 
 const TERM_OPTIONS = [YEAR_TO_DATE, ...TERMS] as const
@@ -36,6 +37,9 @@ export function ReportsScreen({ store, onOpenStudent }: ReportsScreenProps) {
   const [cmpScope, setCmpScope] = useState<Scope | null>(null)
   const [cmpFilters, setCmpFilters] = useState<ReportFilters>({ term: YEAR_TO_DATE, assessment: '' })
   const [metric, setMetric] = useState<'passRate' | 'meanPct'>('passRate')
+  const [aiOpen, setAiOpen] = useState(false)
+  /* Remount the dialog per opening so its conversation and ring start fresh. */
+  const [aiOpenings, setAiOpenings] = useState(0)
 
   const report = useReport(scope, filters, store)
   const cmp = useReport(comparing ? cmpScope : null, cmpFilters, store)
@@ -78,6 +82,19 @@ export function ReportsScreen({ store, onOpenStudent }: ReportsScreenProps) {
           >
             <GitCompareArrows className="size-4" /> Compare
           </button>
+          <span className={`orbit rounded-xl ${report ? 'orbit--slow' : ''}`}>
+            <button
+              type="button"
+              onClick={() => {
+                setAiOpenings((n) => n + 1)
+                setAiOpen(true)
+              }}
+              disabled={!report}
+              className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-40"
+            >
+              <Sparkles className="size-4" /> Ask AI
+            </button>
+          </span>
         </div>
       </div>
 
@@ -92,6 +109,14 @@ export function ReportsScreen({ store, onOpenStudent }: ReportsScreenProps) {
       )}
 
       {report && <ReportBody report={report} cmp={cmp} metric={metric} onMetric={setMetric} onOpenStudent={onOpenStudent} />}
+      {report && (
+        <AiDialog
+          key={aiOpenings}
+          open={aiOpen}
+          onClose={() => setAiOpen(false)}
+          report={{ scopeLabel: scopeLabel(report.scope), summary: report.summary, criteria: report.criteria, trend: report.trend, attention: report.attention, roster: report.roster }}
+        />
+      )}
     </div>
   )
 }

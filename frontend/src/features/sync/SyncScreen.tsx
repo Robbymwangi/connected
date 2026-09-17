@@ -4,7 +4,6 @@ import type { SessionStore } from '../../app/useSessionStore'
 import { FilterDropdown } from '../../components/FilterDropdown'
 import { ActiveConflictCard } from './ActiveConflictCard'
 import { HistoricalConflictCard } from './HistoricalConflictCard'
-import './orbit.css'
 
 const TABS = ['Active', 'Historical'] as const
 type Tab = (typeof TABS)[number]

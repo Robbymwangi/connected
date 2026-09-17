@@ -17,11 +17,14 @@ type ModalProps = {
   children: ReactNode
   footer?: ReactNode
   size?: 'sm' | 'md'
+  /* Classes for a frame around the panel, for a decoration such as the orbit
+     ring, which must sit outside the panel's own overflow clipping. */
+  frameClassName?: string
 }
 
 /* Centred dialog over a blurred scrim. Stays mounted through its exit animation,
    then unmounts. Esc and a click on the scrim both close it. */
-export function Modal({ open, onClose, title, headerExtra, children, footer, size = 'md' }: ModalProps) {
+export function Modal({ open, onClose, title, headerExtra, children, footer, size = 'md', frameClassName = '' }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   /* The latest onClose, callable from the effect without being a dependency of it.
      Callers often pass a fresh function each render, and re-running the focus
@@ -94,14 +97,13 @@ export function Modal({ open, onClose, title, headerExtra, children, footer, siz
         if (e.target === e.currentTarget) onClose()
       }}
     >
+      <div className={`w-full rounded-2xl dialog-panel--${phase} ${size === 'sm' ? 'max-w-sm' : 'max-w-md'} ${frameClassName}`}>
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`w-full overflow-hidden rounded-2xl border border-border bg-card shadow-2xl dialog-panel--${phase} ${
-          size === 'sm' ? 'max-w-sm' : 'max-w-md'
-        }`}
+        className="w-full overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-border/60 px-6 pt-5 pb-4">
           <h3 className="font-display text-base font-bold text-foreground">{title}</h3>
@@ -114,6 +116,7 @@ export function Modal({ open, onClose, title, headerExtra, children, footer, siz
         </div>
         <div className="px-6 py-5">{children}</div>
         {footer && <div className="flex gap-2 px-6 pb-5">{footer}</div>}
+      </div>
       </div>
     </div>
   )

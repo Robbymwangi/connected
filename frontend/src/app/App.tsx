@@ -38,6 +38,7 @@ export default function App() {
           creating={location.creating}
           onOpen={(assessmentId, view) => setLocation({ screen: 'assessments', assessmentId, view })}
           onBackToList={() => setLocation({ screen: 'assessments' })}
+          onOpenStudent={(classId, studentId) => setLocation({ screen: 'classes', classId, studentId })}
         />
       )}
       {location.screen === 'classes' && (
