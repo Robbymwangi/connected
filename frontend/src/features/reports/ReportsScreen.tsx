@@ -153,10 +153,18 @@ function ReportBody({ report, cmp, metric, onMetric, onOpenStudent }: { report: 
      key (subject, name, term), with a gap where one scope has no result, rather
      than by position. Labels carry the subject when a scope spans subjects. */
   const allPoints = [...report.trend, ...(cmp?.trend ?? [])]
-  const keys = [...new Set(allPoints.map((t) => t.key))]
+  /* One entry per distinct assessment (by key), ordered by the earliest date that
+     key appears on, so a compare-only assessment slots into the timeline rather
+     than being appended at the end. */
+  const byKey = new Map<string, { date: string; point: (typeof allPoints)[number] }>()
+  for (const t of allPoints) {
+    const seen = byKey.get(t.key)
+    if (!seen || t.date < seen.date) byKey.set(t.key, { date: t.date, point: t })
+  }
+  const keys = [...byKey.entries()].sort((a, b) => a[1].date.localeCompare(b[1].date)).map(([k]) => k)
   const multiSubject = new Set(allPoints.map((t) => t.subject)).size > 1
   const trendCategories = keys.map((k) => {
-    const t = allPoints.find((p) => p.key === k)!
+    const t = byKey.get(k)!.point
     return multiSubject ? `${t.subject} ${t.label}` : t.label
   })
   const along = (points: Report['trend']) => keys.map((k) => points.find((t) => t.key === k)?.[metric] ?? null)

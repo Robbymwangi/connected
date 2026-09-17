@@ -156,11 +156,14 @@ export function criterionBreakdown(assessments: Assessment[], data: Data): Array
 }
 
 export type TrendPoint = {
-  /* Stable identity for aligning two scopes: subject, name, and term together,
-     because an Overall scope holds a CAT 1 for every subject. */
+  /* Identity for aligning two scopes: subject, name, and term together, because an
+     Overall scope holds a CAT 1 for every subject, and two compared streams should
+     line their equivalent assessments up. */
   key: string
   subject: Subject
   label: string
+  /* The assessment date, for ordering merged points chronologically. */
+  date: string
   passRate: number | null
   meanPct: number | null
 }
@@ -169,7 +172,7 @@ export type TrendPoint = {
 export function trend(assessments: Assessment[], data: Data): TrendPoint[] {
   return assessments.map((a) => {
     const s = summarise([outcomesFor(a, data)])
-    return { key: `${a.subject}|${a.name}|${a.term}`, subject: a.subject, label: `${a.name}, ${a.term}`, passRate: s.passRate, meanPct: s.meanPct }
+    return { key: `${a.subject}|${a.name}|${a.term}`, subject: a.subject, label: `${a.name}, ${a.term}`, date: a.date, passRate: s.passRate, meanPct: s.meanPct }
   })
 }
 

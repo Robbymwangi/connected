@@ -31,10 +31,18 @@ describe('answer', () => {
     expect(a.text).toContain('2 students are averaging below 50%')
     expect(a.text.indexOf('Kofi Mensah')).toBeLessThan(a.text.indexOf('Amara Kamau'))
   })
-  it('describes the trend from first to last assessment', () => {
+  it('describes the trend between the first and last scored assessments', () => {
     const a = answer(SUGGESTIONS[2], report)
     expect(a.text).toContain('from 62% (CAT 1, Term 1) to 75% (CAT 2, Term 2): up 13 points')
     expect(a.chart).toBe('trend')
+  })
+  it('skips assessments with no marks when comparing the trend', () => {
+    const withGap = { ...report, trend: [
+      { label: 'CAT 0, Term 1', passRate: null, meanPct: null },
+      { label: 'CAT 1, Term 1', passRate: 62, meanPct: 55 },
+      { label: 'CAT 2, Term 2', passRate: 75, meanPct: 61.4 },
+    ] }
+    expect(answer(SUGGESTIONS[2], withGap).text).toContain('from 62% (CAT 1, Term 1) to 75% (CAT 2, Term 2)')
   })
   it('ranks criteria', () => {
     const a = answer('strongest and weakest criteria', report)

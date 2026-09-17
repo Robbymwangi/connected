@@ -121,6 +121,7 @@ describe('trend and needingAttention', () => {
     expect(overall.map((p) => p.label)).toEqual(['CAT 1, Term 1', 'CAT 1, Term 1'])
     expect(t[0].passRate).toBe(50)
     expect(t[1].meanPct).toBe(55)
+    expect(t.map((p) => p.date)).toEqual(['2025-03-10', '2025-08-18'])
   })
   it('lists students averaging below the pass mark, lowest first', () => {
     const a = needingAttention([eng1, eng2], data)

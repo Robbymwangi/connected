@@ -52,12 +52,17 @@ function support(r: AssistantReport): Answer {
 
 function trend(r: AssistantReport): Answer {
   if (r.trend.length < 2) return { text: `A trend needs at least two assessments in scope; ${r.scopeLabel} has ${r.trend.length}.` }
-  const first = r.trend[0]
-  const last = r.trend[r.trend.length - 1]
-  const delta = first.passRate !== null && last.passRate !== null ? Math.round(last.passRate - first.passRate) : null
-  const direction = delta === null ? 'cannot be compared' : delta > 0 ? `up ${delta} points` : delta < 0 ? `down ${-delta} points` : 'unchanged'
+  /* Compare the earliest and latest assessments that actually have a pass rate; an
+     assessment with no scored results contributes no point to compare. */
+  const scored = r.trend.filter((t) => t.passRate !== null)
+  const first = scored[0]
+  const last = scored[scored.length - 1]
+  const delta = scored.length >= 2 ? Math.round((last.passRate as number) - (first.passRate as number)) : null
+  const direction = delta === null ? 'cannot be compared across assessments' : delta > 0 ? `up ${delta} points` : delta < 0 ? `down ${-delta} points` : 'unchanged'
   return {
-    text: `Across ${r.trend.length} assessments in ${r.scopeLabel}, the pass rate went from ${pct(first.passRate)} (${first.label}) to ${pct(last.passRate)} (${last.label}): ${direction}. The mean went from ${pct(first.meanPct)} to ${pct(last.meanPct)}.`,
+    text: delta === null
+      ? `Across ${r.trend.length} assessments in ${r.scopeLabel}, too few have marks to compare a trend yet.`
+      : `Across ${r.trend.length} assessments in ${r.scopeLabel}, the pass rate went from ${pct(first.passRate)} (${first.label}) to ${pct(last.passRate)} (${last.label}): ${direction}. The mean went from ${pct(first.meanPct)} to ${pct(last.meanPct)}.`,
     chart: 'trend',
   }
 }

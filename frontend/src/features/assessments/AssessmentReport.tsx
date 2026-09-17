@@ -58,7 +58,7 @@ export function AssessmentReport({ assessment: a, store, onBack, onOpenStudent }
         </div>
       </div>
 
-      {!report || !s || s.scored + s.absent + s.missing === 0 ? (
+      {!report || !s || s.scored + s.absent === 0 ? (
         <p className="py-16 text-center text-sm text-muted-foreground">No marks for this assessment yet.</p>
       ) : (
         <>
