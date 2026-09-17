@@ -55,7 +55,17 @@ export function ReportsScreen({ store, onOpenStudent }: ReportsScreenProps) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ScopePicker label="Scope" value={scope} onChange={(s) => { setScope(s); setFilters((f) => ({ ...f, assessment: '' })) }} teacher={me} />
+          <ScopePicker
+            label="Scope"
+            value={scope}
+            onChange={(s) => {
+              setScope(s)
+              setFilters((f) => ({ ...f, assessment: '' }))
+              /* The compare scope is only meaningful within the same grade. */
+              if (cmpScope && gradeOf(cmpScope.stream) !== gradeOf(s.stream)) setCmpScope(null)
+            }}
+            teacher={me}
+          />
           <FilterDropdown label="Term" value={filters.term as (typeof TERM_OPTIONS)[number]} options={TERM_OPTIONS} onChange={(term) => setFilters({ term, assessment: '' })} />
           <FilterDropdown label="Assessment" value={filters.assessment || 'All assessments'} options={namesFor(scope, filters.term).map((n) => n || 'All assessments')} onChange={(n) => setFilters((f) => ({ ...f, assessment: n === 'All assessments' ? '' : n }))} />
           <button
@@ -114,10 +124,17 @@ function ReportBody({ report, cmp, metric, onMetric, onOpenStudent }: { report: 
     { id: 'p', label: pLabel, color: 'primary', values: s.histogram.map((b) => b.count) },
     ...(c ? [{ id: 'c', label: cLabel ?? '', color: 'muted' as const, values: c.histogram.map((b) => b.count) }] : []),
   ]
-  /* Two scopes may have sat different assessments; align the lines by assessment
-     label, with a gap where one scope has no result, rather than by position. */
-  const trendCategories = [...new Set([...report.trend, ...(cmp?.trend ?? [])].map((t) => t.label))]
-  const along = (points: Report['trend']) => trendCategories.map((label) => points.find((t) => t.label === label)?.[metric] ?? null)
+  /* Two scopes may have sat different assessments; align the lines by the point's
+     key (subject, name, term), with a gap where one scope has no result, rather
+     than by position. Labels carry the subject when a scope spans subjects. */
+  const allPoints = [...report.trend, ...(cmp?.trend ?? [])]
+  const keys = [...new Set(allPoints.map((t) => t.key))]
+  const multiSubject = new Set(allPoints.map((t) => t.subject)).size > 1
+  const trendCategories = keys.map((k) => {
+    const t = allPoints.find((p) => p.key === k)!
+    return multiSubject ? `${t.subject} ${t.label}` : t.label
+  })
+  const along = (points: Report['trend']) => keys.map((k) => points.find((t) => t.key === k)?.[metric] ?? null)
   const trendSeries: Series[] = [
     { id: 'p', label: pLabel, color: 'primary', values: along(report.trend) },
     ...(cmp ? [{ id: 'c', label: cLabel ?? '', color: 'muted' as const, values: along(cmp.trend) }] : []),

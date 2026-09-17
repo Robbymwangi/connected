@@ -113,9 +113,12 @@ describe('criterionBreakdown', () => {
 })
 
 describe('trend and needingAttention', () => {
-  it('reports each assessment in order', () => {
+  it('reports each assessment in order, keyed uniquely across subjects', () => {
     const t = trend([eng1, eng2], data)
     expect(t.map((p) => p.label)).toEqual(['CAT 1, Term 1', 'CAT 2, Term 2'])
+    const overall = trend([eng1, maths], data)
+    expect(new Set(overall.map((p) => p.key)).size).toBe(2)
+    expect(overall.map((p) => p.label)).toEqual(['CAT 1, Term 1', 'CAT 1, Term 1'])
     expect(t[0].passRate).toBe(50)
     expect(t[1].meanPct).toBe(55)
   })
