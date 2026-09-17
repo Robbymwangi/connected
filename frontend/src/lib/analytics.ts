@@ -155,11 +155,21 @@ export function criterionBreakdown(assessments: Assessment[], data: Data): Array
   return [...acc.entries()].map(([name, { sum, n }]) => ({ name, pct: sum / n, n }))
 }
 
+export type TrendPoint = {
+  /* Stable identity for aligning two scopes: subject, name, and term together,
+     because an Overall scope holds a CAT 1 for every subject. */
+  key: string
+  subject: Subject
+  label: string
+  passRate: number | null
+  meanPct: number | null
+}
+
 /* Per assessment, in date order: pass rate and mean, for the trend line. */
-export function trend(assessments: Assessment[], data: Data): Array<{ label: string; passRate: number | null; meanPct: number | null }> {
+export function trend(assessments: Assessment[], data: Data): TrendPoint[] {
   return assessments.map((a) => {
     const s = summarise([outcomesFor(a, data)])
-    return { label: `${a.name}, ${a.term}`, passRate: s.passRate, meanPct: s.meanPct }
+    return { key: `${a.subject}|${a.name}|${a.term}`, subject: a.subject, label: `${a.name}, ${a.term}`, passRate: s.passRate, meanPct: s.meanPct }
   })
 }
 
