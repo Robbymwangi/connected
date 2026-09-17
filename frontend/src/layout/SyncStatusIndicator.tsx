@@ -11,9 +11,10 @@ type SyncStatusIndicatorProps = {
 }
 
 /* Two facts, shown separately. The pill reports connectivity and nothing else. The
-   line beneath reports when the outbox was last drained: the gap between that time
-   and now is how a user estimates drift from the server. The pending count lives on
-   the dashboard's My Progress card, not here. */
+   line beneath reports when the outbox was last drained, and only while offline:
+   that gap is how a user estimates drift from the server, and drift is only a
+   question when there is no link. Online, the outbox drains as soon as it can. The
+   pending count lives on the dashboard's My Progress card, not here. */
 export function SyncStatusIndicator({ isOnline, lastSyncedAt, onToggleOverride }: SyncStatusIndicatorProps) {
   const now = useNow()
 
@@ -40,9 +41,11 @@ export function SyncStatusIndicator({ isOnline, lastSyncedAt, onToggleOverride }
       ) : (
         pill
       )}
-      <span className="text-[11px] leading-none font-medium whitespace-nowrap text-muted-foreground">
-        Synced {formatRelative(lastSyncedAt, now)}
-      </span>
+      {!isOnline && (
+        <span className="text-[11px] leading-none font-medium whitespace-nowrap text-muted-foreground">
+          Synced {formatRelative(lastSyncedAt, now)}
+        </span>
+      )}
     </div>
   )
 }
