@@ -21,16 +21,36 @@ const handWritten: ResultRecord[] = [
   { studentId: 's8', assessmentId: 'a7', total: 44 }, { studentId: 's8', assessmentId: 'a8', total: 66 }, { studentId: 's8', assessmentId: 'a2', total: 61 },
 ]
 
-/* Generated totals for the remaining 4W students on the same three assessments. */
+/* Generated totals. For 4W, the remaining students on the same three assessments;
+   for the other streams, every assessment that has marks entered, up to the number
+   the assessment record says were entered (a5 is part way through). English CAT 2
+   (a1) is left out on purpose: its marks live in the grid, and five students there
+   are not yet entered. */
+type Gen = { assessmentId: string; max: number; studentIds: string[] }
+
+function ids(prefix: string, from: number, to: number): string[] {
+  return Array.from({ length: to - from + 1 }, (_, i) => `${prefix}${from + i}`)
+}
+
+const GENERATED: Gen[] = [
+  { assessmentId: 'a7', max: 60, studentIds: ids('s', 9, 28) },
+  { assessmentId: 'a8', max: 100, studentIds: ids('s', 9, 28) },
+  { assessmentId: 'a2', max: 100, studentIds: ids('s', 9, 28) },
+  { assessmentId: 'a3', max: 60, studentIds: ids('a', 1, 30) },
+  { assessmentId: 'a5', max: 100, studentIds: ids('a', 1, 18) },
+  { assessmentId: 'a6', max: 60, studentIds: ids('e', 1, 26) },
+  { assessmentId: 'a9', max: 60, studentIds: ids('b', 1, 29) },
+  { assessmentId: 'a10', max: 100, studentIds: ids('b', 1, 29) },
+]
+
 function generated(): ResultRecord[] {
   const out: ResultRecord[] = []
-  const maxes: Array<[string, number]> = [['a7', 60], ['a8', 100], ['a2', 100]]
-  for (let i = 9; i <= 28; i++) {
-    maxes.forEach(([assessmentId, max], j) => {
-      const share = 0.35 + (((i * 31 + j * 17) % 23) / 22) * 0.6
-      out.push({ studentId: `s${i}`, assessmentId, total: Math.round(share * max) })
+  GENERATED.forEach(({ assessmentId, max, studentIds }, j) => {
+    studentIds.forEach((studentId, i) => {
+      const share = 0.3 + (((i * 31 + j * 17 + studentId.charCodeAt(0)) % 23) / 22) * 0.65
+      out.push({ studentId, assessmentId, total: Math.round(share * max) })
     })
-  }
+  })
   return out
 }
 
