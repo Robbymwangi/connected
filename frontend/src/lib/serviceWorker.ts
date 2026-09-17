@@ -1,17 +1,25 @@
 import { useSyncExternalStore } from 'react'
+import { registerSW } from 'virtual:pwa-register'
 
-/* Registration and the update prompt for the service worker (ADR 0004). Production
-   only: in development any registered worker is removed so it cannot fight the dev
-   server. */
+/* Registration and the update prompt for the service worker (ADR 0004). Workbox
+   generates and manages the worker; this wires its update signal to the app.
+   Production only: the dev build registers nothing (devOptions.enabled = false),
+   so the dev server's live reload is not fought. */
 
-type Update = { apply: () => void }
-
-let pending: Update | null = null
+let apply: (() => void) | null = null
 const listeners = new Set<() => void>()
-const announce = (u: Update | null) => {
-  pending = u
-  listeners.forEach((l) => l())
+
+export function registerServiceWorker() {
+  if (!import.meta.env.PROD) return
+  const update = registerSW({
+    onNeedRefresh() {
+      /* A new version has installed and is waiting; reloading activates it. */
+      apply = () => update(true)
+      listeners.forEach((l) => l())
+    },
+  })
 }
+
 const subscribe = (listener: () => void) => {
   listeners.add(listener)
   return () => {
@@ -19,41 +27,7 @@ const subscribe = (listener: () => void) => {
   }
 }
 
-export function registerServiceWorker() {
-  if (!('serviceWorker' in navigator)) return
-  if (!import.meta.env.PROD) {
-    navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister()))
-    return
-  }
-
-  let reloading = false
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloading) return
-    reloading = true
-    window.location.reload()
-  })
-
-  navigator.serviceWorker.register('/sw.js').then((registration) => {
-    const watch = (worker: ServiceWorker | null) => {
-      if (!worker) return
-      worker.addEventListener('statechange', () => {
-        /* Installed with a controller already in place means a new version is
-           waiting; without one, this is the first install and needs no prompt. */
-        if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-          announce({ apply: () => worker.postMessage('SKIP_WAITING') })
-        }
-      })
-    }
-    watch(registration.waiting)
-    registration.addEventListener('updatefound', () => watch(registration.installing))
-    if (registration.waiting && navigator.serviceWorker.controller) {
-      announce({ apply: () => registration.waiting?.postMessage('SKIP_WAITING') })
-    }
-  })
-}
-
-/* The pending update, if any, for the shell to offer. An external store, so an
-   update announced at any moment reaches the component. */
-export function useServiceWorkerUpdate(): Update | null {
-  return useSyncExternalStore(subscribe, () => pending, () => null)
+/* The pending update's apply function, if any, for the shell to offer. */
+export function useServiceWorkerUpdate(): (() => void) | null {
+  return useSyncExternalStore(subscribe, () => apply, () => null)
 }

@@ -4,8 +4,8 @@ import { useServiceWorkerUpdate } from '../lib/serviceWorker'
 /* Offered when a new build has installed and is waiting. The user chooses when
    to switch; nothing reloads under them. */
 export function UpdateReady() {
-  const update = useServiceWorkerUpdate()
-  if (!update) return null
+  const apply = useServiceWorkerUpdate()
+  if (!apply) return null
   return (
     <div
       role="status"
@@ -15,7 +15,7 @@ export function UpdateReady() {
       <span className="text-foreground">A new version of ConnectED is ready.</span>
       <button
         type="button"
-        onClick={update.apply}
+        onClick={apply}
         className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground transition-opacity hover:opacity-90"
       >
         Reload
