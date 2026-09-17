@@ -1,28 +1,7 @@
-# CodeRabbit configuration.
-#
-# Interim. CodeRabbit reads CLAUDE.md at the repository root as review guidelines,
-# but that file is not in the repository yet, so the project stage is stated here for
-# now. When CLAUDE.md lands at the root, move the path instructions into it and
-# delete this file, keeping only request_changes_workflow (or set that once in the
-# CodeRabbit organisation settings instead).
+# CodeRabbit configuration. Project guidance lives in AGENTS.md at the repository
+# root, which CodeRabbit reads as review guidelines; this file only sets the review
+# to comment rather than block, since the local review before commit is the gate.
 language: en-GB
 reviews:
   profile: chill
-  # Comment, do not block: the local review before commit is the gate, and a repo
-  # ruleset on main would otherwise need a manual dismissal on every MR.
   request_changes_workflow: false
-  path_instructions:
-    - path: "frontend/**"
-      instructions: |
-        Current stage: the frontend runs entirely on static fixtures with an
-        in-memory session store (app/useSessionStore.ts). There is no API client,
-        no sync engine, and no IndexedDB store yet. Findings that depend on a
-        server (acknowledgements, record versions, persistence across reloads,
-        network error handling) are future work: note them as such, not as
-        defects to fix in the MR.
-
-        Conventions: fixture ids are short readable strings; the store assigns
-        real client-generated UUIDs to created records. Colour comes only from
-        the semantic tokens in styles/tokens.css. Dashboard cards are static
-        apart from the class selector on My Classes. Absent is an explicit mark
-        value, never null or zero.
