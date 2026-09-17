@@ -5,7 +5,7 @@ import type { Assessment } from '../../fixtures/assessments'
 import { classes } from '../../fixtures/classes'
 import { DEFAULT_FILTERS, filterAssessments, type QueueFilters } from '../../lib/assessmentQueue'
 import { MarkingGrid } from './grid/MarkingGrid'
-import { AssessmentPlaceholder } from './AssessmentPlaceholder'
+import { AssessmentReport } from './AssessmentReport'
 import { BrowseTree } from './BrowseTree'
 import { CreateAssessmentDialog, type NewAssessment } from './CreateAssessmentDialog'
 import { QueueList } from './QueueList'
@@ -21,6 +21,7 @@ type AssessmentsScreenProps = {
   creating?: boolean
   onOpen: (assessmentId: string, view: 'grid' | 'report') => void
   onBackToList: () => void
+  onOpenStudent: (classId: string, studentId: string) => void
 }
 
 export function AssessmentsScreen({
@@ -30,6 +31,7 @@ export function AssessmentsScreen({
   creating: creatingOnArrival = false,
   onOpen,
   onBackToList,
+  onOpenStudent,
 }: AssessmentsScreenProps) {
   const { assessments: list, conflicts } = store
   const [listView, setListView] = useState<View>('queue')
@@ -54,7 +56,7 @@ export function AssessmentsScreen({
     )
   }
   if (open && view === 'report') {
-    return <AssessmentPlaceholder assessment={open} onBack={onBackToList} />
+    return <AssessmentReport assessment={open} store={store} onBack={onBackToList} onOpenStudent={onOpenStudent} />
   }
 
   const shown = filterAssessments(list, filters).length
