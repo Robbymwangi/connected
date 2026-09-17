@@ -22,6 +22,8 @@ type AssessmentsScreenProps = {
   onOpen: (assessmentId: string, view: 'grid' | 'report') => void
   onBackToList: () => void
   onOpenStudent: (classId: string, studentId: string) => void
+  /* Called when the create dialog closes, so the URL can drop its ?new. */
+  onCreateClosed?: () => void
 }
 
 export function AssessmentsScreen({
@@ -32,6 +34,7 @@ export function AssessmentsScreen({
   onOpen,
   onBackToList,
   onOpenStudent,
+  onCreateClosed,
 }: AssessmentsScreenProps) {
   const { assessments: list, conflicts } = store
   const [listView, setListView] = useState<View>('queue')
@@ -139,7 +142,14 @@ export function AssessmentsScreen({
         />
       )}
 
-      <CreateAssessmentDialog open={creating} onClose={() => setCreating(false)} onCreate={create} />
+      <CreateAssessmentDialog
+        open={creating}
+        onClose={() => {
+          setCreating(false)
+          onCreateClosed?.()
+        }}
+        onCreate={create}
+      />
     </div>
   )
 }

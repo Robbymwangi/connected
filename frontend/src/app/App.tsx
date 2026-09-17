@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { AssessmentsScreen } from '../features/assessments/AssessmentsScreen'
 import { ClassesScreen } from '../features/classes/ClassesScreen'
 import { Dashboard } from '../features/dashboard/Dashboard'
@@ -6,11 +5,12 @@ import { ReportsScreen } from '../features/reports/ReportsScreen'
 import { SyncScreen } from '../features/sync/SyncScreen'
 import { AppShell } from '../layout/AppShell'
 import type { NavId } from '../layout/navigation'
-import { home, type Location } from './location'
+import { useLocation } from './useLocation'
 import { useSessionStore } from './useSessionStore'
 
 export default function App() {
-  const [location, setLocation] = useState<Location>(home)
+  /* The URL is the source of truth for where the user is (ADR 0005). */
+  const [location, setLocation] = useLocation()
   const navigate = (screen: NavId) =>
     setLocation(
       screen === 'assessments' ? { screen: 'assessments' }
@@ -39,6 +39,7 @@ export default function App() {
           onOpen={(assessmentId, view) => setLocation({ screen: 'assessments', assessmentId, view })}
           onBackToList={() => setLocation({ screen: 'assessments' })}
           onOpenStudent={(classId, studentId) => setLocation({ screen: 'classes', classId, studentId })}
+          onCreateClosed={() => setLocation({ screen: 'assessments' }, { replace: true })}
         />
       )}
       {location.screen === 'classes' && (

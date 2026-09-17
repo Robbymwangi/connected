@@ -1,0 +1,17 @@
+{
+  "name": "ConnectED",
+  "short_name": "ConnectED",
+  "description": "Offline-first examination management and academic analytics for schools.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fdfbf7",
+  "theme_color": "#c1440e",
+  "lang": "en",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
