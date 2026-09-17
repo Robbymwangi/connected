@@ -70,17 +70,18 @@ export function AssessmentReport({ assessment: a, store, onBack, onOpenStudent }
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Panel title="Criterion breakdown" aside="average share achieved">
-              <div className="px-5 py-4">
-                {report.criteria.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-muted-foreground">Criterion detail comes from the marking grid; this assessment's marks are on record as totals only.</p>
-                ) : (
+            {/* Criterion detail exists only where a marking grid does; for a
+                record-only assessment the panel is dropped and student results
+                take the full width rather than sit beside an empty box. */}
+            {report.criteria.length > 0 && (
+              <Panel title="Criterion breakdown" aside="average share achieved">
+                <div className="px-5 py-4">
                   <BarList rows={[...report.criteria].sort((x, y) => y.pct - x.pct).map((c) => ({ label: c.name, pct: c.pct, detail: `n=${c.n}` }))} reference={PASS_MARK_PCT} />
-                )}
-              </div>
-            </Panel>
+                </div>
+              </Panel>
+            )}
 
-            <Panel title="Student results" aside={count(report.roster.length, 'student')}>
+            <Panel title="Student results" aside={count(report.roster.length, 'student')} className={report.criteria.length === 0 ? 'lg:col-span-2' : undefined}>
               <div className="max-h-[420px] divide-y divide-border/40 overflow-y-auto">
                 {report.roster.map((student) => {
                   const o = outcomes.find((x) => x.studentId === student.id)
