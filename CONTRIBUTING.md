@@ -9,6 +9,16 @@ file is about the workflow around it.
 [`README.md`](README.md) has the full guide, including the Windows and WSL2 notes.
 The short version: Docker, Node 22, `make`, then `make setup`.
 
+## The board
+
+Work is tracked on the GitHub Project board, kanban style: pick the next ticket you
+can do, move it to In progress, branch, and open the merge request with `Closes #N`
+in its body so the ticket closes on merge. Milestones are the dated states in
+[`docs/build-plan.md`](docs/build-plan.md); tickets carry that document's five
+fields (Task, Read first, Constraints, Done when, Do not) so an item can be pasted
+into an agent session verbatim. Nobody is assigned work; the board shows who took
+what.
+
 ## Branches and merge requests
 
 - Branch from `main` as `feat/`, `fix/`, `docs/`, or `chore/` followed by a short

@@ -6,15 +6,9 @@ unreliable connectivity.
 ![React 19](https://img.shields.io/badge/React-19-20232a?logo=react&logoColor=61dafb)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)
-![PWA](https://img.shields.io/badge/PWA-offline%20first-c1440e)
 ![Laravel 13](https://img.shields.io/badge/Laravel-13-ff2d20?logo=laravel&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169e1?logo=postgresql&logoColor=white)
 ![Status](https://img.shields.io/badge/status-in%20development-f4a261)
-
-A teacher enters marks in a classroom with no signal, a head of department reviews
-class performance that evening on a phone with one bar, and the school's records
-still end up consistent. ConnectED is a final-year capstone by two developers,
-due at the end of November 2026.
 
 ## The problem
 
@@ -163,17 +157,7 @@ nvm, and `make` from your package manager. Then `make setup`.
 
 ## Documentation
 
-- [`AGENTS.md`](AGENTS.md): the rules of the codebase. Read it before changing
-  anything; the data rules in it are load-bearing.
-- [`CONTRIBUTING.md`](CONTRIBUTING.md): branches, reviews, merge requests, and when
-  to write an ADR.
+- [`AGENTS.md`](AGENTS.md): Built for AI agents to better understand the project
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): Collaboration conventions followed by the project
 - [`docs/adr/`](docs/adr/): why things are the way they are, one decision per file.
-- [`docs/port-brief.md`](docs/port-brief.md): the brief for porting the Figma design
-  into the frontend.
 
-## Status
-
-The frontend runs on static fixtures with an in-memory session store; the screens,
-service worker, router, and charts are in. The API is a fresh Laravel skeleton on
-Postgres. Next: the API resources and the local store with its outbox, which is the
-synchronisation layer described above.

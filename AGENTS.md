@@ -71,6 +71,12 @@ These are load-bearing. Do not work around them.
   beneath it. Anything deeper is reached contextually, never from the sidebar: a
   student profile opens from its stream with a breadcrumb back, and that is allowed.
 - User preferences are local only. Nothing that requires the network to apply.
+- Notifications are records the device already holds, synced like any other table
+  (job status rows: report generation, sync conflicts, enrolment changes). The feed
+  works offline and needs no push infrastructure.
+- The assistant lives in Reports, scoped to the report on screen, and needs a
+  connection; offline it says so. Until the API's assistant exists, answers are
+  templated from the report's own figures and labelled as a stand-in.
 - Fixtures under `fixtures/` use short readable string ids (`s1`, `class-4w`). They
   stand in for the local store, which assigns the real client-generated UUIDs.
 
