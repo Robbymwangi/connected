@@ -4,7 +4,7 @@
             "command": "wsl.exe",
             "args": [
                 "/usr/bin/php8.4",
-                "/home/robby/ConnectED/connected/api/artisan",
+                "<absolute WSL path to this api directory>/artisan",
                 "boost:mcp"
             ]
         }
