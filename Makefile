@@ -18,14 +18,18 @@ help: ## List the targets
 
 setup: api/vendor/bin/sail api/.env frontend/node_modules ## First run: install, start, key, migrate
 	cd api && $(SAIL) up -d
-	cd api && $(SAIL) artisan key:generate --no-interaction
+	@if grep -q '^APP_KEY=$$' api/.env; then cd api && $(SAIL) artisan key:generate --no-interaction; fi
 	cd api && $(SAIL) artisan migrate --no-interaction
 	@echo
 	@echo "Ready. API on http://localhost:8000, then 'make dev' for the frontend."
 
-api/vendor/bin/sail:
+# Re-runs when either manifest changes. Day to day, `sail composer` inside the
+# running container is the faster way to add a package; this rule then re-installs
+# once more on the next `make setup`, which is redundant but correct.
+api/vendor/bin/sail: api/composer.json api/composer.lock
 	docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR)/api:/var/www/html" \
 		-w /var/www/html $(COMPOSER_IMAGE) composer install --ignore-platform-reqs --no-interaction
+	@touch $@
 
 api/.env:
 	cp api/.env.example api/.env
