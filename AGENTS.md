@@ -20,6 +20,19 @@ Laravel starter kits assume a server-rendered monolith, which is the wrong defau
 any framework feature that handles something across the client-server boundary is
 probably incompatible with offline-first.
 
+## What is ours and what is a dependency
+
+The examination scrutinises the project's contribution: the offline synchronisation
+layer. That is the local store and outbox, the version check, field-level merge, the
+conflict flow under ADRs 0001 and 0002, and the server side that accepts or rejects a
+write. Its logic and parameters must be our own implementation. Libraries underneath
+it are fine; a managed service, sync engine, or replication framework that owns that
+behaviour is not.
+
+Everything else (service worker, containers, tooling, test runners) may use
+maintained dependencies. Do not argue for hand-written infrastructure on examination
+grounds; ADR 0004 reversed a hand-written service worker to Workbox for this reason.
+
 ## Non-negotiable data rules
 
 These are load-bearing. Do not work around them.
@@ -61,36 +74,49 @@ These are load-bearing. Do not work around them.
 - Fixtures under `fixtures/` use short readable string ids (`s1`, `class-4w`). They
   stand in for the local store, which assigns the real client-generated UUIDs.
 
+## Running it
+
+`make setup` once, then `make up` for the API (Docker through Laravel Sail: `api`,
+`pgsql`, and `queue` services from `api/compose.yaml`) and `make dev` for the
+frontend, which runs natively on Node 22. `make check` is what must pass before a
+commit. The README has the platform notes; `CONTRIBUTING.md` has the workflow.
+
 ## Conventions
+
+The workflow (branches, merge requests, reviews, ADRs) is in `CONTRIBUTING.md`. The
+rules an agent applies while writing:
 
 - No em dashes in prose or comments; use semicolons, conjunctions, or colons.
 - Oxford comma.
 - "Merge request", not "pull request".
 - Branches: `feat/`, `fix/`, `docs/`, `chore/` followed by a short slug.
 - Squash merge into `main`. One commit per completed work item.
-- `npm run typecheck` must pass before any piece of work is finished. The Figma export
-  was never type-checked and contained syntax errors that esbuild silently stripped.
+- `make check` must pass before any piece of work is finished: the frontend type
+  check is not optional. The Figma export was never type-checked and contained
+  syntax errors that esbuild silently stripped.
 - Run the CodeRabbit local review (`coderabbit review --uncommitted -c AGENTS.md`) and
-  address or decline its findings before every commit. Local and pull-request reviews
+  address or decline its findings before every commit. Local and merge request reviews
   share one quota, so review in sweeps: one local pass per finished chunk, then let the
   bot on the merge request confirm. The bot comments; it does not block.
-- Architectural decisions go in `docs/adr/` as they are made. Three exist: record
-  versioning (0001), conflict resolution (0002), charts without a library (0003).
+- Architectural decisions go in `docs/adr/` as they are made. Five exist: record
+  versioning (0001), conflict resolution (0002), charts without a library (0003),
+  offline with Workbox (0004), router from location (0005).
 
 ## Current stage
 
 The frontend runs entirely on static fixtures with an in-memory session store
 (`app/useSessionStore.ts`, a reducer). There is no API client, no sync engine, and no
-IndexedDB store yet. Findings that depend on a server (acknowledgements, record
+IndexedDB store yet. The API is a fresh Laravel skeleton on Postgres in Sail, with no
+domain migrations or resources. Findings that depend on a server (acknowledgements, record
 versions beyond what ADR 0001 fixes, persistence across reloads, network error
 handling) are future work: note them as such, not as defects to fix now. Fixture ids
 are short readable strings; the store assigns real UUIDs to created records.
 
 ## How to work here
 
-Explain before you generate. The developers must be able to defend every part of this
-system at an oral examination, so code that works but is not understood is worse than no
-code.
+Explain before you generate. The developers must be able to defend this system at an
+oral examination, and its synchronisation layer in depth, so code that works but is not
+understood is worse than no code.
 
 When a task spans more than one file or one concern, propose a decomposition and wait
 for agreement rather than producing the whole thing. Prefer finishing one layer and
