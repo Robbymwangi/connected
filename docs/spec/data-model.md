@@ -136,11 +136,16 @@ something #36 requires.
   simply the report for whichever assessment happens to be named "End of
   Term," not a different kind of record.
 - **`notifications`**: `id`, `institution_id`, `user_id`, `kind`
-  (`sync-conflict`, `submission`, `report-ready`, `enrolment`), `tone`,
-  `title`, `body`, `unread` (boolean). Written by the server (a conflict
-  raised, a report ready), read by a device by pull; `unread` is the one
-  field a device pushes back, matching AGENTS.md's frontend rule that
-  notifications are synced job-status rows, not push infrastructure.
+  (`sync-conflict`, `submission`, `report-ready`, `enrolment`,
+  `edit-blocked`), `tone`, `title`, `body`, `unread` (boolean). Written by
+  the server (a conflict raised, a report ready), read by a device by pull;
+  `unread` is the one field a device pushes back, matching AGENTS.md's
+  frontend rule that notifications are synced job-status rows, not push
+  infrastructure. `edit-blocked` is a later, additive value
+  (`docs/spec/workflow.md`, #37): a mark edit rejected because its
+  assessment was finalized before the edit arrived isn't the same fact as
+  a `sync-conflict` between two people's values, so it gets its own kind
+  rather than stretching that one to cover it.
 - **`unlock_notes`**: `id`, `institution_id`, `assessment_id`, `user_id`,
   `note`, `created_at`. An append-only audit log, not synchronisable in the
   full sense: it's written once by ADMIN, online, and a device only ever
