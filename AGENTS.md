@@ -56,6 +56,10 @@ These are load-bearing. Do not work around them.
 
 - The application must work with zero connectivity, which is its normal resting state.
   No remote runtime dependencies: no CDN fonts, no CDN scripts, no remote images.
+  Reports is the one deliberate, named exception: it needs a connection and says so
+  offline, per `docs/spec/analytics.md` (#38), because it is a retrospective view of
+  work already recorded, not a surface a teacher depends on mid-entry with no signal.
+  Grading itself, the marking grid, and sync are never exempt.
 - Fonts are self-hosted and precached by the service worker: Fraunces for display and
   headings only, Figtree for body and tabular data.
 - Icons are `lucide-react`.
@@ -74,9 +78,11 @@ These are load-bearing. Do not work around them.
 - Notifications are records the device already holds, synced like any other table
   (job status rows: report generation, sync conflicts, enrolment changes). The feed
   works offline and needs no push infrastructure.
-- The assistant lives in Reports, scoped to the report on screen, and needs a
-  connection; offline it says so. Until the API's assistant exists, answers are
-  templated from the report's own figures and labelled as a stand-in.
+- The assistant lives in Reports, scoped to the report on screen, and shares that
+  screen's connectivity requirement above; it checks the connection itself rather
+  than trusting a cached report to still be answerable offline. Until the API's
+  assistant exists, answers are templated from the report's own figures and
+  labelled as a stand-in.
 - Fixtures under `fixtures/` use short readable string ids (`s1`, `class-4w`). They
   stand in for the local store, which assigns the real client-generated UUIDs.
 
