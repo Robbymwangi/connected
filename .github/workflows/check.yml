@@ -1,0 +1,78 @@
+name: check
+
+# Runs what `make check` runs locally, so a merge request shows the same
+# gate a developer already ran before pushing (docs/build-plan.md item 1.8,
+# ticket #46). The frontend job calls the same Makefile targets a developer
+# does, since neither needs Sail. The API job does not call `make api-test`:
+# that target shells to `sail test`, which would mean building the whole
+# Sail image inside CI for no benefit, so this job talks to PHP and Postgres
+# directly instead, pinned to the same versions Sail runs locally.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    services:
+      # Matches api/compose.yaml's pgsql service (postgres:18-alpine, same
+      # credentials as .env.example). POSTGRES_DB is set to the testing
+      # database directly, since a CI run never needs the dev database
+      # Sail's own init script also creates locally.
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: testing
+          POSTGRES_USER: sail
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sail -d testing"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: testing
+      DB_USERNAME: sail
+      DB_PASSWORD: password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          # Sail builds the api service from vendor/laravel/sail/runtimes/8.5
+          # (api/compose.yaml); matching that here, not the host's 8.4, is
+          # the point of pinning it explicitly rather than letting the
+          # runner's default PHP apply.
+          php-version: '8.5'
+          extensions: pdo_pgsql, pgsql
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist
+      - run: cp .env.example .env
+      - run: php artisan key:generate --ansi
+      - run: php artisan test
