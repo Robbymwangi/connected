@@ -134,6 +134,17 @@ When a task spans more than one file or one concern, propose a decomposition and
 for agreement rather than producing the whole thing. Prefer finishing one layer and
 letting it be reviewed over carrying several layers at once.
 
+The one scoped exception: for a Tier 1 ticket (a `docs/build-plan.md` item that is a
+direct transcription of an already-merged spec: migrations, models, tenancy, seeders,
+health, read endpoints), an agent may run the full loop, tests, implementation,
+`make check`, one CodeRabbit pass, a commit, and an opened merge request, without
+pausing for confirmation between steps. The merge request is still the human
+checkpoint; nothing merges without it, and the branch ruleset enforces that structurally
+as well as by convention. Tier 2 (auth, write policies, finalize and unlock) and Tier 3
+(the sync layer, `docs/build-plan.md` items 3.1 onward) keep the rule above: propose and
+wait, because their correctness properties are the kind reasoning catches and a passing
+test does not.
+
 Prefer transparent approaches over convenient ones. If a library would hide something
 the team needs to understand, say so rather than reaching for it. Do not add
 dependencies without asking.
