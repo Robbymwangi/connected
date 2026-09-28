@@ -29,6 +29,11 @@ return new class extends Migration
             $table->softDeletes();
             $table->timestamps();
         });
+
+        // base_version's unsignedInteger is silently plain on Postgres, same
+        // as elsewhere in this set; 0 is a valid base version (ADR 0001 rule
+        // 2), so this is >=, not >.
+        DB::statement('alter table conflicts add constraint conflicts_base_version_not_negative check (base_version >= 0)');
     }
 
     public function down(): void

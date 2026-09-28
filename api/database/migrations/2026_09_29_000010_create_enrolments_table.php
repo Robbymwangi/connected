@@ -32,6 +32,10 @@ return new class extends Migration
             'create unique index enrolments_live_unique on enrolments '.
             '(student_id, year) where deleted_at is null'
         );
+
+        // year's unsignedSmallInteger is silently plain on Postgres, same as
+        // elsewhere in this set.
+        DB::statement('alter table enrolments add constraint enrolments_year_positive check (year > 0)');
     }
 
     public function down(): void

@@ -32,6 +32,12 @@ return new class extends Migration
             'create unique index results_live_unique on results '.
             '(assessment_id, student_id) where deleted_at is null'
         );
+
+        // total and max's unsignedInteger is silently plain on Postgres, same
+        // as elsewhere in this set; both are 0 (or negative, for total)
+        // without an explicit check.
+        DB::statement('alter table results add constraint results_total_not_negative check (total >= 0)');
+        DB::statement('alter table results add constraint results_max_positive check (max > 0)');
     }
 
     public function down(): void

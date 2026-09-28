@@ -42,6 +42,11 @@ return new class extends Migration
             'alter table marks add constraint marks_score_matches_kind '.
             "check ((mark_kind = 'score') = (score is not null))"
         );
+
+        // unsignedInteger is silently a plain integer on Postgres, same as
+        // everywhere else in this migration set; a negative score needs its
+        // own explicit check. 0 is a valid score, so this is >=, not >.
+        DB::statement('alter table marks add constraint marks_score_not_negative check (score is null or score >= 0)');
     }
 
     public function down(): void

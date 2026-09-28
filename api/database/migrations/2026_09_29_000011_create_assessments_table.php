@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -43,6 +44,14 @@ return new class extends Migration
             $table->softDeletes();
             $table->timestamps();
         });
+
+        // unsignedTinyInteger/unsignedSmallInteger are, like every "unsigned"
+        // call in this migration set, silently plain integers on Postgres:
+        // it has no native unsigned type, so the bound has to be an explicit
+        // check. term matches pre-migration decision 3's 1-to-3 range
+        // exactly, not just "not negative".
+        DB::statement('alter table assessments add constraint assessments_term_in_range check (term between 1 and 3)');
+        DB::statement('alter table assessments add constraint assessments_year_positive check (year > 0)');
     }
 
     public function down(): void

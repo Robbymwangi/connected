@@ -129,6 +129,64 @@ test('class_subjects is unique per class per subject', function () {
     ])))->toThrow(Exception::class);
 });
 
+test('sessions.user_id is uuid, matching users.id', function () {
+    // Regression: the skeleton migration's default is foreignId, a bigint
+    // that could never actually hold a users.id value.
+    $column = DB::selectOne(
+        "select data_type from information_schema.columns where table_name = 'sessions' and column_name = 'user_id'"
+    );
+    expect($column->data_type)->toBe('uuid');
+});
+
+test('numeric columns reject the out-of-range values unsignedInteger implies but does not enforce on Postgres', function () {
+    // Postgres has no native unsigned integer type, so unsignedInteger() and
+    // its siblings are silently plain integers here; every check below would
+    // pass its insert through uncaught without the explicit constraints this
+    // migration set adds for each.
+    $institutionId = seedInstitution();
+    $subjectId = Str::uuid7()->toString();
+    DB::table('subjects')->insert(['id' => $subjectId, 'institution_id' => $institutionId, 'name' => 'English', 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
+
+    expect(fn () => DB::transaction(fn () => DB::table('criteria')->insert([
+        'id' => Str::uuid7()->toString(), 'institution_id' => $institutionId, 'subject_id' => $subjectId,
+        'name' => 'x', 'max_score' => 0, 'version' => 1, 'created_at' => now(), 'updated_at' => now(),
+    ])))->toThrow(Exception::class, null, 'criteria.max_score <= 0 should be rejected');
+
+    $classId = Str::uuid7()->toString();
+    DB::table('classes')->insert(['id' => $classId, 'institution_id' => $institutionId, 'grade' => '4', 'stream' => '4W', 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
+    $userId = Str::uuid7()->toString();
+    DB::table('users')->insert(['id' => $userId, 'institution_id' => $institutionId, 'name' => 'x', 'email' => 'range@example.com', 'password' => 'x', 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
+
+    expect(fn () => DB::transaction(fn () => DB::table('assessments')->insert([
+        'id' => Str::uuid7()->toString(), 'institution_id' => $institutionId, 'class_id' => $classId, 'subject_id' => $subjectId,
+        'name' => 'x', 'term' => 4, 'year' => 2026, 'date' => '2026-02-01', 'status' => 'scheduled', 'created_by' => $userId,
+        'version' => 1, 'created_at' => now(), 'updated_at' => now(),
+    ])))->toThrow(Exception::class, null, 'assessments.term outside 1 to 3 should be rejected');
+
+    $criterionId = Str::uuid7()->toString();
+    DB::table('criteria')->insert(['id' => $criterionId, 'institution_id' => $institutionId, 'subject_id' => $subjectId, 'name' => 'x', 'max_score' => 20, 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
+    $assessmentId = Str::uuid7()->toString();
+    DB::table('assessments')->insert(['id' => $assessmentId, 'institution_id' => $institutionId, 'class_id' => $classId, 'subject_id' => $subjectId, 'name' => 'x', 'term' => 1, 'year' => 2026, 'date' => '2026-02-01', 'status' => 'scheduled', 'created_by' => $userId, 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
+    $studentId = Str::uuid7()->toString();
+    DB::table('students')->insert(['id' => $studentId, 'institution_id' => $institutionId, 'name' => 'x', 'gender' => 'F', 'dob' => '2015-01-01', 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
+
+    expect(fn () => DB::transaction(fn () => DB::table('marks')->insert([
+        'id' => Str::uuid7()->toString(), 'institution_id' => $institutionId, 'assessment_id' => $assessmentId,
+        'student_id' => $studentId, 'criterion_id' => $criterionId, 'mark_kind' => 'score', 'score' => -1,
+        'last_edited_by' => $userId, 'version' => 0, 'created_at' => now(), 'updated_at' => now(),
+    ])))->toThrow(Exception::class, null, 'marks.score negative should be rejected');
+
+    expect(fn () => DB::transaction(fn () => DB::table('results')->insert([
+        'id' => Str::uuid7()->toString(), 'institution_id' => $institutionId, 'assessment_id' => $assessmentId,
+        'student_id' => $studentId, 'total' => -1, 'max' => 20, 'level' => 'BE', 'version' => 1, 'created_at' => now(), 'updated_at' => now(),
+    ])))->toThrow(Exception::class, null, 'results.total negative should be rejected');
+
+    expect(fn () => DB::transaction(fn () => DB::table('enrolments')->insert([
+        'id' => Str::uuid7()->toString(), 'institution_id' => $institutionId, 'student_id' => $studentId,
+        'class_id' => $classId, 'year' => 0, 'version' => 1, 'created_at' => now(), 'updated_at' => now(),
+    ])))->toThrow(Exception::class, null, 'enrolments.year not positive should be rejected');
+});
+
 test('a soft-deleted row does not block re-creating the same combination', function () {
     // The regression this migration set guards against: a plain unique
     // constraint would keep counting a soft-deleted row, so revoking a
