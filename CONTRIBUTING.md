@@ -46,12 +46,6 @@ what.
    confirm. The bot comments; it does not block.
 3. Commit with a message whose first line says what changed and why in one sentence.
 
-## Writing
-
-- No em dashes in prose or comments; use semicolons, conjunctions, or colons.
-- Oxford comma.
-- Comments explain why, not what, and match the density of the code around them.
-
 ## Architecture decision records
 
 A decision goes in `docs/adr/` when it is made, not after, as `NNNN-short-slug.md`
