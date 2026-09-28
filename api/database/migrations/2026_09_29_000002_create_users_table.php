@@ -6,18 +6,30 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    /* users, per docs/spec/data-model.md (#34): always server- or admin-created,
+       never offline. is_admin and the subject_moderations grants are the only
+       capabilities (#36's layered, not exclusive, decision); deactivated_at is
+       deliberately not soft-deleted, since a deactivated account still has to
+       resolve to a name wherever it's referenced (a mark's last_edited_by, a
+       conflict side, a resolution) and stays synced and visible; it just can't
+       authenticate or act.
+
+       password_reset_tokens and sessions are Laravel's own framework tables,
+       untouched: this API is Sanctum-token-only, never session-cookie auth
+       (docs/spec/access-model.md, #36), but the framework's own internals still
+       expect them to exist under the database session driver. */
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
-            $table->id();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('institution_id')->constrained('institutions');
             $table->string('name');
             $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
-            $table->rememberToken();
+            $table->boolean('is_admin')->default(false);
+            $table->timestamp('deactivated_at')->nullable();
+            $table->unsignedInteger('version')->default(0);
+            $table->softDeletes();
             $table->timestamps();
         });
 
@@ -37,9 +49,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('users');

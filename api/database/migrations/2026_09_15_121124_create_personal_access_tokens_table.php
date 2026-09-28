@@ -13,7 +13,12 @@ return new class extends Migration
     {
         Schema::create('personal_access_tokens', function (Blueprint $table) {
             $table->id();
-            $table->morphs('tokenable');
+            // uuidMorphs, not morphs: tokenable_id has to match users.id, which
+            // is a uuid (docs/spec/data-model.md, #34), not an auto-increment
+            // integer. This table's own id stays a plain auto-increment bigint;
+            // it's Sanctum's own bookkeeping table, not part of the application's
+            // domain model that the client-generated-id rule governs.
+            $table->uuidMorphs('tokenable');
             $table->text('name');
             $table->string('token', 64)->unique();
             $table->text('abilities')->nullable();
