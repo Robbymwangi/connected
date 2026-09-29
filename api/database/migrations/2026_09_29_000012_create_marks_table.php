@@ -14,7 +14,9 @@ return new class extends Migration
        primary key itself is the uniqueness constraint on the triple; no
        separate unique index is added here (docs/spec/data-model.md, #34,
        Grains and identity). Generating the id is a model-layer concern for
-       #40, not this migration.
+       #40, not this migration: see Mark::MARK_UUID_NAMESPACE and
+       Mark::newUniqueId() in app/Models/Mark.php for the fixed namespace and
+       the derivation itself.
 
        score is null unless mark_kind is score, enforced with a check
        constraint since it's a row-local rule. "At most the criterion's
