@@ -119,6 +119,16 @@ make check     # typecheck, lint, Vitest, and Pest: what must pass before a comm
 make down      # stop the containers
 ```
 
+### The seeded school
+
+`make api-fresh` drops the database, rebuilds it, and seeds one deterministic school
+(`api/database/seeders/SchoolSeeder.php`): four streams in two grades, six subjects
+with weighted rubrics, eighty students, and three terms of assessments and marks,
+including absences, students who decline across the year, and one part-entered
+assessment. Every user signs in with the password `password`; `admin@school.edu` is
+the administrator and `kamau@school.edu` moderates Maths and Science. It wipes local
+data, so it is for development only.
+
 Anything Sail can do is available from `api/` as `./vendor/bin/sail <command>`
 (`sail artisan`, `sail composer`, `sail shell`, `sail logs`); the Makefile only wraps
 the common ones. Read [`frontend/README.md`](frontend/README.md) for the npm scripts
