@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToInstitution;
 use App\Models\Concerns\Syncable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -24,7 +25,7 @@ use Ramsey\Uuid\Uuid;
 #[Fillable(['id', 'institution_id', 'assessment_id', 'student_id', 'criterion_id', 'mark_kind', 'score', 'last_edited_by'])]
 class Mark extends Model
 {
-    use Syncable;
+    use BelongsToInstitution, Syncable;
 
     public const MARK_UUID_NAMESPACE = '733181fb-9c96-4898-a85d-69d3d13d83d3';
 

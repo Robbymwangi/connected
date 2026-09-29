@@ -1,12 +1,10 @@
 <?php
 
 use App\Exceptions\StaleVersionException;
-use App\Models\Assessment;
 use App\Models\ClassSubject;
 use App\Models\Comment;
 use App\Models\Conflict;
 use App\Models\Criterion;
-use App\Models\Enrolment;
 use App\Models\Institution;
 use App\Models\Mark;
 use App\Models\Notification;
@@ -15,10 +13,7 @@ use App\Models\Result;
 use App\Models\SchoolClass;
 use App\Models\Student;
 use App\Models\Subject;
-use App\Models\SubjectModeration;
-use App\Models\TeacherAssignment;
 use App\Models\UnlockNote;
-use App\Models\User;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -32,94 +27,6 @@ use Ramsey\Uuid\Uuid;
    the mechanical decisions the spec's prose implies but doesn't spell out
    in Eloquent terms: the deterministic mark id, and version being
    server-managed rather than merely present. */
-
-function buildGraph(): array
-{
-    $institution = Institution::create(['name' => 'Test School']);
-
-    $teacher = User::create([
-        'institution_id' => $institution->id,
-        'name' => 'T. Teacher',
-        'email' => 'teacher@example.com',
-        'password' => 'a-hashed-password',
-    ]);
-
-    $subject = Subject::create(['institution_id' => $institution->id, 'name' => 'Maths']);
-
-    $criterion = Criterion::create([
-        'institution_id' => $institution->id,
-        'subject_id' => $subject->id,
-        'name' => 'Accuracy',
-        'max_score' => 10,
-    ]);
-
-    $class = SchoolClass::create([
-        'institution_id' => $institution->id,
-        'grade' => '4',
-        'stream' => 'West',
-        'class_teacher_id' => $teacher->id,
-    ]);
-
-    $classSubject = ClassSubject::create([
-        'institution_id' => $institution->id,
-        'class_id' => $class->id,
-        'subject_id' => $subject->id,
-    ]);
-
-    $teacherAssignment = TeacherAssignment::create([
-        'institution_id' => $institution->id,
-        'user_id' => $teacher->id,
-        'class_id' => $class->id,
-        'subject_id' => $subject->id,
-    ]);
-
-    $subjectModeration = SubjectModeration::create([
-        'institution_id' => $institution->id,
-        'user_id' => $teacher->id,
-        'subject_id' => $subject->id,
-    ]);
-
-    $student = Student::create([
-        'institution_id' => $institution->id,
-        'name' => 'S. Student',
-        'gender' => 'F',
-        'dob' => '2015-01-01',
-    ]);
-
-    $enrolment = Enrolment::create([
-        'institution_id' => $institution->id,
-        'student_id' => $student->id,
-        'class_id' => $class->id,
-        'year' => 2026,
-    ]);
-
-    $assessment = Assessment::create([
-        'institution_id' => $institution->id,
-        'class_id' => $class->id,
-        'subject_id' => $subject->id,
-        'name' => 'CAT 1',
-        'term' => 1,
-        'year' => 2026,
-        'date' => '2026-02-01',
-        'status' => 'scheduled',
-        'created_by' => $teacher->id,
-    ]);
-
-    $mark = Mark::create([
-        'institution_id' => $institution->id,
-        'assessment_id' => $assessment->id,
-        'student_id' => $student->id,
-        'criterion_id' => $criterion->id,
-        'mark_kind' => 'score',
-        'score' => 8,
-        'last_edited_by' => $teacher->id,
-    ]);
-
-    return compact(
-        'institution', 'teacher', 'subject', 'criterion', 'class', 'classSubject',
-        'teacherAssignment', 'subjectModeration', 'student', 'enrolment', 'assessment', 'mark',
-    );
-}
 
 test('creates a full object graph from institution down to a mark and traverses it in both directions', function () {
     $g = buildGraph();

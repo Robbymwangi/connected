@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToInstitution;
 use App\Models\Concerns\Syncable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable(['id', 'institution_id', 'subject_id', 'name', 'max_score'])]
 class Criterion extends Model
 {
-    use Syncable;
+    use BelongsToInstitution, Syncable;
 
     protected $table = 'criteria';
 

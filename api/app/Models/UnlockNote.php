@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToInstitution;
 use App\Models\Concerns\HasUuidv7;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['id', 'institution_id', 'assessment_id', 'user_id', 'note'])]
 class UnlockNote extends Model
 {
-    use HasUuidv7;
+    use BelongsToInstitution, HasUuidv7;
 
     public const UPDATED_AT = null;
 

@@ -1,5 +1,17 @@
 <?php
 
+use App\Models\Assessment;
+use App\Models\ClassSubject;
+use App\Models\Criterion;
+use App\Models\Enrolment;
+use App\Models\Institution;
+use App\Models\Mark;
+use App\Models\SchoolClass;
+use App\Models\Student;
+use App\Models\Subject;
+use App\Models\SubjectModeration;
+use App\Models\TeacherAssignment;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -44,7 +56,103 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/* Shared across EloquentModelRelationshipsTest (#40) and InstitutionScopeTest
+   (#41): a full object graph from one institution down to one mark. $suffix
+   keeps a second call's rows (a second institution, a different teacher
+   email, since users.email is globally unique) from colliding with the
+   first's. */
+/**
+ * @return array{
+ *     institution: Institution, teacher: User, subject: Subject, criterion: Criterion,
+ *     class: SchoolClass, classSubject: ClassSubject, teacherAssignment: TeacherAssignment,
+ *     subjectModeration: SubjectModeration, student: Student, enrolment: Enrolment,
+ *     assessment: Assessment, mark: Mark,
+ * }
+ */
+function buildGraph(string $institutionName = 'Test School', string $suffix = ''): array
 {
-    // ..
+    $institution = Institution::create(['name' => $institutionName]);
+
+    $teacher = User::create([
+        'institution_id' => $institution->id,
+        'name' => 'T. Teacher',
+        'email' => "teacher{$suffix}@example.com",
+        'password' => 'a-hashed-password',
+    ]);
+
+    $subject = Subject::create(['institution_id' => $institution->id, 'name' => 'Maths']);
+
+    $criterion = Criterion::create([
+        'institution_id' => $institution->id,
+        'subject_id' => $subject->id,
+        'name' => 'Accuracy',
+        'max_score' => 10,
+    ]);
+
+    $class = SchoolClass::create([
+        'institution_id' => $institution->id,
+        'grade' => '4',
+        'stream' => 'West',
+        'class_teacher_id' => $teacher->id,
+    ]);
+
+    $classSubject = ClassSubject::create([
+        'institution_id' => $institution->id,
+        'class_id' => $class->id,
+        'subject_id' => $subject->id,
+    ]);
+
+    $teacherAssignment = TeacherAssignment::create([
+        'institution_id' => $institution->id,
+        'user_id' => $teacher->id,
+        'class_id' => $class->id,
+        'subject_id' => $subject->id,
+    ]);
+
+    $subjectModeration = SubjectModeration::create([
+        'institution_id' => $institution->id,
+        'user_id' => $teacher->id,
+        'subject_id' => $subject->id,
+    ]);
+
+    $student = Student::create([
+        'institution_id' => $institution->id,
+        'name' => 'S. Student',
+        'gender' => 'F',
+        'dob' => '2015-01-01',
+    ]);
+
+    $enrolment = Enrolment::create([
+        'institution_id' => $institution->id,
+        'student_id' => $student->id,
+        'class_id' => $class->id,
+        'year' => 2026,
+    ]);
+
+    $assessment = Assessment::create([
+        'institution_id' => $institution->id,
+        'class_id' => $class->id,
+        'subject_id' => $subject->id,
+        'name' => 'CAT 1',
+        'term' => 1,
+        'year' => 2026,
+        'date' => '2026-02-01',
+        'status' => 'scheduled',
+        'created_by' => $teacher->id,
+    ]);
+
+    $mark = Mark::create([
+        'institution_id' => $institution->id,
+        'assessment_id' => $assessment->id,
+        'student_id' => $student->id,
+        'criterion_id' => $criterion->id,
+        'mark_kind' => 'score',
+        'score' => 8,
+        'last_edited_by' => $teacher->id,
+    ]);
+
+    return compact(
+        'institution', 'teacher', 'subject', 'criterion', 'class', 'classSubject',
+        'teacherAssignment', 'subjectModeration', 'student', 'enrolment', 'assessment', 'mark',
+    );
 }
