@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use InvalidArgumentException;
 use Ramsey\Uuid\Uuid;
 
 /* id is a deterministic UUIDv5 of (assessment_id, student_id, criterion_id),
@@ -27,12 +28,31 @@ class Mark extends Model
 
     public const MARK_UUID_NAMESPACE = '733181fb-9c96-4898-a85d-69d3d13d83d3';
 
+    /* The primary key is the uniqueness constraint on the identity triple
+       (docs/spec/data-model.md, Grains and identity) only if every mark's id
+       actually is that triple's UUIDv5; a supplied id that doesn't match
+       would create a second, undetectable row for the same cell instead of
+       colliding with the first. HasUuids only fills the key in when it's
+       empty, so a wrong-but-present id would otherwise pass through
+       untouched: reject it instead of silently accepting or replacing it,
+       since replacing it would break a device's own reference to the row it
+       just created. Caught by CodeRabbit's review of #40. */
+    protected static function booted(): void
+    {
+        static::creating(function (self $mark): void {
+            if ($mark->getKey() !== null && $mark->getKey() !== $mark->newUniqueId()) {
+                throw new InvalidArgumentException(
+                    'Mark id must be the deterministic UUIDv5 of (assessment_id, student_id, criterion_id).',
+                );
+            }
+        });
+    }
+
     /* Overrides HasUuidv7's random UUIDv7 with the deterministic UUIDv5, but
        only when nothing supplied an id already: HasUuids' creating hook
        calls this exactly when the attribute is still empty, so a
        client-supplied mark id (the ordinary offline-create case) is kept as
-       given, unchecked here; validating that it actually matches this
-       formula is a write-policy concern for a later ticket, not this one. */
+       given, checked above against this same formula. */
     public function newUniqueId(): string
     {
         $name = "{$this->assessment_id}:{$this->student_id}:{$this->criterion_id}";

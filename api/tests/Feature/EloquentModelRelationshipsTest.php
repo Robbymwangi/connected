@@ -22,6 +22,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use Ramsey\Uuid\Uuid;
 
 /* Ticket #40: models with relationships for all eighteen tables (the brief's
@@ -128,7 +129,7 @@ test('creates a full object graph from institution down to a mark and traverses 
     expect($g['institution']->users->first()->is($g['teacher']))->toBeTrue();
     expect($g['institution']->subjects->first()->criteria->first()->is($g['criterion']))->toBeTrue();
     expect($g['institution']->classes->first()->is($g['class']))->toBeTrue();
-    expect($g['class']->subjects->first()->is($g['subject']))->toBeTrue();
+    expect($g['class']->classSubjects->first()->subject->is($g['subject']))->toBeTrue();
     expect($g['class']->teacherAssignments->first()->teacher->is($g['teacher']))->toBeTrue();
     expect($g['institution']->students->first()->enrolments->first()->schoolClass->is($g['class']))->toBeTrue();
     expect($g['assessment']->marks->first()->is($g['mark']))->toBeTrue();
@@ -155,6 +156,41 @@ test('a mark id is a deterministic UUIDv5 of its identity triple, not a fresh UU
     )->toString();
 
     expect($g['mark']->id)->toBe($expected);
+});
+
+test('a mark id supplied for the wrong identity triple is rejected, not silently accepted or replaced', function () {
+    $g = buildGraph();
+
+    $otherCriterion = Criterion::create([
+        'institution_id' => $g['institution']->id,
+        'subject_id' => $g['subject']->id,
+        'name' => 'Presentation',
+        'max_score' => 10,
+    ]);
+
+    expect(fn () => Mark::create([
+        'id' => $g['mark']->id, // belongs to $g['criterion'], not $otherCriterion
+        'institution_id' => $g['institution']->id,
+        'assessment_id' => $g['assessment']->id,
+        'student_id' => $g['student']->id,
+        'criterion_id' => $otherCriterion->id,
+        'mark_kind' => 'score',
+        'score' => 5,
+        'last_edited_by' => $g['teacher']->id,
+    ]))->toThrow(InvalidArgumentException::class);
+});
+
+test('class_subjects is only ever written through ClassSubject, never a pivot writer', function () {
+    $g = buildGraph();
+
+    expect(method_exists(SchoolClass::class, 'subjects'))->toBeFalse();
+    expect(method_exists(Subject::class, 'classes'))->toBeFalse();
+
+    // The safe read path still works and returns full ClassSubject rows,
+    // with their own id, institution_id, version, and soft delete intact.
+    $relation = $g['class']->classSubjects->first();
+    expect($relation->is($g['classSubject']))->toBeTrue();
+    expect($relation->version)->toBe(0);
 });
 
 test('two independent creates for the same mark identity triple collide on id, not on producing two rows', function () {

@@ -6,7 +6,6 @@ use App\Models\Concerns\Syncable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /* A table, not the frontend's fixed three-item list: criteria and the
@@ -29,14 +28,11 @@ class Subject extends Model
         return $this->hasMany(Criterion::class);
     }
 
+    /* Not a belongsToMany: see the matching note on SchoolClass::classSubjects().
+       Caught by CodeRabbit's review of #40. */
     public function classSubjects(): HasMany
     {
         return $this->hasMany(ClassSubject::class);
-    }
-
-    public function classes(): BelongsToMany
-    {
-        return $this->belongsToMany(SchoolClass::class, 'class_subjects', 'subject_id', 'class_id');
     }
 
     public function teacherAssignments(): HasMany
