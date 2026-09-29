@@ -31,6 +31,13 @@ export default defineConfig({
       devOptions: { enabled: false },
     }),
   ],
+  /* The API is same-origin in production (CloudFront routes /api/* to the EC2
+     origin, build-plan 5.2) and the service worker assumes it. Locally the Sail
+     container answers on :8000, so both the dev server and `make offline`'s
+     preview forward /api there; without it the health probe would read every
+     local run as an unreachable API. */
+  server: { proxy: { '/api': 'http://localhost:8000' } },
+  preview: { proxy: { '/api': 'http://localhost:8000' } },
   test: {
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     exclude: ['e2e/**', 'node_modules/**'],

@@ -119,6 +119,11 @@ make check     # typecheck, lint, Vitest, and Pest: what must pass before a comm
 make down      # stop the containers
 ```
 
+The Online/Offline pill reports whether the API answers `GET /api/health`, not only
+whether the browser has a network. `make dev` and `make offline` forward `/api` to the
+Sail container on :8000, so with `make up` stopped the pill reads Offline; that is the
+probe working, not a bug.
+
 Anything Sail can do is available from `api/` as `./vendor/bin/sail <command>`
 (`sail artisan`, `sail composer`, `sail shell`, `sail logs`); the Makefile only wraps
 the common ones. Read [`frontend/README.md`](frontend/README.md) for the npm scripts
