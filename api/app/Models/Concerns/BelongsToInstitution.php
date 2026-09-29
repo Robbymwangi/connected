@@ -13,10 +13,16 @@ use InvalidArgumentException;
    side (a query can't see another institution's row), and the creating hook
    below closes the write side ("the client never asserts its institution").
 
-   With no institution resolved, the creating hook leaves institution_id
-   exactly as given, same reasoning as InstitutionScope's own no-context
-   case: a console command or seeder bootstrapping data outside any request
-   is trusted to set it directly. */
+   With no institution resolved outside HTTP, the creating hook leaves
+   institution_id exactly as given, same reasoning as InstitutionScope's own
+   no-context case: a console command or seeder bootstrapping data outside
+   any request is trusted to set it directly. Inside HTTP with none resolved
+   it refuses, matching the scope's fail-closed read side.
+
+   The updating hook makes institution_id immutable once a row exists, so an
+   update cannot move a row to another institution. Query-level bulk updates
+   (Model::where(...)->update()) fire no model events and are not covered;
+   sync writes go through our own server code, not arbitrary bulk updates. */
 trait BelongsToInstitution
 {
     protected static function bootBelongsToInstitution(): void
@@ -27,6 +33,12 @@ trait BelongsToInstitution
             $currentId = app(CurrentInstitution::class)->id();
 
             if ($currentId === null) {
+                if (app(CurrentInstitution::class)->isHttp()) {
+                    throw new InvalidArgumentException(
+                        'No institution is resolved for this request; a row cannot be created without one.',
+                    );
+                }
+
                 return;
             }
 
@@ -40,6 +52,12 @@ trait BelongsToInstitution
                 throw new InvalidArgumentException(
                     'institution_id must match the authenticated account\'s institution; it is never asserted by the client.',
                 );
+            }
+        });
+
+        static::updating(function (Model $model) {
+            if ($model->isDirty('institution_id')) {
+                throw new InvalidArgumentException('institution_id is immutable once a row exists.');
             }
         });
     }

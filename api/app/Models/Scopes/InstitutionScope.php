@@ -13,15 +13,13 @@ use Illuminate\Database\Eloquent\Scope;
    every query an account can run; there is no code path where it becomes
    visible and then gets filtered out afterward."
 
-   With no institution resolved (CurrentInstitution::id() is null), this
-   applies no filter at all, not an impossible one: every HTTP request that
-   can reach a controller has already gone through ResolveInstitution and
-   has a resolved institution, so "no context" only happens in a console
-   command, a seeder, or a test that hasn't set one, none of which are the
-   controller-forgot-to-scope-a-query surface this scope exists to close.
+   Outside HTTP with no institution resolved (console command, seeder, test)
+   this applies no filter: that is the trusted, out-of-band path, and
    docs/spec/access-model.md, Tokens, is explicit that bootstrapping the
-   first institution is deliberately out of band, not a request this scope
-   ever sees. */
+   first institution is not a request this scope ever sees. Inside HTTP
+   (ResolveInstitution has begun the request) with no institution, it fails
+   closed and matches no rows, so a request without an authenticated account
+   can never fall through to every institution's data. */
 class InstitutionScope implements Scope
 {
     public function apply(Builder $builder, Model $model): void
@@ -30,6 +28,8 @@ class InstitutionScope implements Scope
 
         if ($institutionId !== null) {
             $builder->where($model->qualifyColumn('institution_id'), $institutionId);
+        } elseif (app(CurrentInstitution::class)->isHttp()) {
+            $builder->whereRaw('1 = 0');
         }
     }
 }

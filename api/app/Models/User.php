@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Laravel\Sanctum\HasApiTokens;
 
 /* Always server- or admin-created, never offline; is_admin and the
    subject_moderations grants are the only capabilities (#36's "layered, not
@@ -29,7 +30,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use BelongsToInstitution, HasFactory, Syncable;
+    use BelongsToInstitution, HasApiTokens, HasFactory, Syncable;
 
     protected function casts(): array
     {

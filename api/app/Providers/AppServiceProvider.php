@@ -12,11 +12,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Singleton, not the container's default per-resolution instance:
-        // ResolveInstitution's set() and InstitutionScope's id() must see
-        // the same instance within one request, or the state never
-        // actually propagates from one to the other.
-        $this->app->singleton(CurrentInstitution::class);
+        // Scoped, not singleton: ResolveInstitution's set and InstitutionScope's
+        // read must share one instance within a request, and a long-lived
+        // worker must get a fresh one for the next request or job.
+        $this->app->scoped(CurrentInstitution::class);
     }
 
     /**

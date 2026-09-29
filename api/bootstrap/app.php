@@ -14,10 +14,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Named, not yet attached to a route group: no protected route
-        // exists before #43 (Authentication) and #48 (Read endpoints), and
-        // it must run after auth:sanctum wherever it lands.
-        $middleware->alias(['resolve-institution' => ResolveInstitution::class]);
+        // The whole api group, so no route can forget it; it resolves the
+        // user from the sanctum guard itself and so needs no ordering
+        // against auth:sanctum.
+        $middleware->appendToGroup('api', ResolveInstitution::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

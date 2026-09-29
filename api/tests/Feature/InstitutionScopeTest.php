@@ -21,6 +21,7 @@ use App\Models\UnlockNote;
 use App\Models\User;
 use App\Support\CurrentInstitution;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Symfony\Component\HttpFoundation\Response;
 
 /* Ticket #41: an Eloquent global scope for institution_id and a middleware
@@ -49,6 +50,7 @@ test('the middleware resolves the current institution from the authenticated use
 
     app(ResolveInstitution::class)->handle($anonymous, $passThrough);
     expect($currentInstitution->id())->toBeNull();
+    expect($currentInstitution->isHttp())->toBeTrue();
 });
 
 test('institution_id is auto-filled from context when omitted, and rejected when it mismatches', function () {
@@ -173,4 +175,57 @@ test('authenticated as a user of school A, every model is scoped to A and sees n
     // Institution itself is deliberately not scoped (data-model.md,
     // Conventions): both rows stay visible regardless of context.
     expect(Institution::count())->toBe(2);
+});
+
+test('a token-authenticated request through the api group sees only its own institution, and an anonymous one sees nothing', function () {
+    $a = buildGraph('School A', '-http-a');
+    $b = buildGraph('School B', '-http-b');
+    $a['subject']->update(['name' => 'Maths A']);
+    $b['subject']->update(['name' => 'Maths B']);
+
+    // A stand-in for the read endpoints (#48): the point is only that the
+    // route reaches a tenant model through the real api middleware group.
+    Route::middleware('api')->get('/api/probe/subjects', fn () => Subject::pluck('name'));
+    Route::middleware(['api', 'auth:sanctum'])->get('/api/probe/protected-subjects', fn () => Subject::pluck('name'));
+
+    $token = $a['teacher']->createToken('school-a')->plainTextToken;
+
+    $this->withToken($token)->getJson('/api/probe/protected-subjects')
+        ->assertOk()
+        ->assertExactJson(['Maths A']);
+
+    // Same tenant model, no token: the api group still armed the request, so
+    // the scope fails closed instead of returning both schools.
+    app('auth')->forgetGuards();
+    $this->flushHeaders();
+    $this->getJson('/api/probe/subjects')
+        ->assertOk()
+        ->assertExactJson([]);
+
+    // And a token belonging to school B sees B's row, never A's.
+    app('auth')->forgetGuards();
+    $this->withToken($b['teacher']->createToken('school-b')->plainTextToken)
+        ->getJson('/api/probe/subjects')
+        ->assertOk()
+        ->assertExactJson(['Maths B']);
+});
+
+test('inside an http request with no institution resolved, creating a tenant row is refused', function () {
+    app(CurrentInstitution::class)->beginRequest(null);
+
+    expect(fn () => Subject::create(['name' => 'Orphan']))->toThrow(InvalidArgumentException::class);
+    expect(Subject::count())->toBe(0);
+});
+
+test('institution_id cannot be changed on an existing row', function () {
+    $a = buildGraph('School A', '-immutable');
+    $other = Institution::create(['name' => 'Someone Else']);
+
+    $subject = Subject::find($a['subject']->id);
+    $subject->institution_id = $other->id;
+
+    expect(fn () => $subject->save())->toThrow(InvalidArgumentException::class);
+    expect(fn () => $subject->update(['institution_id' => $other->id]))->toThrow(InvalidArgumentException::class);
+
+    expect(Subject::find($a['subject']->id)->institution_id)->toBe($a['institution']->id);
 });

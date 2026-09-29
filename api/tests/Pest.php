@@ -61,6 +61,14 @@ expect()->extend('toBeOne', function () {
    keeps a second call's rows (a second institution, a different teacher
    email, since users.email is globally unique) from colliding with the
    first's. */
+/**
+ * @return array{
+ *     institution: Institution, teacher: User, subject: Subject, criterion: Criterion,
+ *     class: SchoolClass, classSubject: ClassSubject, teacherAssignment: TeacherAssignment,
+ *     subjectModeration: SubjectModeration, student: Student, enrolment: Enrolment,
+ *     assessment: Assessment, mark: Mark,
+ * }
+ */
 function buildGraph(string $institutionName = 'Test School', string $suffix = ''): array
 {
     $institution = Institution::create(['name' => $institutionName]);
