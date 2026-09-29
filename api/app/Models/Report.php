@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToInstitution;
 use App\Models\Concerns\Syncable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['id', 'institution_id', 'assessment_id', 'student_id', 'generated_at', 's3_key'])]
 class Report extends Model
 {
-    use Syncable;
+    use BelongsToInstitution, Syncable;
 
     protected function casts(): array
     {

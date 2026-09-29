@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\ResolveInstitution;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,7 +14,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Named, not yet attached to a route group: no protected route
+        // exists before #43 (Authentication) and #48 (Read endpoints), and
+        // it must run after auth:sanctum wherever it lands.
+        $middleware->alias(['resolve-institution' => ResolveInstitution::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

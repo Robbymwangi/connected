@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToInstitution;
 use App\Models\Concerns\Syncable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['id', 'institution_id', 'mark_id', 'base_version', 'side_a', 'side_b', 'proposals', 'referral', 'resolution', 'resolved_at'])]
 class Conflict extends Model
 {
-    use Syncable;
+    use BelongsToInstitution, Syncable;
 
     protected function casts(): array
     {

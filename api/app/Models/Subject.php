@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToInstitution;
 use App\Models\Concerns\Syncable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable(['id', 'institution_id', 'name'])]
 class Subject extends Model
 {
-    use Syncable;
+    use BelongsToInstitution, Syncable;
 
     public function institution(): BelongsTo
     {
