@@ -1,5 +1,5 @@
+import { useCurrentUser } from '../../app/AuthContext'
 import type { ActiveConflict } from '../../fixtures/conflicts'
-import { currentUser } from '../../fixtures/user'
 import type { NavId } from '../../layout/navigation'
 import { formatLongDate, greetingFor } from '../../lib/time'
 import { AttentionBanner } from './AttentionBanner'
@@ -19,6 +19,7 @@ type DashboardProps = {
 /* Static cards. Each card's only way out is to the section that owns its data;
    interactive analytics live in Reports. */
 export function Dashboard({ conflicts, onNavigate, onCreateAssessment, onViewConflicts }: DashboardProps) {
+  const currentUser = useCurrentUser()
   const now = new Date()
 
   return (

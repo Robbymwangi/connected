@@ -1,10 +1,17 @@
 import { expect, test, type Page } from '@playwright/test'
+import { signIn } from './support'
 
 /* The health probe (#44, lib/health.ts): the pill follows whether the API
    answers, not only whether the browser reports a link. Every test keeps the
    browser online throughout (navigator.onLine stays true) and changes only what
    /api/health returns, which is the captive-portal case navigator.onLine alone
-   cannot see. The route is faked, so no API needs to be running. */
+   cannot see. The route is faked, so no API needs to be running.
+
+   The pill lives in the top bar, inside the signed-in app shell (build plan
+   1.7, #45), so every test signs in first via support.ts before it can be
+   seen at all. The health route is answered from the start of each test, so
+   it is already in place before sign-in's own navigation triggers the
+   first probe. */
 
 const healthy = { status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) }
 
@@ -25,7 +32,7 @@ const pill = (page: Page, label: 'Online' | 'Offline') => page.getByText(label, 
 
 test('the pill flips offline when the probe fails behind a browser that says online, and back', async ({ page }) => {
   await answerHealth(page, 'ok')
-  await page.goto('/')
+  await signIn(page)
   await expect(pill(page, 'Online')).toBeVisible()
 
   await answerHealth(page, 'down')
@@ -40,7 +47,7 @@ test('the pill flips offline when the probe fails behind a browser that says onl
 
 test('coming back online with the API still down never reads online, not even for a moment', async ({ page, context }) => {
   await answerHealth(page, 'ok')
-  await page.goto('/')
+  await signIn(page)
   await expect(pill(page, 'Online')).toBeVisible()
 
   /* Record every DOM change that shows the Online pill, so a flash too brief for an
@@ -67,7 +74,7 @@ test('coming back online with the API still down never reads online, not even fo
 
 test('a captive portal answering 200 with HTML reads as offline', async ({ page }) => {
   await answerHealth(page, 'portal')
-  await page.goto('/')
+  await signIn(page)
   await expect(pill(page, 'Offline')).toBeVisible()
   expect(await page.evaluate(() => navigator.onLine)).toBe(true)
 })
@@ -78,7 +85,7 @@ test('the probe is one shared poll and never carries a token', async ({ page }) 
     requests.push(route.request().headers())
     return route.fulfill(healthy)
   })
-  await page.goto('/')
+  await signIn(page)
   await expect(pill(page, 'Online')).toBeVisible()
 
   /* The top bar, the marking grid, and the assistant dialog all use the hook;

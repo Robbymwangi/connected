@@ -1,7 +1,7 @@
 import { Settings, ShieldCheck, UserRound, type LucideIcon } from 'lucide-react'
 import type { RefObject } from 'react'
+import { useCurrentUser } from '../app/AuthContext'
 import { Popover } from '../components/Popover'
-import { currentUser } from '../fixtures/user'
 
 const ITEMS: { icon: LucideIcon; label: string }[] = [
   { icon: UserRound, label: 'My Profile' },
@@ -17,6 +17,7 @@ type UserMenuProps = {
 
 /* Entries are inert until those screens exist. */
 export function UserMenu({ open, onClose, triggerRef }: UserMenuProps) {
+  const currentUser = useCurrentUser()
   return (
     <Popover
       open={open}

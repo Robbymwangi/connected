@@ -1,12 +1,10 @@
 import { useState } from 'react'
+import { useCurrentUser } from '../../app/AuthContext'
 import type { ActiveConflict, Choice, Proposal } from '../../fixtures/conflicts'
 import { rubricFor, type Subject } from '../../fixtures/rubrics'
-import { currentUser } from '../../fixtures/user'
 import { abilityOf, canRefer, describeReferral, sideOf, type Resolver } from '../../lib/conflicts'
 import { formatMark, parseMarkInput, type Mark } from '../../lib/grading'
 import { formatDateTime } from '../../lib/time'
-
-const user: Resolver = { id: currentUser.id, name: currentUser.fullName, canModerate: currentUser.canModerate }
 
 type ConflictActionsProps = {
   conflict: ActiveConflict
@@ -26,6 +24,8 @@ type ConflictActionsProps = {
    the Sync card and the marking grid's dialog. Sides are named by value and author,
    never as mine or theirs. */
 export function ConflictActions({ conflict, subject, onResolve, onPropose, onAccept, onRefer, onCancel }: ConflictActionsProps) {
+  const currentUser = useCurrentUser()
+  const user: Resolver = { id: currentUser.id, name: currentUser.fullName, canModerate: currentUser.canModerate }
   const ability = abilityOf(conflict, user)
   const max = rubricFor(subject).find((c) => c.id === conflict.criterionId)?.max ?? 0
 
@@ -95,7 +95,7 @@ export function ConflictActions({ conflict, subject, onResolve, onPropose, onAcc
       <div className="px-4 pt-1 pb-4">
         <ProposalThread proposals={conflict.proposals} describe={describe} />
         <div className="mt-2 flex items-center justify-between gap-3">
-          <p className="text-xs font-medium text-muted-foreground">Awaiting {otherParty(conflict)}.</p>
+          <p className="text-xs font-medium text-muted-foreground">Awaiting {otherParty(conflict, user.id)}.</p>
           {referLink}
         </div>
       </div>
@@ -130,8 +130,8 @@ export function ConflictActions({ conflict, subject, onResolve, onPropose, onAcc
     return (
       <div className="px-4 pt-1 pb-4">
         <div className="flex flex-wrap items-center gap-2">
-          <SideButton side={conflict.mine} label={`${verb} ${formatMark(conflict.mine.mark)}`} onClick={() => setPicked({ kind: 'side', editId: conflict.mine.editId })} />
-          <SideButton side={conflict.theirs} label={`${verb} ${formatMark(conflict.theirs.mark)}`} onClick={() => setPicked({ kind: 'side', editId: conflict.theirs.editId })} />
+          <SideButton myId={user.id} side={conflict.mine} label={`${verb} ${formatMark(conflict.mine.mark)}`} onClick={() => setPicked({ kind: 'side', editId: conflict.mine.editId })} />
+          <SideButton myId={user.id} side={conflict.theirs} label={`${verb} ${formatMark(conflict.theirs.mark)}`} onClick={() => setPicked({ kind: 'side', editId: conflict.theirs.editId })} />
           <button type="button" onClick={() => setPicked('corrected')} className={`${ACTION} border-info/25 bg-info/10 text-info hover:bg-info/20`}>
             {settling ? 'Enter corrected' : 'Propose corrected'}
           </button>
@@ -205,29 +205,43 @@ const ACTION = 'flex-1 rounded-xl border px-3 py-2 text-center text-xs font-semi
 const INPUT =
   'w-full rounded-xl border bg-muted/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:outline-none'
 
-function otherParty(conflict: ActiveConflict): string {
-  return conflict.mine.userId === user.id ? conflict.theirs.who : conflict.mine.who
+function otherParty(conflict: ActiveConflict, myId: string): string {
+  return conflict.mine.userId === myId ? conflict.theirs.who : conflict.mine.who
 }
 
-function SideButton({ side, label, onClick }: { side: ActiveConflict['mine']; label: string; onClick: () => void }) {
+function SideButton({
+  side,
+  label,
+  onClick,
+  myId,
+}: {
+  side: ActiveConflict['mine']
+  label: string
+  onClick: () => void
+  myId: string
+}) {
   return (
     <button type="button" onClick={onClick} className={`${ACTION} border-border text-foreground hover:bg-muted`}>
       <span className="block tabular">{label}</span>
       <span className="block text-[10px] font-medium text-muted-foreground">
-        {side.userId === user.id ? 'you' : side.who}, {formatDateTime(side.at)}
+        {side.userId === myId ? 'you' : side.who}, {formatDateTime(side.at)}
       </span>
     </button>
   )
 }
 
 /* "You propose", "Ms. Akinyi proposes", or the past tense for superseded ones. */
-function proposalVerb(proposal: Proposal, pending: boolean): string {
-  const you = proposal.byId === user.id
+function proposalVerb(proposal: Proposal, pending: boolean, myId: string): string {
+  const you = proposal.byId === myId
   if (!pending) return `${you ? 'You' : proposal.by} proposed`
   return you ? 'You propose' : `${proposal.by} proposes`
 }
 
-/* Every proposal so far, oldest first; the last is the pending one. */
+/* Every proposal so far, oldest first; the last is the pending one. Reads the
+   signed-in account itself (rather than taking myId as a prop) since it is
+   used from two separate parent chains (ActiveConflictCard's observer/
+   referred/awaiting branches above, and HistoricalConflictCard) that would
+   otherwise both have to thread it through just for this. */
 export function ProposalThread({
   proposals,
   describe,
@@ -238,6 +252,7 @@ export function ProposalThread({
   /* False on a settled conflict: nothing is pending there. */
   lastIsPending?: boolean
 }) {
+  const myId = useCurrentUser().id
   return (
     <div className="flex flex-col gap-2">
       {proposals.map((proposal, i) => {
@@ -248,7 +263,7 @@ export function ProposalThread({
             className={`rounded-xl border px-3 py-2.5 ${pending ? 'border-info/25 bg-info/[0.06]' : 'border-border/50 bg-muted/30'}`}
           >
             <p className={`text-xs font-semibold ${pending ? 'text-info' : 'text-muted-foreground'}`}>
-              {proposalVerb(proposal, pending)} {describe(proposal.choice)}
+              {proposalVerb(proposal, pending, myId)} {describe(proposal.choice)}
             </p>
             <p className="mt-1 text-xs leading-relaxed text-foreground/80 italic">"{proposal.note}"</p>
             <p className="mt-1 text-[10px] text-muted-foreground/70">{formatDateTime(proposal.at)}</p>
