@@ -4,6 +4,7 @@ use App\Http\Controllers\HealthController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\LogoutController;
 use App\Http\Controllers\MeController;
+use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\ResolveInstitution;
 use Illuminate\Support\Facades\Route;
 
@@ -22,7 +23,12 @@ Route::get('/health', HealthController::class)
 // own comment). Logout and /me require a token.
 Route::post('/login', LoginController::class)->name('login')->middleware('throttle:login');
 
-Route::middleware('auth:sanctum')->group(function () {
+// Every route behind auth:sanctum takes EnsureAccountIsActive too: a token
+// issued before an account was deactivated must stop working, not just a
+// new login (docs/spec/data-model.md, users). Future protected routes
+// (2.1 onward) should keep both in this same group rather than auth:sanctum
+// alone.
+Route::middleware(['auth:sanctum', EnsureAccountIsActive::class])->group(function () {
     Route::post('/logout', LogoutController::class)->name('logout');
     Route::get('/me', MeController::class)->name('me');
 });

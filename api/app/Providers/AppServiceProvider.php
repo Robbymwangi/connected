@@ -27,14 +27,19 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // #43: keyed by email + IP, not IP alone, so one attacker guessing
-        // many accounts from one address doesn't get 5/minute per guess,
-        // and not email alone, so it can't be used to lock another account
-        // out from a different address.
+        // #43: two limits apply together. Five a minute keyed by email + IP
+        // stops repeated guessing against one account; alone, that key
+        // would let one address cycle through many different emails at
+        // five guesses each with nothing to stop it, so a second limit
+        // caps that same address at twenty a minute regardless of which
+        // email it is guessing.
         RateLimiter::for('login', function (Request $request) {
-            return Limit::perMinute(5)->by(
-                Str::transliterate(Str::lower($request->string('email'))).'|'.$request->ip()
-            );
+            return [
+                Limit::perMinute(5)->by(
+                    Str::transliterate(Str::lower($request->string('email'))).'|'.$request->ip()
+                ),
+                Limit::perMinute(20)->by($request->ip()),
+            ];
         });
     }
 }

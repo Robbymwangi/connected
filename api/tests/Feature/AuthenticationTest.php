@@ -6,7 +6,7 @@ use Laravel\Sanctum\PersonalAccessToken;
    device, per docs/spec/access-model.md, Tokens. Login has no account yet,
    so it is the one route that reads across institutions on purpose
    (LoginController's withoutGlobalScopes()); logout and /me sit behind
-   auth:sanctum like every other protected route. */
+   auth:sanctum and EnsureAccountIsActive like every other protected route. */
 
 test('logging in with the right email and password returns a token that authenticates a protected route', function () {
     $g = buildGraph('School A', '-login-ok');
@@ -68,6 +68,25 @@ test('login is rate limited to five attempts a minute, keyed by email and IP tog
     ])->assertStatus(422);
 });
 
+test('login also caps one IP at twenty attempts a minute, regardless of which email it tries', function () {
+    // Five attempts each against four different, nonexistent emails: none
+    // of them hits the five-a-minute per-email limit, so only the IP-wide
+    // limit can be the one that trips.
+    for ($email = 0; $email < 4; $email++) {
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->postJson('/api/login', [
+                'email' => "nobody-ip-cap-{$email}@example.com",
+                'password' => 'wrong',
+            ])->assertStatus(422);
+        }
+    }
+
+    $this->postJson('/api/login', [
+        'email' => 'nobody-ip-cap-4@example.com',
+        'password' => 'wrong',
+    ])->assertStatus(429);
+});
+
 test('a deactivated account is rejected the same way, even with the correct password', function () {
     $g = buildGraph('School A', '-login-deactivated');
     $g['teacher']->update(['deactivated_at' => now()]);
@@ -103,6 +122,21 @@ test('logout revokes the token that authenticated the request, and only that one
 
     app('auth')->forgetGuards();
     $this->withToken($kept)->getJson('/api/me')->assertOk();
+});
+
+test('a token issued before deactivation stops working after it, not only a new login', function () {
+    $g = buildGraph('School A', '-deactivated-token');
+    $token = $g['teacher']->createToken('device', ['sync'])->plainTextToken;
+
+    $this->withToken($token)->getJson('/api/me')->assertOk();
+
+    $g['teacher']->update(['deactivated_at' => now()]);
+
+    app('auth')->forgetGuards();
+    $this->withToken($token)->getJson('/api/me')->assertUnauthorized();
+
+    app('auth')->forgetGuards();
+    $this->withToken($token)->postJson('/api/logout')->assertUnauthorized();
 });
 
 test('logout and me are refused without a token', function () {
