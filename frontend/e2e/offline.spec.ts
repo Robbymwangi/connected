@@ -1,13 +1,20 @@
 import { expect, test, type Page } from '@playwright/test'
+import { signIn } from './support'
 
 /* The offline guarantee across the cases that broke the hand-written worker and
    drove the move to Workbox (ADR 0004): first visit, then a reload and a deep link
    with no network. Each test uses its own context so one test's worker and caches
-   do not leak into the next. */
+   do not leak into the next.
+
+   The app now gates on sign-in (build plan 1.7, #45); support.ts's signIn() gets
+   past that once through faked routes, then removes them. The session that lands
+   in IndexedDB (lib/sessionStorage.ts) is what then survives the reload and the
+   fresh tab below with no network at all and no fake answering underneath it:
+   that survival is this suite's proof that IndexedDB over sessionStorage was the
+   right call, not just an assertion about the dashboard heading. */
 
 async function loadOnceOnline(page: Page) {
-  await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await signIn(page)
   /* Wait until a service worker controls the page, so the cache is populated. */
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null)
 }

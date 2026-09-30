@@ -1,8 +1,8 @@
 import { Ellipsis, LogOut, X } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { useCurrentUser, useSignOut } from '../app/AuthContext'
 import { Button } from '../components/Button'
 import { NavItem } from '../components/NavItem'
-import { currentUser } from '../fixtures/user'
 import { NAV_MAIN, NAV_TOOLS, type NavId } from './navigation'
 import { UserMenu } from './UserMenu'
 
@@ -18,6 +18,8 @@ type SidebarProps = {
 }
 
 export function Sidebar({ open, pinned, onClose, onHoverEnd, active, onNavigate }: SidebarProps) {
+  const currentUser = useCurrentUser()
+  const signOut = useSignOut()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuTrigger = useRef<HTMLButtonElement>(null)
   const scrim = open && pinned
@@ -110,6 +112,7 @@ export function Sidebar({ open, pinned, onClose, onHoverEnd, active, onNavigate 
               </div>
               <Button
                 variant="danger"
+                onClick={signOut}
                 className="flex w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium"
               >
                 <LogOut className="size-4" />

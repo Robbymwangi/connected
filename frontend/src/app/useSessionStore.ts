@@ -12,7 +12,6 @@ import {
 import { emptyGrid, marksByAssessment, type Grid } from '../fixtures/marks'
 import { rubricFor } from '../fixtures/rubrics'
 import { rosterFor } from '../fixtures/students'
-import { currentUser } from '../fixtures/user'
 import {
   abilityOf,
   agreedResolution,
@@ -195,10 +194,11 @@ function settle(state: State, conflict: ActiveConflict, resolution: Resolution, 
   }
 }
 
-/* Who is acting. Comes from authentication later. */
-const user: Resolver = { id: currentUser.id, name: currentUser.fullName, canModerate: currentUser.canModerate }
-
-export function useSessionStore() {
+/* Who is acting: the signed-in account (build plan 1.7, #45), passed in
+   rather than read from Context here, since the caller (App.tsx) already
+   has it directly and every dispatch below needs the exact same Resolver
+   ConflictActions used to decide what the UI showed. */
+export function useSessionStore(user: Resolver) {
   const [state, dispatch] = useReducer(reduce, seed)
 
   return {

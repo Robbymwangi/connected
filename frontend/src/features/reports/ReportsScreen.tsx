@@ -1,12 +1,12 @@
 import { GitCompareArrows, Sparkles } from 'lucide-react'
 import { useState } from 'react'
+import { useCurrentUser } from '../../app/AuthContext'
 import type { SessionStore } from '../../app/useSessionStore'
 import { BarChart, LineChart, type Series } from '../../components/charts'
 import { FilterDropdown } from '../../components/FilterDropdown'
 import { LevelBadge } from '../../components/LevelBadge'
 import { TERMS } from '../../fixtures/assessments'
 import { teachers } from '../../fixtures/teachers'
-import { currentUser } from '../../fixtures/user'
 import { HISTOGRAM_BINS, PASS_MARK_PCT, YEAR_TO_DATE, type ReportFilters, type Scope } from '../../lib/analytics'
 import { PERFORMANCE_LEVELS, type PerformanceLevel } from '../../lib/grading'
 import { gradeOf, scopeLabel } from '../../lib/reportScopes'
@@ -30,6 +30,11 @@ const fmtPct = (v: number | null) => (v === null ? '–' : `${Math.round(v)}%`)
 const fmt1 = (v: number | null) => (v === null ? '–' : v.toFixed(1))
 
 export function ReportsScreen({ store, onOpenStudent }: ReportsScreenProps) {
+  const currentUser = useCurrentUser()
+  /* teachers is still fixture data with fixture ids; a real signed-in
+     account's id never matches one, so this always falls back to
+     teachers[0] until Reports gets real data (a later phase). Known, not a
+     bug this ticket introduces silently. */
   const me = teachers.find((t) => t.id === currentUser.id) ?? teachers[0]
   const [scope, setScope] = useState<Scope | null>({ stream: me.homeStream ?? '4W', subject: 'English' })
   const [filters, setFilters] = useState<ReportFilters>({ term: YEAR_TO_DATE, assessment: '' })
