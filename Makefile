@@ -16,10 +16,23 @@ help: ## List the targets
 
 # --- One-time setup ---------------------------------------------------------
 
-setup: api/vendor/bin/sail api/.env frontend/node_modules ## First run: install, start, key, migrate
+setup: api/vendor/bin/sail api/.env frontend/node_modules ## First run: install, start, key, migrate, seed if empty
 	cd api && $(SAIL) up -d
 	@if grep -q '^APP_KEY=$$' api/.env; then cd api && $(SAIL) artisan key:generate --no-interaction; fi
 	cd api && $(SAIL) artisan migrate --no-interaction
+	@cd api && output=$$($(SAIL) artisan tinker --execute='echo \App\Models\Institution::count();' 2>&1); \
+	status=$$?; \
+	count=$$(echo "$$output" | tr -d '[:space:]'); \
+	if [ $$status -ne 0 ] || ! echo "$$count" | grep -qE '^[0-9]+$$'; then \
+		echo "Could not tell whether the database is empty; not guessing. Output was:"; \
+		echo "$$output"; \
+		exit 1; \
+	elif [ "$$count" = "0" ]; then \
+		echo "Empty database: seeding the demo school."; \
+		$(SAIL) artisan db:seed --no-interaction; \
+	else \
+		echo "Database already has data ($$count institution(s)); leaving it alone. Use 'make api-fresh' to wipe and reseed."; \
+	fi
 	@echo
 	@echo "Ready. API on http://localhost:8000, then 'make dev' for the frontend."
 
