@@ -326,6 +326,51 @@ Bring `make check` green across typecheck, lint, Vitest, Playwright, and Pest.
 End-to-end coverage of the offline path specifically: install, go offline, edit,
 come back, reconcile.
 
+**5.4 Admin panel: guard and tenancy plumbing**
+Filament installed in `api/` (ADR 0009). A dedicated `admin` guard with a user
+provider that bypasses `InstitutionScope` for the login lookup only, the same
+explicit narrow bypass `LoginController` already uses and for the same reason.
+`ResolveInstitution` generalised to take a guard name, registered as
+**persistent** Filament middleware for the `admin` guard specifically, not
+ordinary route middleware. `config/sanctum.php`'s `'guard'` set from `['web']`
+to `[]` once this guard exists.
+- Read first: ADR 0009, `docs/spec/access-model.md`.
+- Done when: with two institutions seeded, an admin's login, list view, and a
+  Livewire table *search* all stay scoped to their own institution; opening
+  another institution's record by id 404s; creating a record fills in the
+  right `institution_id` without the form sending it; a request carrying only
+  a panel session and no bearer token gets 401 against `/api/me`.
+- Do not: use Filament's own `->tenant()` feature. Multi-tenancy is the one
+  global scope (`AGENTS.md`), not a tenancy package, here or anywhere else.
+
+**5.5 Admin panel: roster resources**
+Filament resources for students, teachers (users), and classes.
+`FilamentUser::canAccessPanel()` returns `is_admin && deactivated_at ===
+null`, checked on every request, no finer per-action policies. A
+RelationManager on the user resource for subject-moderation grants. A
+deactivate action, never a delete action, that also revokes the account's
+tokens (via a `User::booted` hook, so no action can forget it) and is blocked
+for self-deactivation and for the last remaining `is_admin` account. A
+separate "Revoke devices" action for a lost device that does not warrant
+deactivating the person.
+- Read first: ADR 0009, `docs/spec/access-model.md`.
+- Done when: a non-admin account cannot reach the panel at all, with the
+  identical failure message a wrong password gives; deactivating an account
+  revokes its tokens in the same request, provable by the next API call with
+  the old token getting 401; the last-admin and self-deactivation lockouts
+  are each covered by a test.
+- Do not: let Filament's default resource scaffolding generate a delete
+  action anywhere on the user resource; strip it explicitly.
+
+**5.6 Admin panel: unlock action**
+A Filament custom Action on the assessment resource, a form modal with one
+required note field, calling the same model method 2.3 builds for unlocking
+rather than reimplementing the rule a second time.
+- Read first: ADR 0009, build-plan.md 2.3.
+- Done when: unlocking a finalized assessment through the panel produces the
+  identical `unlock_notes` row 2.3's own test expects from the API path.
+- Do not: duplicate the unlock rule in panel-specific code.
+
 ---
 
 ## Stack inventory
@@ -344,7 +389,10 @@ and needs a decision record before it enters the repository.
 
 **API and application layer**
 
-- Laravel 13, JSON only; no Inertia and no Blade views
+- Laravel 13, JSON only for the teacher-facing API; no Inertia. The one
+  exception is the admin panel (ADR 0009): Filament, server-rendered, its own
+  session guard, online-only, scoped to `api/app/Filament/` and never
+  referenced by an API controller.
 - Sanctum for token authentication
 - Eloquent, with a global scope for `institution_id` and middleware resolving it
   from the authenticated user
