@@ -3,6 +3,7 @@
 use App\Models\Enrolment;
 use App\Models\SchoolClass;
 use App\Models\Student;
+use Illuminate\Support\Carbon;
 
 /* Ticket #48 (docs/build-plan.md 2.1): classes, subjects (with their
    criteria as the rubric), students, and assessments, as JSON resources.
@@ -75,23 +76,30 @@ test('filtering students by class_id returns the current-year roster, with the m
     $former = Student::create(['institution_id' => $g['institution']->id, 'name' => 'Former Student', 'gender' => 'F', 'dob' => '2014-01-01']);
     Enrolment::create(['institution_id' => $g['institution']->id, 'student_id' => $former->id, 'class_id' => $g['class']->id, 'year' => 2025]);
 
-    $this->withToken($token)->getJson('/api/students?class_id='.$g['class']->id)
-        ->assertOk()
-        ->assertJson(['data' => [[
-            'id' => $g['student']->id,
-            'enrolments' => [['class_id' => $g['class']->id, 'year' => $g['enrolment']->year]],
-        ]]])
-        ->assertJsonCount(1, 'data');
+    // The "current year" default depends on the real clock
+    // (StudentsController's now()->year), and the enrolment fixture above
+    // is fixed at 2026; pinned here so this test's result does not quietly
+    // change the day the calendar turns over, rather than relying on it
+    // happening to still be 2026 whenever this runs.
+    $this->travelTo(Carbon::create(2026, 6, 15), function () use ($token, $g, $former) {
+        $this->withToken($token)->getJson('/api/students?class_id='.$g['class']->id)
+            ->assertOk()
+            ->assertJson(['data' => [[
+                'id' => $g['student']->id,
+                'enrolments' => [['class_id' => $g['class']->id, 'year' => $g['enrolment']->year]],
+            ]]])
+            ->assertJsonCount(1, 'data');
 
-    // The same former student is exactly who an explicit, historical year
-    // is for.
-    $this->withToken($token)->getJson('/api/students?class_id='.$g['class']->id.'&year=2025')
-        ->assertOk()
-        ->assertJson(['data' => [[
-            'id' => $former->id,
-            'enrolments' => [['class_id' => $g['class']->id, 'year' => 2025]],
-        ]]])
-        ->assertJsonCount(1, 'data');
+        // The same former student is exactly who an explicit, historical
+        // year is for.
+        $this->withToken($token)->getJson('/api/students?class_id='.$g['class']->id.'&year=2025')
+            ->assertOk()
+            ->assertJson(['data' => [[
+                'id' => $former->id,
+                'enrolments' => [['class_id' => $g['class']->id, 'year' => 2025]],
+            ]]])
+            ->assertJsonCount(1, 'data');
+    });
 });
 
 test('a nonpositive year is rejected rather than silently ignored', function () {
