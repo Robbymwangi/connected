@@ -349,8 +349,10 @@ Filament resources for students, teachers (users), and classes.
 null`, checked on every request, no finer per-action policies. A
 RelationManager on the user resource for subject-moderation grants. A
 deactivate action, never a delete action, that also revokes the account's
-tokens (via a `User::booted` hook, so no action can forget it) and is blocked
-for self-deactivation and for the last remaining `is_admin` account. A
+tokens via a `User::booted` hook (fires on a model save, not a query-level
+bulk update; every deactivation path here must save a `User` instance) and
+is blocked for self-deactivation and for the last remaining `is_admin`
+account. A
 separate "Revoke devices" action for a lost device that does not warrant
 deactivating the person.
 - Read first: ADR 0009, `docs/spec/access-model.md`.

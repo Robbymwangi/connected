@@ -189,10 +189,15 @@ nothing in the schema or the auth logic changes to enforce that. See
 
 8. **Token revocation and deactivation lockouts.**
    - A `User::booted` hook deletes the account's tokens the moment
-     `deactivated_at` is set to non-null, so no panel action, present or
-     future, can forget to do it; `EnsureAccountIsActive` (1.5) stays as the
-     backstop for whatever window exists before that hook runs, not the only
-     line of defense.
+     `deactivated_at` is set to non-null, so no panel action that saves a
+     `User` model instance can forget to do it; `EnsureAccountIsActive`
+     (1.5) stays as the backstop for whatever window exists before that
+     hook runs, not the only line of defense. The hook fires on model
+     saves only, not on a query-level bulk update (`User::where(...)->
+     update(...)`), which Eloquent never routes through model events at
+     all — every future deactivation path must load and save a `User`
+     instance, or revoke tokens explicitly if it ever has a real reason
+     to use a bulk update instead.
    - A separate "Revoke devices" action deletes an account's tokens without
      deactivating it, for a lost phone where the person still works here.
    - **Decided 2026-10-01: the panel blocks an admin from deactivating their
