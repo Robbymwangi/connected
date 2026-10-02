@@ -165,14 +165,25 @@ exists once, before the ordinary account system has anyone to provision from. No
 agent should build a cross-tenant super-admin login to solve this.
 
 Where and how ADMIN actually manages accounts (a dedicated panel, or endpoints
-the PWA's admin capability calls) is not decided here. It is very likely an
-online-only surface regardless of the answer, and if it uses anything outside
-the current JSON-only stack, that choice needs its own ADR before it lands.
+the PWA's admin capability calls) was deliberately left undecided by this file;
+see ADR 0009, which answers it. The rule that governed that decision stays
+recorded here: it is very likely an online-only surface regardless of the
+answer, and if it uses anything outside the current JSON-only stack, that
+choice needs its own ADR before it lands.
 
-That surface is left open deliberately, not by oversight. Everything ADMIN does,
-creating and editing teacher, student, and class records, granting moderation,
-unlocking an assessment, is institution roster management, not a marking task,
-and has no offline requirement the way the PWA's screens do. It is a genuinely
-different piece of software from the teacher-facing app, even if it ends up
-living inside the same codebase, and deciding its shape belongs to whichever
-ticket actually builds it, not to this file.
+That surface was left open deliberately here, not by oversight. Everything
+ADMIN does, creating and editing teacher, student, and class records, granting
+moderation, unlocking an assessment, is institution roster management, not a
+marking task, and has no offline requirement the way the PWA's screens do. It
+is a genuinely different piece of software from the teacher-facing app, even if
+it ends up living inside the same codebase, and deciding its shape belonged to
+whichever ticket actually built it, not to this file.
+
+**Decided, in ADR 0009**: a Filament panel inside `api/`, online-only,
+authenticated by its own session guard rather than the PWA's bearer tokens, one
+account and one password either way. The single gate is `is_admin` with no
+finer per-action policies, checked on every request so a deactivated account's
+panel session dies immediately, matching `EnsureAccountIsActive`'s guarantee on
+the PWA side. Admin stays additive, not exclusive, exactly as this file already
+states: nothing here technically bars a pure-admin account from the PWA, and
+nothing needed to.
