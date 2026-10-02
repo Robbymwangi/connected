@@ -1,9 +1,13 @@
 <?php
 
+use App\Http\Controllers\AssessmentsController;
+use App\Http\Controllers\ClassesController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\LogoutController;
 use App\Http\Controllers\MeController;
+use App\Http\Controllers\StudentsController;
+use App\Http\Controllers\SubjectsController;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\ResolveInstitution;
 use Illuminate\Support\Facades\Route;
@@ -31,4 +35,11 @@ Route::post('/login', LoginController::class)->name('login')->middleware('thrott
 Route::middleware(['auth:sanctum', EnsureAccountIsActive::class])->group(function () {
     Route::post('/logout', LogoutController::class)->name('logout');
     Route::get('/me', MeController::class)->name('me');
+
+    // 2.1 (#48): reads unrestricted within the institution for any
+    // authenticated user (docs/spec/access-model.md, The principle).
+    Route::get('/classes', ClassesController::class)->name('classes.index');
+    Route::get('/subjects', SubjectsController::class)->name('subjects.index');
+    Route::get('/students', StudentsController::class)->name('students.index');
+    Route::get('/assessments', AssessmentsController::class)->name('assessments.index');
 });
