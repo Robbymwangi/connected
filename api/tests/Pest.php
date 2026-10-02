@@ -69,6 +69,14 @@ expect()->extend('toBeOne', function () {
  *     assessment: Assessment, mark: Mark,
  * }
  */
+/* A bearer token for a model-scoped protected-route test, with the sync
+   ability every real device token carries (docs/spec/access-model.md,
+   Tokens). */
+function tokenFor(User $user): string
+{
+    return $user->createToken('device', ['sync'])->plainTextToken;
+}
+
 function buildGraph(string $institutionName = 'Test School', string $suffix = ''): array
 {
     $institution = Institution::create(['name' => $institutionName]);
