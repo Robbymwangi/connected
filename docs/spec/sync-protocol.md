@@ -97,36 +97,50 @@ transaction's duration:
    regardless of which fields it touches. Disjoint-field merging doesn't
    apply here: an edit that doesn't know its target has vanished must
    surface, per ADR 0001 rule 6, not merge silently just because its field
-   names happen not to be `deletedAt`. Otherwise, look at every field
-   changed on that record at versions greater than `baseVersion` (from the
-   change log). If the entry's fields don't overlap that set → `merged`:
+   names happen not to be `deletedAt`. Otherwise, look at every field whose
+   stored value actually moved on that record at versions greater than
+   `baseVersion` (from the change log; a field a mutation merely touched
+   without changing its value, see the mixed-merge case below, doesn't
+   belong in this set, even though the change log still carries it for
+   `GET /sync`'s own purpose of telling a pulling device what to patch).
+   If the entry's fields don't overlap that set → `merged`:
    apply, increment, log, same as rule 2. If they overlap and the values on
    both sides are equal, **and the record is a mark**, since the conflict
    taxonomy below restricts automatic resolution to two sides holding the
-   same mark and nowhere else: if every field the entry touches is already
-   current (the overlapping field matches, and there is no disjoint field
-   alongside it) → **(proposed amendment, discussed 2026-10-03, not yet
-   reviewed: a no-op)** the record itself is not touched again: no new
-   `version`, no change-log row, `last_edited_by` unchanged, since the
-   value the first side already wrote is the value this entry would have
-   written. "First" here means whichever write produced the version this
-   entry collided with, ordered by version number, never by either side's
-   `at`. A `conflicts` row is still logged with `resolution.kind: "auto"`
-   (ADR 0002 rule 6), recording both sides, so the second device sees the
-   collision happened even though nothing about the record changed. The
-   response to the second device is still `accepted`, carrying the
-   record's current (unchanged) version, exactly as if its write had
-   applied; from that device's own point of view the value it wanted is
-   already there, and it has no reason to know a collision happened at all
-   unless it later opens the conflict row. If the entry also touches a
-   disjoint field alongside the already-current overlapping one, the
-   no-op above doesn't apply: this is `merged`, same as the disjoint-only
-   case, applying every field the entry sent, including the one that
-   happened to already match; the mutation is contributing real
-   information through its disjoint field, so it earns the ordinary merge,
-   not the no-op, and the already-matching field is harmless to write
-   again since it doesn't change the stored value. For an overlapping
-   field equal on a record that is not a mark, or if the values differ →
+   same mark and nowhere else: if every field the entry touches, overlapping
+   or disjoint, already matches the record's current value → **(proposed
+   amendment, discussed 2026-10-03, not yet reviewed: a no-op)** the record
+   itself is not touched again: no new `version`, no change-log row,
+   `last_edited_by` unchanged, since the value the first side already wrote
+   is the value this entry would have written, in every field it touches,
+   not only the overlapping one. The entry's mutation id is still recorded
+   in the processed-mutation lookup rule 1 checks, exactly as it would be
+   for any other rule; a no-op skips the change-log row and the version
+   bump, never the id's own record of having been handled, so a lost
+   response that makes a device resend this same mutation is caught by
+   rule 1 as `replayed` rather than running the match in this rule a
+   second time and appending a second `conflicts` side. "First" here means
+   whichever write
+   produced the version this entry collided with, ordered by version
+   number, never by either side's `at`. A `conflicts` row is still logged
+   with `resolution.kind: "auto"` (ADR 0002 rule 6), recording both sides,
+   so the second device sees the collision happened even though nothing
+   about the record changed. The response to the second device is still
+   `accepted`, carrying the record's current (unchanged) version, exactly
+   as if its write had applied; from that device's own point of view the
+   value it wanted is already there, and it has no reason to know a
+   collision happened at all unless it later opens the conflict row. If at
+   least one disjoint field's submitted value actually differs from the
+   record's current value, the no-op above doesn't apply: this is
+   `merged`, same as the disjoint-only case, applying every field the
+   entry sent, including any that happened to already match; the mutation
+   is contributing real information through that disjoint field, so it
+   earns the ordinary merge, not the no-op. Treating an all-fields-match
+   entry as a full `merged` instead, logging a disjoint field as "changed"
+   when its value didn't move, would give a later stale edit against that
+   same field something to collide with that was never a real change; the
+   no-op avoids manufacturing that collision. For an overlapping field
+   equal on a record that is not a mark, or if the values differ →
    `conflict`: nothing is written to the record itself; a `conflicts` row is
    created (or, if one is already open on this cell, this entry becomes its
    second side) holding both values, and the response carries the record's
@@ -265,9 +279,15 @@ mutation is processed, not read from the device's `resolvedAt`, for the
 identical reason `receivedAt` isn't read from `at`. `receivedAt` and
 `resolved_at` are both audit-only: neither is ever the `GET /sync`
 cursor, which stays the opaque `seq` integer described below, and a
-replayed mutation (rule 1) does not get a new `receivedAt`; replay
-returns the original write's stamp unchanged, since replaying isn't a
-new write.
+replayed mutation (rule 1) does not get a new `receivedAt`. Neither
+rule's `POST /sync` response carries `receivedAt` at all; the existing
+response shape above (`id`, `status`, `version`) is unchanged by this
+proposal, for replay or any other rule. `receivedAt` is visible only
+where this section already says it travels: the change log and the
+conflict/proposal storage a pull later reads. For a replayed mutation,
+what stays unchanged is the stored row in the change log, specifically
+the `receivedAt` recorded there from the original write; replaying
+doesn't touch it, since replaying isn't a new write.
 
 **What this catches, and what it deliberately doesn't.** A large gap
 between `at` and `receivedAt` is not a signal of anything: a teacher
@@ -375,7 +395,18 @@ would be false, but a split by what role the id plays in that entry:
    history, and rejects the mutation as `invalid` if it doesn't. A device
    relays a conflict's existing proposals back because the wire format
    doesn't resend whole rows (only changed fields), not because it gets
-   to assert someone else's history on the server's behalf.
+   to assert someone else's history on the server's behalf. The
+   client-sendable shape of a `proposals[]` entry, new or relayed, is
+   `{byId, choice, note, at}`; it never includes `receivedAt`, which is
+   storage the server alone fills, not a fact the device is ever asked
+   to report. For a brand-new entry the server fills it from its own
+   clock, same as any other write; for a relayed entry the server
+   restores it from what the entry already holds in its own history
+   (matched by `byId` and position in the stored array, not re-derived
+   from anything the relaying device sent), rather than trusting a
+   `receivedAt` the device might include. A payload that does include a
+   `receivedAt` inside a `proposals[]` entry is `invalid`, the same as
+   any other server-owned field appearing where it shouldn't.
 
 Either way, a device cannot make an edit look like someone else's: it can
 correctly report who did what before, and it can act only as the user its
