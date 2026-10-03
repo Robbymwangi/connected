@@ -101,8 +101,32 @@ transaction's duration:
    changed on that record at versions greater than `baseVersion` (from the
    change log). If the entry's fields don't overlap that set → `merged`:
    apply, increment, log, same as rule 2. If they overlap and the values on
-   both sides are equal → `accepted`, and a `conflicts` row is logged with
-   `resolution.kind: "auto"` (ADR 0002 rule 6). If they overlap and differ →
+   both sides are equal, **and the record is a mark**, since the conflict
+   taxonomy below restricts automatic resolution to two sides holding the
+   same mark and nowhere else: if every field the entry touches is already
+   current (the overlapping field matches, and there is no disjoint field
+   alongside it) → **(proposed amendment, discussed 2026-10-03, not yet
+   reviewed: a no-op)** the record itself is not touched again: no new
+   `version`, no change-log row, `last_edited_by` unchanged, since the
+   value the first side already wrote is the value this entry would have
+   written. "First" here means whichever write produced the version this
+   entry collided with, ordered by version number, never by either side's
+   `at`. A `conflicts` row is still logged with `resolution.kind: "auto"`
+   (ADR 0002 rule 6), recording both sides, so the second device sees the
+   collision happened even though nothing about the record changed. The
+   response to the second device is still `accepted`, carrying the
+   record's current (unchanged) version, exactly as if its write had
+   applied; from that device's own point of view the value it wanted is
+   already there, and it has no reason to know a collision happened at all
+   unless it later opens the conflict row. If the entry also touches a
+   disjoint field alongside the already-current overlapping one, the
+   no-op above doesn't apply: this is `merged`, same as the disjoint-only
+   case, applying every field the entry sent, including the one that
+   happened to already match; the mutation is contributing real
+   information through its disjoint field, so it earns the ordinary merge,
+   not the no-op, and the already-matching field is harmless to write
+   again since it doesn't change the stored value. For an overlapping
+   field equal on a record that is not a mark, or if the values differ →
    `conflict`: nothing is written to the record itself; a `conflicts` row is
    created (or, if one is already open on this cell, this entry becomes its
    second side) holding both values, and the response carries the record's
@@ -194,7 +218,129 @@ Manual review: every other rejected write with an overlapping field. Handled
 entirely through the propose, accept, refer, resolve mutations above, per
 ADR 0002's rules for who may act.
 
+## Audit timestamps and actor identity
+
+> **Proposed addition, drafted 2026-10-03, not yet reviewed.** Raised
+> while discussing PR #88 (what a device's clock can and can't be trusted
+> for): `at`'s "informational only" label already protects correctness,
+> since nothing above compares it to anything. It says nothing about
+> auditability, which is a separate problem and what this section is for.
+> This section amends rule 4's equal-value case (who gets credited) and
+> adds a server-set value alongside what a device sends, plus two specific
+> timestamp anomaly flags for an auditor. It does not change rules 1, 2,
+> 3, 5, or 6.
+
+A device's `at` stays exactly as it is: client-claimed, informational, and
+never compared by any rule above for the purpose of deciding whether a
+write is accepted, merged, or conflicted. A device's clock is not
+trustworthy, and this spec already doesn't trust it for anything that
+decides an outcome; that is settled by ADR 0001 and unaffected by anything
+below. But a device's clock being untrustworthy is also exactly why an
+auditor looking at a conflict later needs something that *is* trustworthy
+to check `at` against, and nothing currently records one.
+
+**Proposed: `receivedAt`, set by the server from its own clock, the
+moment any write to a synchronisable table happens.** This is new data,
+not already captured anywhere; `created_at`/`updated_at` are per-row, not
+per-edit, and can't tell two overlapping writes apart. It applies to
+every `sync_changes` row, not only a `POST /sync` push: the change log
+above already carries a server-originated write (an admin creates a
+student, an unlock, a finalize made through the admin action, a report
+finishing) the same way it carries a push's, and the second anomaly check
+below needs a `receivedAt` for whichever write produced a `baseVersion`
+regardless of which path wrote it, so the stamp has to be unconditional
+on every row that log appends, not only the three `POST /sync` rules. It
+arrives with the Phase 3 sync implementation (issue #89), stored on the
+change-log row `GET /sync` reads (`sync_changes`, already named in that
+section below) and copied from there into a conflict's `side_a`/`side_b`
+and into a `proposals[]` entry, alongside the existing client `at`, never
+instead of it. The same applies to a conflict's `resolved_at` column: a
+resolution mutation's `fields` already carry a client-sent `resolvedAt`
+(`fields: {resolution: {...}, resolvedAt}`, same shape as any other
+mutation's `at`); that field is `at` by another name for this mutation
+type and stays exactly as informational, kept as sent, never rejected or
+overwritten. The server-set `resolved_at` column is new, separate storage
+alongside it, filled from the server's own clock when the resolving
+mutation is processed, not read from the device's `resolvedAt`, for the
+identical reason `receivedAt` isn't read from `at`. `receivedAt` and
+`resolved_at` are both audit-only: neither is ever the `GET /sync`
+cursor, which stays the opaque `seq` integer described below, and a
+replayed mutation (rule 1) does not get a new `receivedAt`; replay
+returns the original write's stamp unchanged, since replaying isn't a
+new write.
+
+**What this catches, and what it deliberately doesn't.** A large gap
+between `at` and `receivedAt` is not a signal of anything: a teacher
+marking all week offline and syncing Friday produces exactly that gap
+honestly, and this file's whole offline-first premise means that has to
+stay unremarkable. What's worth flagging as an anomaly for whoever
+audits a conflict later, to look into rather than take as proof of
+anything, is narrower, and both checks allow the same skew tolerance,
+proposed at five minutes pending team agreement on the actual number,
+applied identically to both, since `at` comes from a device clock this
+spec already treats as untrustworthy: a clock that's merely wrong by
+more than the tolerance can trip either check on a perfectly honest
+edit, so neither check proves a lie, only that something about this
+claim doesn't add up and is worth a look:
+
+- `at` later than `receivedAt` on the same mutation: an edit that appears
+  to come from after the server ever saw it.
+- `at` earlier than the `receivedAt` of the write that produced the
+  `baseVersion` this mutation edited against: an edit that appears to
+  have been made before the version it's based on existed. Skipped
+  entirely at `baseVersion: 0`, since there's no prior write to be
+  earlier than.
+
+Both flags are derived when the row is read for display (3.5), not stored
+on it; they're a function of two timestamps already on record, not a new
+fact that needs its own column.
+
+**Be honest about what these two checks are for.** They catch an honest
+clock mistake (wrong timezone, a device that never had NTP), not a
+careful liar. A device that forges `at` to fall inside both windows
+leaves no trace here at all, and that is fine, because these checks are
+never the thing standing between a forged clock and a wrong outcome: that
+job belongs entirely to attribution being decided by version order (see
+the amendment to rule 4's equal-value case, directly below, and the
+worked example "Two devices enter the same value, and one lies about
+when" further down in Worked examples), which reads no timestamp from
+anyone, ever. The residual risk after both the version-order rule and
+these two checks is narrow and specific: a human auditor glancing at a
+conflict row and trusting the displayed `at` over `receivedAt`. That's a
+display problem, not a protocol one, and is addressed below.
+
+**Display discipline.** `receivedAt` is the time shown as authoritative;
+`at` is always labelled explicitly as device-reported, never presented as
+simply "the time," and the two sides of a conflict are never sorted or
+described as earlier or later by `at`, only by version order, extending
+ADR 0002 rule 8's symmetric presentation (never "mine" or "theirs") to
+time as well as ownership. Either anomaly flag above is shown beside the
+side it applies to, not as a separate notice, so it reads as "this claim
+doesn't add up" rather than as a system-wide warning.
+
+Why not just have the device sign its claimed `at`? A signature proves
+who sent a value, not when it's true; the device still has no clock worth
+signing a true time with, so signing `at` would only make a forged
+timestamp harder to dispute, not less forged.
+
+**Amendment to rule 4's equal-value case: who gets credited.** See the
+amendment to rule 4 itself above (POST /sync): the first side keeps
+`last_edited_by`, "first" meaning whichever write produced the version
+the second collided with, by version order, never by either side's `at`;
+the second write is a no-op on the record, logged only as the `conflicts`
+row's second side. The full reasoning, and why this is a credit question
+and not the answer to clock forgery, is in the worked example "Two
+devices enter the same value, and one lies about when," in Worked
+examples below.
+
 ## Authorization and scoping
+
+> **Proposed addition, drafted 2026-10-03, not yet reviewed.** The
+> institution rule below is existing, settled spec. The actor-identity
+> rule after it is new: raised while discussing PR #88 (see "Audit
+> timestamps and actor identity") and belongs here because it's the same
+> shape of rule, trust the token, never the payload, just for who, not
+> which institution.
 
 The institution comes from the authenticated token (Sanctum, #36), never
 from the payload. A `recordId` that doesn't resolve within the caller's
@@ -203,6 +349,45 @@ ordinary create; at a nonzero `baseVersion` it's `forbidden`, since there's
 no record on this side to be stale against, consistent with how
 `docs/spec/access-model.md` describes a cross-institution row as simply not
 found.
+
+**Proposed: a two-part rule for who a mutation's fields can claim to be.**
+A user id can legitimately appear in a payload: `workflow.md`'s finalize
+mutation sends `finalizedBy`, and a conflict's `proposals[]` entries carry
+`byId`, because an offline device recording its own action has to say who
+did it, and an "agreed" resolution has to say who proposed and who
+accepted, so the first part below is not "no user id ever appears," which
+would be false, but a split by what role the id plays in that entry:
+
+1. **A domain field naming who performed *this* mutation** (`finalizedBy`
+   on a finalize, a new proposal's own `byId`, an acceptance's
+   `acceptedBy`) must equal the authenticated token's user; if the
+   payload sends a different id in such a field, that is `invalid`, not
+   silently overridden, so a device sending the wrong id finds out rather
+   than having its mistake hidden. A mark edit has no field like this at
+   all: it never names its own author in `fields`, since `last_edited_by`
+   is not a domain fact the device reports but a server-derived attribute,
+   covered by the server-owned list below.
+2. **A field naming someone else as a reference to prior history**
+   (`proposals[].byId` for an earlier proposal the device is now
+   responding to, an "agreed" resolution's `proposedBy`) is never an
+   acting-user claim for the current mutation; the server accepts it only
+   when it matches what the server's own record already holds for that
+   history, and rejects the mutation as `invalid` if it doesn't. A device
+   relays a conflict's existing proposals back because the wire format
+   doesn't resend whole rows (only changed fields), not because it gets
+   to assert someone else's history on the server's behalf.
+
+Either way, a device cannot make an edit look like someone else's: it can
+correctly report who did what before, and it can act only as the user its
+own token authenticates, never both at once for the same field. Columns
+the server alone owns (`version`, `institution_id`, `last_edited_by`,
+`created_by`, `receivedAt`, `resolved_at`) are never read from the
+payload at all; `fields` carrying any of them is `invalid`, rejected
+outright rather than silently stripped, so a device sending one finds
+out rather than having it quietly ignored. This is distinct from the
+resolution mutation's own client-sent `resolvedAt`, which is `at` by
+another name and stays informational exactly as described above; the
+difference is the column, not the camelCase/snake_case spelling.
 
 Push authorization mirrors #36 exactly: marks and assessment creation are
 unrestricted for any authenticated user; updating, finalizing, or unlocking
@@ -221,6 +406,34 @@ finds `score` changed since then, and it's the one field B also changed, so
 if the values differ, `conflict`, the row stays at `version: 7`, and both
 devices see the conflict on their next interaction, B immediately from its
 own rejection, A from its next pull.
+
+**Two devices enter the same value, and one lies about when.** Both
+devices edited the same mark while offline earlier in the week, at
+`baseVersion: 6`, whose write was itself received by the server on
+Monday. Device A syncs first on Friday: `accepted`, `version: 7`,
+`receivedAt` 14:02. Device B syncs minutes later; its push claims
+`at: 13:50`, ahead of A's real edit, because its operator set the system
+clock back before syncing, hoping to look like the earlier editor. Rule 4
+finds `score` changed since `baseVersion: 6`, the values match, so it is
+the no-op case above: B's write changes nothing, and `last_edited_by`
+stays A's, because attribution is decided by version order (A's write
+produced version 7, B's collided against it) and never by either side's
+claimed `at`. B's forged clock gains it nothing: it cannot buy credit for
+a write that, under rule 4, was never going to overwrite A's anyway.
+
+Whether an auditor would even notice depends on exactly what B forged.
+13:50 is later than Monday's `receivedAt` for `baseVersion: 6` and earlier
+than B's own `receivedAt` on Friday, so it lands inside both windows and
+trips neither anomaly check; this is the "leaves no trace here at all"
+case the limits paragraph above describes, and it is fine precisely
+because the forgery bought B nothing regardless. Had B instead claimed an
+`at` before Monday's `receivedAt`, before the version it was editing
+against had even been received, that would trip the second check; had it
+claimed an `at` after its own Friday `receivedAt`, that would trip the
+first. Either way the `conflicts` row still holds both sides' real
+`receivedAt` values, so an auditor who checks them instead of trusting
+the displayed `at`, per the display discipline above, sees the true
+order regardless of what either device claimed.
 
 **A lost response.** Device A's mutation is accepted server-side, but the
 response never arrives. A's outbox still holds the entry and resends it on
