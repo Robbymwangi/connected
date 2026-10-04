@@ -25,6 +25,9 @@ use Illuminate\Support\Facades\Gate;
    year overrides that default, for a historical roster. */
 class StudentsController extends Controller
 {
+    /**
+     * List institution students, optionally filtered by class and enrolment year.
+     */
     public function __invoke(Request $request): AnonymousResourceCollection
     {
         $filters = $request->validate([
@@ -49,6 +52,9 @@ class StudentsController extends Controller
         return StudentResource::collection($query->get());
     }
 
+    /**
+     * Create an institution student after authorizing administrator access.
+     */
     public function store(Request $request): JsonResponse
     {
         Gate::authorize('create', Student::class);
@@ -67,6 +73,9 @@ class StudentsController extends Controller
         return StudentResource::make($student)->response()->setStatusCode(201);
     }
 
+    /**
+     * Update student details after authorizing administrator access.
+     */
     public function update(Request $request, Student $student): JsonResponse
     {
         Gate::authorize('update', $student);

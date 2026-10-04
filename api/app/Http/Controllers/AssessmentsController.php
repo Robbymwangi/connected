@@ -19,6 +19,9 @@ use Illuminate\Validation\ValidationException;
    sittings. */
 class AssessmentsController extends Controller
 {
+    /**
+     * List institution assessments, optionally filtered by class.
+     */
     public function __invoke(Request $request): AnonymousResourceCollection
     {
         $filters = $request->validate([
@@ -32,6 +35,9 @@ class AssessmentsController extends Controller
         return AssessmentResource::collection($assessments);
     }
 
+    /**
+     * Create a scheduled assessment after validating the class and subject.
+     */
     public function store(Request $request): JsonResponse
     {
         Gate::authorize('create', Assessment::class);
@@ -49,6 +55,9 @@ class AssessmentsController extends Controller
         return AssessmentResource::make($assessment->load('subject'))->response()->setStatusCode(201);
     }
 
+    /**
+     * Update an assessment after validating the class and subject.
+     */
     public function update(Request $request, Assessment $assessment): JsonResponse
     {
         Gate::authorize('update', $assessment);
@@ -61,6 +70,9 @@ class AssessmentsController extends Controller
         return AssessmentResource::make($assessment->load('subject'))->response()->setStatusCode(200);
     }
 
+    /**
+     * Validate assessment fields and institution membership of related records.
+     */
     private function validatedAttributes(Request $request): array
     {
         $institutionId = $request->user()->institution_id;
@@ -81,6 +93,9 @@ class AssessmentsController extends Controller
         ]);
     }
 
+    /**
+     * Reject a subject that is not offered by the selected class.
+     */
     private function ensureSubjectIsOffered(array $attributes): void
     {
         $isOffered = ClassSubject::query()

@@ -15,6 +15,9 @@ use Illuminate\Validation\ValidationException;
 
 class MarksController extends Controller
 {
+    /**
+     * Create or update a mark after validating enrolment, criterion, and score.
+     */
     public function store(Request $request): JsonResponse
     {
         $institutionId = $request->user()->institution_id;
@@ -87,6 +90,9 @@ class MarksController extends Controller
         return $this->markResponse($mark, $mark->wasRecentlyCreated ? 201 : 200);
     }
 
+    /**
+     * Update an authorized mark, enforcing the criterion maximum score.
+     */
     public function update(Request $request, Mark $mark): JsonResponse
     {
         Gate::authorize('update', $mark);
@@ -111,6 +117,9 @@ class MarksController extends Controller
         return $this->markResponse($mark, 200);
     }
 
+    /**
+     * Return the mark identifiers, value, and version with the given HTTP status.
+     */
     private function markResponse(Mark $mark, int $status): JsonResponse
     {
         return response()->json([

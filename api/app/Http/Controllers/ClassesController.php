@@ -16,6 +16,9 @@ use Illuminate\Validation\Rule;
    here. */
 class ClassesController extends Controller
 {
+    /**
+     * List institution classes with their teachers and offered subjects.
+     */
     public function __invoke(): AnonymousResourceCollection
     {
         $classes = SchoolClass::with(['classTeacher', 'classSubjects.subject'])->get();
@@ -23,6 +26,9 @@ class ClassesController extends Controller
         return SchoolClassResource::collection($classes);
     }
 
+    /**
+     * Create an institution class after authorizing administrator access.
+     */
     public function store(Request $request): JsonResponse
     {
         Gate::authorize('create', SchoolClass::class);
@@ -35,6 +41,9 @@ class ClassesController extends Controller
         return $this->resourceResponse($schoolClass, 201);
     }
 
+    /**
+     * Update a class after authorizing administrator access.
+     */
     public function update(Request $request, SchoolClass $schoolClass): JsonResponse
     {
         Gate::authorize('update', $schoolClass);
@@ -44,6 +53,9 @@ class ClassesController extends Controller
         return $this->resourceResponse($schoolClass, 200);
     }
 
+    /**
+     * Validate class fields and institution membership of the optional teacher.
+     */
     private function validatedAttributes(Request $request): array
     {
         $institutionId = $request->user()->institution_id;
@@ -58,6 +70,9 @@ class ClassesController extends Controller
         ]);
     }
 
+    /**
+     * Return the class resource with its teacher, subjects, and HTTP status.
+     */
     private function resourceResponse(SchoolClass $schoolClass, int $status): JsonResponse
     {
         return SchoolClassResource::make(

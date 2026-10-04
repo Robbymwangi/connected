@@ -10,6 +10,9 @@ use Illuminate\Validation\Rule;
 
 class TeachersController extends Controller
 {
+    /**
+     * Create an institution teacher account after authorizing administrator access.
+     */
     public function store(Request $request): JsonResponse
     {
         Gate::authorize('create', User::class);
@@ -29,6 +32,9 @@ class TeachersController extends Controller
         return $this->resourceResponse($teacher, 201);
     }
 
+    /**
+     * Update a teacher account after authorizing administrator access.
+     */
     public function update(Request $request, User $teacher): JsonResponse
     {
         Gate::authorize('update', $teacher);
@@ -48,6 +54,9 @@ class TeachersController extends Controller
         return $this->resourceResponse($teacher, 200);
     }
 
+    /**
+     * Return teacher account details without credentials, using the given HTTP status.
+     */
     private function resourceResponse(User $teacher, int $status): JsonResponse
     {
         return response()->json([
