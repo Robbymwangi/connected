@@ -141,7 +141,10 @@ and the editor window.
    `/mnt/c/...`. Bind mounts and file watching across the Windows boundary are slow,
    and Vite's live reload misses changes there.
 3. Install Node inside WSL with [nvm](https://github.com/nvm-sh/nvm), not the Windows
-   Node. `sudo apt install make` if `make` is missing.
+   Node. Run `npm ci` and `make dev` from that same WSL environment; do not reuse
+   `frontend/node_modules` installed by Windows, since native packages such as
+   Rolldown require a platform-specific binding. `sudo apt install make` if `make`
+   is missing.
 4. Open the folder with VS Code's WSL extension (`code .` from the WSL shell) so the
    terminal, Git, and Node are all the Linux ones.
 5. The Windows browser reaches `localhost:5173` and `localhost:8000` directly; WSL
