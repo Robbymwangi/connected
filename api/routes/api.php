@@ -9,6 +9,7 @@ use App\Http\Controllers\MarksController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\StudentsController;
 use App\Http\Controllers\SubjectsController;
+use App\Http\Controllers\SyncController;
 use App\Http\Controllers\TeachersController;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\ResolveInstitution;
@@ -37,6 +38,7 @@ Route::post('/login', LoginController::class)->name('login')->middleware('thrott
 Route::middleware(['auth:sanctum', EnsureAccountIsActive::class])->group(function () {
     Route::post('/logout', LogoutController::class)->name('logout');
     Route::get('/me', MeController::class)->name('me');
+    Route::get('/sync', SyncController::class)->name('sync.pull');
 
     // 2.1 (#48): reads unrestricted within the institution for any
     // authenticated user (docs/spec/access-model.md, The principle).
