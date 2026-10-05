@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\StudentResource;
 use App\Models\Student;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Gate;
 
 /* GET /api/students (build plan 2.1, #48). Unrestricted within the
    institution for any authenticated user (docs/spec/access-model.md, The
@@ -23,6 +25,9 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
    year overrides that default, for a historical roster. */
 class StudentsController extends Controller
 {
+    /**
+     * List institution students, optionally filtered by class and enrolment year.
+     */
     public function __invoke(Request $request): AnonymousResourceCollection
     {
         $filters = $request->validate([
@@ -45,5 +50,44 @@ class StudentsController extends Controller
         }
 
         return StudentResource::collection($query->get());
+    }
+
+    /**
+     * Create an institution student after authorizing administrator access.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        Gate::authorize('create', Student::class);
+
+        $attributes = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'gender' => ['required', 'in:F,M'],
+            'dob' => ['required', 'date', 'before_or_equal:today'],
+        ]);
+
+        $student = Student::create([
+            ...$attributes,
+            'institution_id' => $request->user()->institution_id,
+        ]);
+
+        return StudentResource::make($student)->response()->setStatusCode(201);
+    }
+
+    /**
+     * Update student details after authorizing administrator access.
+     */
+    public function update(Request $request, Student $student): JsonResponse
+    {
+        Gate::authorize('update', $student);
+
+        $attributes = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'gender' => ['required', 'in:F,M'],
+            'dob' => ['required', 'date', 'before_or_equal:today'],
+        ]);
+
+        $student->update($attributes);
+
+        return StudentResource::make($student)->response()->setStatusCode(200);
     }
 }

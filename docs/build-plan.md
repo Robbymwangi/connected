@@ -241,6 +241,7 @@ dependents.
   matching base `version` accepts and increments; mismatched `version` with
   disjoint fields merges; mismatched `version` with a contested field returns
   `conflict` carrying both values and writes nothing.
+- Done when: A Pest test authenticates as a non-admin teacher and submits a valid mark mutation through 'POST /sync' for a class and subject the teacher is not assigned to in their institution; the mutation is accepted.
 - Done when: a Pest test submits a batch of thirty mutations of which one
   conflicts, and the other twenty-nine are persisted.
 - Do not: infer conflicts from timestamps under any circumstances. Clock skew
