@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react'
+import { createContext, useContext } from 'react'
 import type { CurrentUser } from '../lib/session'
 
 /* The signed-in user and how to sign out, for the handful of components that
@@ -15,16 +15,12 @@ import type { CurrentUser } from '../lib/session'
    better choice. Chosen over a state-management library because that would
    be solving a problem this app does not have yet; if more cross-cutting
    state shows up later, that is its own decision, with its own ADR. */
-type AuthContextValue = {
+export type AuthContextValue = {
   user: CurrentUser
   signOut: () => void
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null)
-
-export function AuthProvider({ value, children }: { value: AuthContextValue; children: ReactNode }) {
-  return <AuthContext value={value}>{children}</AuthContext>
-}
+export const AuthContext = createContext<AuthContextValue | null>(null)
 
 function useAuthContext(): AuthContextValue {
   const value = useContext(AuthContext)
