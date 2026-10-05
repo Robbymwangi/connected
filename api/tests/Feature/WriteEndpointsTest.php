@@ -6,7 +6,10 @@ use App\Models\Enrolment;
 use App\Models\Mark;
 use App\Models\SchoolClass;
 use App\Models\Student;
+use App\Models\Subject;
 use App\Models\User;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 test('a non-admin teacher can write a mark for an unassigned class and subject', function () {
@@ -71,6 +74,64 @@ test('a non-admin teacher can write a mark for an unassigned class and subject',
         ->and($mark->version)->toBe(0);
 });
 
+test('a concurrent first write to a mark cell updates the winning row', function () {
+    $graph = buildGraph('School A', '-concurrent-mark-write');
+    $student = Student::create([
+        'institution_id' => $graph['institution']->id,
+        'name' => 'Concurrent Student',
+        'gender' => 'F',
+        'dob' => '2015-03-01',
+    ]);
+    Enrolment::create([
+        'institution_id' => $graph['institution']->id,
+        'student_id' => $student->id,
+        'class_id' => $graph['class']->id,
+        'year' => $graph['assessment']->year,
+    ]);
+
+    $concurrentWriteInserted = false;
+    DB::listen(function (QueryExecuted $query) use ($graph, $student, &$concurrentWriteInserted): void {
+        if ($concurrentWriteInserted
+            || ! str_contains($query->sql, 'from "marks"')
+            || ! str_contains($query->sql, '"assessment_id" = ?')) {
+            return;
+        }
+
+        $concurrentWriteInserted = true;
+        Mark::create([
+            'institution_id' => $graph['institution']->id,
+            'assessment_id' => $graph['assessment']->id,
+            'student_id' => $student->id,
+            'criterion_id' => $graph['criterion']->id,
+            'mark_kind' => 'empty',
+            'score' => null,
+            'last_edited_by' => $graph['teacher']->id,
+        ]);
+    });
+
+    $response = $this->withToken(tokenFor($graph['teacher']))->postJson('/api/marks', [
+        'assessment_id' => $graph['assessment']->id,
+        'student_id' => $student->id,
+        'criterion_id' => $graph['criterion']->id,
+        'mark_kind' => 'score',
+        'score' => 8,
+    ]);
+
+    $response->assertOk()->assertJsonPath('data.mark_kind', 'score');
+
+    $mark = Mark::query()
+        ->where('assessment_id', $graph['assessment']->id)
+        ->where('student_id', $student->id)
+        ->where('criterion_id', $graph['criterion']->id)
+        ->firstOrFail();
+
+    expect($concurrentWriteInserted)->toBeTrue()
+        ->and($response->json('data.id'))->toBe($mark->id)
+        ->and($mark->score)->toBe(8)
+        ->and($mark->version)->toBe(1)
+        ->and($mark->last_edited_by)->toBe($graph['teacher']->id);
+});
+
 test('a non-admin teacher can create an assessment for an unassigned class and subject', function () {
     $graph = buildGraph('School A', '-assessment-write');
     $schoolClass = SchoolClass::create([
@@ -103,6 +164,72 @@ test('a non-admin teacher can create an assessment for an unassigned class and s
     expect($assessment->institution_id)->toBe($graph['institution']->id)
         ->and($assessment->created_by)->toBe($graph['teacher']->id)
         ->and($assessment->status)->toBe('scheduled');
+});
+
+test('an assessment with marks cannot change its class, subject, or year', function () {
+    $graph = buildGraph('School A', '-assessment-scope-change');
+    $newSubject = Subject::create([
+        'institution_id' => $graph['institution']->id,
+        'name' => 'Science',
+    ]);
+    $newClass = SchoolClass::create([
+        'institution_id' => $graph['institution']->id,
+        'grade' => '5',
+        'stream' => 'East',
+    ]);
+    ClassSubject::create([
+        'institution_id' => $graph['institution']->id,
+        'class_id' => $newClass->id,
+        'subject_id' => $newSubject->id,
+    ]);
+
+    $response = $this->withToken(tokenFor($graph['teacher']))->putJson(
+        '/api/assessments/'.$graph['assessment']->id,
+        [
+            'class_id' => $newClass->id,
+            'subject_id' => $newSubject->id,
+            'name' => 'Moved Assessment',
+            'term' => 2,
+            'year' => 2027,
+            'date' => '2027-05-01',
+        ],
+    );
+
+    $response->assertInvalid([
+        'class_id' => 'cannot change after marks exist',
+        'subject_id' => 'cannot change after marks exist',
+        'year' => 'cannot change after marks exist',
+    ]);
+
+    $assessment = $graph['assessment']->fresh();
+    expect($assessment->class_id)->toBe($graph['class']->id)
+        ->and($assessment->subject_id)->toBe($graph['subject']->id)
+        ->and($assessment->year)->toBe(2026)
+        ->and($assessment->version)->toBe(0);
+});
+
+test('an assessment with marks can update its name and date without changing scope', function () {
+    $graph = buildGraph('School A', '-assessment-metadata-update');
+
+    $response = $this->withToken(tokenFor($graph['teacher']))->putJson(
+        '/api/assessments/'.$graph['assessment']->id,
+        [
+            'class_id' => $graph['class']->id,
+            'subject_id' => $graph['subject']->id,
+            'name' => 'Updated CAT 1',
+            'term' => 1,
+            'year' => 2026,
+            'date' => '2026-03-01',
+        ],
+    );
+
+    $response->assertOk()->assertJsonPath('data.name', 'Updated CAT 1');
+
+    $assessment = $graph['assessment']->fresh();
+    expect($assessment->class_id)->toBe($graph['class']->id)
+        ->and($assessment->subject_id)->toBe($graph['subject']->id)
+        ->and($assessment->year)->toBe(2026)
+        ->and($assessment->date->toDateString())->toBe('2026-03-01');
 });
 
 test('a non-admin teacher can update any mark in the school', function () {

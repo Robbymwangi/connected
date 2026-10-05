@@ -65,6 +65,18 @@ class AssessmentsController extends Controller
         $attributes = $this->validatedAttributes($request);
         $this->ensureSubjectIsOffered($attributes);
 
+        $changedScopeFields = array_keys(array_filter([
+            'class_id' => (string) $assessment->class_id !== $attributes['class_id'],
+            'subject_id' => (string) $assessment->subject_id !== $attributes['subject_id'],
+            'year' => (int) $assessment->year !== (int) $attributes['year'],
+        ]));
+
+        if ($changedScopeFields !== [] && $assessment->marks()->exists()) {
+            $message = 'The class, subject, and year cannot change after marks exist.';
+
+            throw ValidationException::withMessages(array_fill_keys($changedScopeFields, $message));
+        }
+
         $assessment->update($attributes);
 
         return AssessmentResource::make($assessment->load('subject'))->response()->setStatusCode(200);

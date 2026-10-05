@@ -7,8 +7,10 @@ use App\Models\Criterion;
 use App\Models\Enrolment;
 use App\Models\Mark;
 use App\Models\Student;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -75,17 +77,39 @@ class MarksController extends Controller
 
         Gate::authorize($mark === null ? 'create' : 'update', $mark ?? Mark::class);
 
+        $isNewMark = $mark === null;
+        $markAttributes = [
+            'mark_kind' => $attributes['mark_kind'],
+            'score' => $attributes['mark_kind'] === 'score' ? $attributes['score'] : null,
+            'last_edited_by' => $request->user()->id,
+        ];
+
         $mark ??= new Mark;
         $mark->fill([
             'institution_id' => $institutionId,
             'assessment_id' => $assessment->id,
             'student_id' => $student->id,
             'criterion_id' => $criterion->id,
-            'mark_kind' => $attributes['mark_kind'],
-            'score' => $attributes['mark_kind'] === 'score' ? $attributes['score'] : null,
-            'last_edited_by' => $request->user()->id,
+            ...$markAttributes,
         ]);
-        $mark->save();
+
+        try {
+            DB::transaction(fn () => $mark->save());
+        } catch (UniqueConstraintViolationException $exception) {
+            if (! $isNewMark) {
+                throw $exception;
+            }
+
+            $existingMark = Mark::query()->find($mark->newUniqueId());
+
+            if ($existingMark === null) {
+                throw $exception;
+            }
+
+            Gate::authorize('update', $existingMark);
+            $existingMark->update($markAttributes);
+            $mark = $existingMark;
+        }
 
         return $this->markResponse($mark, $mark->wasRecentlyCreated ? 201 : 200);
     }
