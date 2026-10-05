@@ -228,12 +228,21 @@ dependents.
 
 **3.1 `GET /sync?since={cursor}`**
 
-- Constraints: returns every row in the institution scope with `updated_at` after
-  the cursor, soft-deleted rows included, plus a fresh cursor.
-- Done when: a Pest test pulls, writes on the server, pulls again with the
-  returned cursor, and receives exactly the changed rows and nothing else.
-- Do not: omit soft-deleted rows. A client that missed a delete has no other way
-  to learn of it.
+- Constraints: the cursor is `sync_changes.seq`, the bigserial key of an append-only
+  change log that every write to a synchronisable table appends to inside its own
+  transaction (`docs/spec/sync-protocol.md`, GET /sync; ADR 0010). Never a timestamp.
+  Returns changes after the cursor as `{seq, table, recordId, version, fields}`, changed
+  fields only, soft deletes included, institution scope from the token, with `limit`
+  and `more`. `since=0` reads the live tables, one change per current row, with the
+  cursor fixed at the log's highest `seq` before the read.
+- Delivered in slices, one merge request each: the `sync_changes` migration and model
+  (including `received_at`, #89); the append in `Syncable`, serialised by an advisory
+  lock; the endpoint.
+- Done when: a Pest test pulls, writes on the server, pulls again with the returned
+  cursor, and receives exactly the changes written and nothing else; a model that skips
+  the log fails a guard test.
+- Do not: omit soft-deleted rows. A client that missed a delete has no other way to
+  learn of it. Do not use `updated_at` as a cursor.
 
 **3.2 `POST /sync`**
 
