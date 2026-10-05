@@ -211,10 +211,23 @@ than a separate bootstrap endpoint; one code path applies changes whether
 it's the first pull or the thousandth. `limit` paginates a large first pull;
 `more: true` means call again with the returned cursor.
 
+A paged first pull is the one case where the returned cursor is not yet a
+`seq` (ADR 0010, decision 5). The server fixes a high-water mark, the highest
+`seq` when the bootstrap starts, and until the snapshot is complete returns an
+opaque continuation token holding that mark and the last `(table, id)` read.
+The device sends it back as `since` unchanged; the server resumes the scan
+after that position. Only the final page returns the plain integer `seq`, equal
+to the mark, so a device never holds a `seq` cursor while rows at or below it
+are still unsent. Changes that land during the scan sit above the mark and
+arrive on the first ordinary pull. A malformed token is a 422.
+
 Soft-deleted rows are included, never filtered out, because a device that
 missed a delete has no other way to learn of it.
 
-Applying a change on the device: patch the named fields onto the local
+Applying a change on the device: skip it if its `version` is not greater than
+the local record's, since a bootstrap row can already reflect a change whose log
+entry sits above the mark, and an older delta must never roll the record back
+(ADR 0010, decision 4). Otherwise patch the named fields onto the local
 record and set its `version`, except any field the device's own pending
 outbox entry for that record still holds. That field waits for its own
 push result rather than being overwritten by someone else's pull, so a

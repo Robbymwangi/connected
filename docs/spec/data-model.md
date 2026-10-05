@@ -150,10 +150,16 @@ something #36 requires.
   `note`, `created_at`. An append-only audit log, not synchronisable in the
   full sense: it's written once by ADMIN, online, and a device only ever
   reads it as part of an assessment's history.
-- **`sync_changes`**: provisional. The change log that backs pull, if #35
-  settles on a log-and-cursor design over reading `updated_at` directly.
-  Not fixed here; described so this file doesn't silently assume an answer
-  #35 hasn't given yet.
+- **`sync_changes`**: `seq` (bigserial primary key, the pull cursor),
+  `institution_id`, `table`, `record_id`, `version`, `fields` (jsonb, changed
+  fields only, `deleted_at` included), `received_at` (server clock, set on every
+  row, audit only; `docs/spec/sync-protocol.md`, Audit timestamps). Append-only,
+  written by `Syncable` on every create, update, and soft delete inside the
+  writing transaction, serialised so `seq` order equals commit order (ADR 0010).
+  Not itself synchronisable and never on either verb as a table. Indexed on
+  `(institution_id, seq)`. The one deliberate exception to client-generated
+  UUID keys: the rule exists because records are created offline, and a log row
+  is only ever written by the server, whose sequence is the cursor itself.
 
 ## Grains and identity
 
