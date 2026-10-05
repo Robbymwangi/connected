@@ -50,6 +50,7 @@ Route::middleware(['auth:sanctum', EnsureAccountIsActive::class])->group(functio
     Route::put('/students/{student}', [StudentsController::class, 'update'])->name('students.update');
     Route::post('/assessments', [AssessmentsController::class, 'store'])->name('assessments.store');
     Route::put('/assessments/{assessment}', [AssessmentsController::class, 'update'])->name('assessments.update');
+    Route::post('/assessments/{assessment}/unlock', [AssessmentsController::class, 'unlock'])->name('assessments.unlock');
     Route::post('/classes', [ClassesController::class, 'store'])->name('classes.store');
     Route::put('/classes/{schoolClass}', [ClassesController::class, 'update'])->name('classes.update');
     Route::post('/teachers', [TeachersController::class, 'store'])->name('teachers.store');

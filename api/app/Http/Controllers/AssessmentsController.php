@@ -82,6 +82,19 @@ class AssessmentsController extends Controller
         return AssessmentResource::make($assessment->load('subject'))->response()->setStatusCode(200);
     }
 
+    public function unlock(Request $request, Assessment $assessment): JsonResponse
+    {
+        Gate::authorize('unlock', $assessment);
+
+        $attributes = $request->validate([
+            'note' => ['sometimes', 'nullable', 'string'],
+        ]);
+
+        $assessment->unlock($request->user(), $attributes['note'] ?? null);
+
+        return AssessmentResource::make($assessment->load('subject'))->response()->setStatusCode(200);
+    }
+
     /**
      * Validate assessment fields and institution membership of related records.
      */

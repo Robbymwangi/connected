@@ -1,0 +1,18 @@
+[90m= [39m[34;4mApp\Models\Assessment[39;24m {#8307
+    [34mid[39m: [32m"[39m[32m01a10bbb-5164-718d-b4e4-0684cb81f246[39m[32m"[39m,
+    [34minstitution_id[39m: [32m"[39m[32m01a0fd50-22d8-715b-b69c-4c60e81c877a[39m[32m"[39m,
+    [34mclass_id[39m: [32m"[39m[32m01a0fd50-2c0d-71cf-85c2-725fd08c3e56[39m[32m"[39m,
+    [34msubject_id[39m: [32m"[39m[32m01a0fd50-2c04-71dc-a7fe-a266bc5cb9f0[39m[32m"[39m,
+    [34mname[39m: [32m"[39m[32mPhase 2.3 Manual Test[39m[32m"[39m,
+    [34mterm[39m: [35m3[39m,
+    [34myear[39m: [35m2026[39m,
+    [34mdate[39m: [32m"[39m[32m2026-10-05[39m[32m"[39m,
+    [34mstatus[39m: [32m"[39m[32mscheduled[39m[32m"[39m,
+    [34mcreated_by[39m: [32m"[39m[32m01a0fd50-269e-7330-951d-e9f19da717c5[39m[32m"[39m,
+    [34mfinalized_at[39m: [36mnull[39m,
+    [34mfinalized_by[39m: [36mnull[39m,
+    [34mversion[39m: [35m0[39m,
+    [34mdeleted_at[39m: [36mnull[39m,
+    [34mcreated_at[39m: [32m"[39m[32m2026-10-05 11:03:07[39m[32m"[39m,
+    [34mupdated_at[39m: [32m"[39m[32m2026-10-05 11:03:07[39m[32m"[39m,
+  }
