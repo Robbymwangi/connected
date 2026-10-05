@@ -234,7 +234,10 @@ dependents.
   Returns changes after the cursor as `{seq, table, recordId, version, fields}`, changed
   fields only, soft deletes included, institution scope from the token, with `limit`
   and `more`. `since=0` reads the live tables, one change per current row, with the
-  cursor fixed at the log's highest `seq` before the read.
+  high-water mark fixed at the log's highest `seq` before the read. A bootstrap larger
+  than `limit` is paged by an opaque continuation `cursor` (mark and last table and id);
+  only its final page returns the plain `seq` cursor, so a client never resumes from a
+  `seq` while unsent rows lie at or below it.
 - Delivered in slices, one merge request each: the `sync_changes` migration and model
   (including `received_at`, #89); the append in `Syncable`, serialised by an advisory
   lock; the endpoint.
