@@ -155,11 +155,6 @@ class MarksController extends Controller
                 'last_edited_by' => $request->user()->id,
             ]);
         });
-        $mark->update([
-            'mark_kind' => $attributes['mark_kind'],
-            'score' => $attributes['mark_kind'] === 'score' ? $attributes['score'] : null,
-            'last_edited_by' => $request->user()->id,
-        ]);
 
         return $this->markResponse($mark, 200);
     }
