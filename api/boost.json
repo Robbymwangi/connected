@@ -6,10 +6,11 @@
     "guidelines": true,
     "mcp": true,
     "nightwatch": false,
-    "sail": true,
+    "sail": false,
     "skills": [
         "infer-conventions",
         "deploying-to-cloud",
-        "laravel-best-practices"
+        "laravel-best-practices",
+        "testing-best-practices"
     ]
 }

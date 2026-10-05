@@ -94,21 +94,35 @@ class MarksController extends Controller
         ]);
 
         try {
-            DB::transaction(fn () => $mark->save());
+            DB::transaction(function () use ($mark, $isNewMark, $markAttributes): void {
+                $this->lockEditableAssessment($mark->assessment_id);
+
+                if (! $isNewMark) {
+                    $mark->refresh();
+                    $mark->fill($markAttributes);
+                }
+
+                $mark->save();
+            });
         } catch (UniqueConstraintViolationException $exception) {
             if (! $isNewMark) {
                 throw $exception;
             }
 
-            $existingMark = Mark::query()->find($mark->newUniqueId());
+            $mark = DB::transaction(function () use ($mark, $markAttributes, $exception): Mark {
+                $this->lockEditableAssessment($mark->assessment_id);
 
-            if ($existingMark === null) {
-                throw $exception;
-            }
+                $existingMark = Mark::query()->find($mark->newUniqueId());
 
-            Gate::authorize('update', $existingMark);
-            $existingMark->update($markAttributes);
-            $mark = $existingMark;
+                if ($existingMark === null) {
+                    throw $exception;
+                }
+
+                Gate::authorize('update', $existingMark);
+                $existingMark->update($markAttributes);
+
+                return $existingMark;
+            });
         }
 
         return $this->markResponse($mark, $mark->wasRecentlyCreated ? 201 : 200);
@@ -132,13 +146,30 @@ class MarksController extends Controller
             ]);
         }
 
-        $mark->update([
-            'mark_kind' => $attributes['mark_kind'],
-            'score' => $attributes['mark_kind'] === 'score' ? $attributes['score'] : null,
-            'last_edited_by' => $request->user()->id,
-        ]);
+        DB::transaction(function () use ($mark, $attributes, $request): void {
+            $this->lockEditableAssessment($mark->assessment_id);
+            $mark->refresh();
+            $mark->update([
+                'mark_kind' => $attributes['mark_kind'],
+                'score' => $attributes['mark_kind'] === 'score' ? $attributes['score'] : null,
+                'last_edited_by' => $request->user()->id,
+            ]);
+        });
 
         return $this->markResponse($mark, 200);
+    }
+
+    private function lockEditableAssessment(string $assessmentId): Assessment
+    {
+        $assessment = Assessment::query()->lockForUpdate()->findOrFail($assessmentId);
+
+        if (in_array($assessment->status, ['finalized', 'reports-generated'], true)) {
+            throw ValidationException::withMessages([
+                'assessment_id' => 'Marks cannot be changed while the assessment is finalized. Unlock it first.',
+            ]);
+        }
+
+        return $assessment;
     }
 
     /**
