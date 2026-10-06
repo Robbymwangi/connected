@@ -29,12 +29,17 @@ final class PushOutcome
         return new self($id, 'accepted', version: $version);
     }
 
+    public static function merged(string $id, int $version): self
+    {
+        return new self($id, 'merged', version: $version);
+    }
+
     /**
      * @param  array<string, mixed>  $current
      */
-    public static function conflict(string $id, array $current): self
+    public static function conflict(string $id, array $current, ?string $conflictId = null): self
     {
-        return new self($id, 'conflict', current: $current);
+        return new self($id, 'conflict', conflictId: $conflictId, current: $current);
     }
 
     public static function rejected(?string $id, SyncRejection $rejection): self

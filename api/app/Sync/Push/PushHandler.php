@@ -3,6 +3,7 @@
 namespace App\Sync\Push;
 
 use App\Models\User;
+use App\Support\SyncLog;
 use Illuminate\Database\Eloquent\Model;
 
 /* What one pushable table declares to POST /sync: which wire names it accepts,
@@ -35,6 +36,45 @@ abstract class PushHandler
     public function refused(): array
     {
         return [];
+    }
+
+    /**
+     * Wire names that move as one fact: touching any member overlaps a move of any member.
+     *
+     * @return list<list<string>>
+     */
+    public function mergeGroups(): array
+    {
+        return [];
+    }
+
+    /**
+     * Wire names that identify the record and never move; rule 4 leaves them out of every comparison.
+     *
+     * @return list<string>
+     */
+    public function identity(): array
+    {
+        return [];
+    }
+
+    /**
+     * What the entry itself says, validated, as wire name to value, without touching the
+     * record: rule 4 compares it with what moved, and a stale entry holding an invalid value
+     * must be answered invalid rather than stored as a conflict side. Identity fields are left out.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws SyncRejection
+     */
+    abstract public function incoming(PushEntry $entry, Model $record): array;
+
+    /** The record's current value for a wire name, in the same wire format as incoming(). */
+    public function currentValue(Model $record, string $wire): mixed
+    {
+        $column = $this->columns()[$wire];
+
+        return SyncLog::fieldsFor($record, [$column])[$column] ?? null;
     }
 
     /** The record, soft-deleted rows included, scoped to the institution; locked when asked. */

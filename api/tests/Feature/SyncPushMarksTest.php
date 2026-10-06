@@ -342,3 +342,19 @@ test('a resent mark create is replayed, and nothing is written twice', function 
     expect($result)->toBe(['id' => $entry['id'], 'status' => 'accepted', 'version' => 1, 'replayed' => true]);
     expect(DB::table('sync_changes')->where('record_id', $entry['recordId'])->count())->toBe(1);
 });
+
+test('a version that only moved who is credited does not block a stale mark edit', function () {
+    $g = buildGraph('School A', '-mk-who-moved');
+    $colleague = makeColleague($g, 'who-moved-mk@example.com');
+    $resend = markUpdate($g, ['score' => 8]);
+    $stale = markUpdate($g, ['score' => 9]);
+
+    $first = postedResults(pushEntries($this, tokenFor($colleague), [$resend]))[0];
+    expect($first)->toBe(['id' => $resend['id'], 'status' => 'accepted', 'version' => 2]);
+
+    app('auth')->forgetGuards();
+    $second = postedResults(pushEntries($this, tokenFor($g['teacher']), [$stale]))[0];
+
+    expect($second)->toBe(['id' => $stale['id'], 'status' => 'merged', 'version' => 3]);
+    expect(DB::table('marks')->where('id', $g['mark']->id)->first())->toMatchArray(['score' => 9, 'last_edited_by' => $g['teacher']->id, 'version' => 3]);
+});

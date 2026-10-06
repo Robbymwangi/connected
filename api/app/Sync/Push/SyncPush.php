@@ -21,8 +21,9 @@ use LogicException;
    The order, per the amended spec: the envelope (no database); rule 1, replay;
    the record, found scoped to the institution and soft-deleted rows included, and
    locked; authorization; the table's own checks; then the version rules (a base
-   ahead of the server is invalid; behind is a conflict; equal applies; base 0 on
-   an unknown id creates); and last the validation of the row that would result.
+   ahead of the server is invalid; behind is rule 4, decided by StaleBase from what moved
+   on the record since; equal applies; base 0 on an unknown id creates); and last the
+   validation of the row that would result.
    An unauthorized stale edit is therefore never answered `conflict`, which would
    leave it retained in the outbox forever.
 
@@ -168,12 +169,8 @@ final class SyncPush
                 throw SyncRejection::invalid('baseVersion is ahead of the server');
             }
 
-            // Rule 4 (merge or conflict, from the change log) is 3.2b; until then any stale base conflicts.
             if ($entry->baseVersion < $record->version) {
-                $outcome = PushOutcome::conflict($entry->id, SyncPull::row($record));
-                $this->record($entry, $outcome, $record->version);
-
-                return $outcome;
+                return $this->stale($entry, $handler, $record);
             }
         }
 
@@ -186,6 +183,83 @@ final class SyncPush
 
         $outcome = PushOutcome::accepted($entry->id, $model->version);
         $this->record($entry, $outcome, $model->version, $this->changeSeqOf($model, $before));
+
+        return $outcome;
+    }
+
+    /* Rule 4: an entry whose base is behind the record's. What it touches is compared with
+       what moved on the record since, from the change log (StaleBase decides; this class
+       only gathers its inputs and acts on the verdict).
+
+       Order matters. The record is snapshotted first, because resulting() fills the locked
+       record in place and a conflict must show the row as it stood. The entry's own values
+       are validated before any branch, so a stale entry holding an invalid value is invalid,
+       never stored as a conflict side. resulting() runs only on a merge. */
+    private function stale(PushEntry $entry, PushHandler $handler, Model $record): PushOutcome
+    {
+        $current = SyncPull::row($record);
+        $history = RecordHistory::above($record, $entry->baseVersion);
+        $sent = $handler->incoming($entry, $record);
+
+        $currentValues = [];
+
+        foreach (array_keys($sent) as $wire) {
+            $currentValues[$wire] = $handler->currentValue($record, $wire);
+        }
+
+        $verdict = StaleBase::decide(
+            sent: $sent,
+            base: $entry->baseVersion,
+            current: $record->version,
+            history: $history,
+            columns: $handler->columns(),
+            groups: $handler->mergeGroups(),
+            identity: $handler->identity(),
+            currentValues: $currentValues,
+            trashed: $record->trashed(),
+            entryDeletes: array_key_exists('deletedAt', $entry->fields) && $entry->fields['deletedAt'] !== null,
+        );
+
+        return match ($verdict) {
+            StaleVerdict::Merged => $this->merge($entry, $handler, $record),
+            StaleVerdict::Unchanged, StaleVerdict::UnchangedAfterCollision => $this->unchanged($entry, $record),
+            StaleVerdict::ConflictOverlap, StaleVerdict::ConflictIncomplete, StaleVerdict::ConflictDeleted => $this->conflict($entry, $record, $current),
+            StaleVerdict::TrashedBase => throw SyncRejection::invalid('the record has been deleted'),
+        };
+    }
+
+    /* Disjoint fields: applied through the model like any write, so the version bumps, the
+       log row is appended, and the version-guarded UPDATE runs. A merge always has at least
+       one differing field, so it always writes a log row. */
+    private function merge(PushEntry $entry, PushHandler $handler, Model $record): PushOutcome
+    {
+        $before = $record->version;
+        $model = $handler->resulting($entry, $record);
+        $model->save();
+
+        $outcome = PushOutcome::merged($entry->id, $model->version);
+        $this->record($entry, $outcome, $model->version, $this->changeSeqOf($model, $before));
+
+        return $outcome;
+    }
+
+    /* Everything it touches already holds the value it sent: nothing to write. No version, no
+       log row, last_edited_by unchanged; the outcome is still recorded, so a resend replays. */
+    private function unchanged(PushEntry $entry, Model $record): PushOutcome
+    {
+        $outcome = PushOutcome::accepted($entry->id, $record->version);
+        $this->record($entry, $outcome, $record->version);
+
+        return $outcome;
+    }
+
+    /**
+     * @param  array<string, mixed>  $current  the record as it stood before anything filled it
+     */
+    private function conflict(PushEntry $entry, Model $record, array $current): PushOutcome
+    {
+        $outcome = PushOutcome::conflict($entry->id, $current);
+        $this->record($entry, $outcome, $record->version);
 
         return $outcome;
     }

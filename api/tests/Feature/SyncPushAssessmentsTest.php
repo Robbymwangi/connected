@@ -207,3 +207,117 @@ test('an update to a soft-deleted assessment at the current version is invalid, 
     expect($result)->toBe(['id' => $entry['id'], 'status' => 'invalid', 'reason' => 'the assessment has been deleted']);
     expect(DB::table('assessments')->where('id', $g['assessment']->id)->value('name'))->toBe('CAT 1');
 });
+
+/* Rule 4, on a real assessment: what the entry touches against what moved since its base. */
+
+test('name and date edited from two devices merge silently, and both survive', function () {
+    $g = buildGraph('School A', '-asm-merge');
+    $g['assessment']->update(['name' => 'Renamed']);
+    $entry = assessmentUpdate($g, ['date' => '2026-03-02'], base: 1);
+
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
+
+    expect($result)->toBe(['id' => $entry['id'], 'status' => 'merged', 'version' => 3]);
+    expect(DB::table('assessments')->where('id', $g['assessment']->id)->first())->toMatchArray(['name' => 'Renamed', 'date' => '2026-03-02', 'version' => 3]);
+    $seq = DB::table('sync_changes')->where('record_id', $g['assessment']->id)->where('version', 3)->value('seq');
+    expect(DB::table('sync_mutations')->where('id', $entry['id'])->first())->toMatchArray(['status' => 'merged', 'version' => 3, 'change_seq' => $seq]);
+});
+
+test('a mixed merge applies the differing disjoint field and logs only what moved', function () {
+    $g = buildGraph('School A', '-asm-mixed');
+    $g['assessment']->update(['name' => 'Renamed']);
+    $entry = assessmentUpdate($g, ['name' => 'Renamed', 'date' => '2026-03-02'], base: 1);
+
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
+
+    expect($result['status'])->toBe('merged');
+    $logged = DB::table('sync_changes')->where('record_id', $g['assessment']->id)->where('version', 3)->first();
+    expect(json_decode($logged->fields, true))->toBe(['date' => '2026-03-02']);
+});
+
+test('an overlapping field that already holds the value sent is accepted at the unchanged version, writing and logging nothing', function () {
+    $g = buildGraph('School A', '-asm-noop-collision');
+    $g['assessment']->update(['name' => 'Renamed']);
+    $logRows = DB::table('sync_changes')->where('record_id', $g['assessment']->id)->count();
+    $entry = assessmentUpdate($g, ['name' => 'Renamed'], base: 1);
+
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
+
+    expect($result)->toBe(['id' => $entry['id'], 'status' => 'accepted', 'version' => 2]);
+    expect(DB::table('sync_changes')->where('record_id', $g['assessment']->id)->count())->toBe($logRows);
+    expect(DB::table('sync_mutations')->where('id', $entry['id'])->first())->toMatchArray(['status' => 'accepted', 'version' => 2, 'change_seq' => null]);
+});
+
+test('A to B to A: a differing edit conflicts, and the original value is the no-op', function () {
+    $g = buildGraph('School A', '-asm-roundtrip');
+    $g['assessment']->update(['name' => 'B']);
+    $g['assessment']->update(['name' => 'CAT 1']);
+    $differing = assessmentUpdate($g, ['name' => 'Mine'], base: 1);
+    $original = assessmentUpdate($g, ['name' => 'CAT 1'], base: 1);
+
+    $results = postedResults(pushEntries($this, tokenFor($g['teacher']), [$differing, $original]));
+
+    expect($results[0]['status'])->toBe('conflict');
+    expect($results[1])->toBe(['id' => $original['id'], 'status' => 'accepted', 'version' => 3]);
+});
+
+test('an update against a delete is a conflict even on a disjoint field, and the row is untouched', function () {
+    $g = buildGraph('School A', '-asm-vs-delete');
+    $g['assessment']->delete();
+    $entry = assessmentUpdate($g, ['date' => '2026-03-02'], base: 1);
+
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
+
+    expect($result['status'])->toBe('conflict');
+    expect($result['current']['fields']['deletedAt'])->not->toBeNull();
+    expect(DB::table('assessments')->where('id', $g['assessment']->id)->first())->toMatchArray(['date' => '2026-02-01', 'version' => 2]);
+});
+
+test('a delete and then a restore above the base is still a conflict', function () {
+    $g = buildGraph('School A', '-asm-delete-restore');
+    $g['assessment']->delete();
+    $g['assessment']->restore();
+    $entry = assessmentUpdate($g, ['date' => '2026-03-02'], base: 1);
+
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
+
+    expect($result['status'])->toBe('conflict');
+});
+
+test('a restore above the base, with the delete at or before it, merges', function () {
+    $g = buildGraph('School A', '-asm-restore-only');
+    $g['assessment']->delete();
+    $g['assessment']->restore();
+    $entry = assessmentUpdate($g, ['date' => '2026-03-02'], base: 2);
+
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
+
+    expect($result)->toBe(['id' => $entry['id'], 'status' => 'merged', 'version' => 4]);
+});
+
+test('a version bumped without a log row fails safe to a conflict, never a merge', function () {
+    $g = buildGraph('School A', '-asm-gap');
+    DB::table('assessments')->where('id', $g['assessment']->id)->update(['version' => 2]);
+    $entry = assessmentUpdate($g, ['date' => '2026-03-02'], base: 1);
+
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
+
+    expect($result['status'])->toBe('conflict');
+    expect(DB::table('assessments')->where('id', $g['assessment']->id)->value('date'))->toBe('2026-02-01');
+});
+
+test('a stale entry with an invalid value is invalid, not a conflict', function (string $field, mixed $value) {
+    $g = buildGraph('School A', '-asm-stale-poison');
+    $g['assessment']->update(['name' => 'Renamed']);
+    $entry = assessmentUpdate($g, [$field => $value], base: 1);
+
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
+
+    expect($result['status'])->toBe('invalid');
+    expect(DB::table('assessments')->where('id', $g['assessment']->id)->value('version'))->toBe(2);
+})->with([
+    'a NUL byte in the name' => ['name', "Mine\0 edit"],
+    'an array name' => ['name', ['x']],
+    'a fractional term' => ['term', 2.5],
+    'a date that is not real' => ['date', '2026-02-30'],
+]);
