@@ -21,7 +21,10 @@ reports, is pull-only: a device reads it and never proposes a change.
 `institutions` and `unlock_notes` aren't synchronisable at all (#34's
 Conventions) and never appear on either verb.
 
-Pull is institution-wide, not scoped to a teacher's assignments. Grading is
+Pull is institution-wide, not scoped to a teacher's assignments, with one
+exception: a notification is a personal feed (a conflict raised, an edit
+blocked), so a user is sent only their own, in a first pull and in the log
+alike. Grading is
 unrestricted (#36), so a colleague covering an absent teacher's class needs
 that class's data already on their device, not a fresh pull that happens to
 include it; and a moderator must see every open cross-teacher conflict on
@@ -205,10 +208,13 @@ at all: "which fields changed on this record since version 6" has no
 answer from `updated_at` alone, only from a per-change record of what was
 touched and when in version order.
 
-`since=0` (or omitted, for a first login) returns every current row across
+An omitted `since` (a first login) returns every current row across
 every pull-only and push-pull table, as if each had just changed, rather
 than a separate bootstrap endpoint; one code path applies changes whether
-it's the first pull or the thousandth. `limit` paginates a large first pull;
+it's the first pull or the thousandth. `since=0` is not a first pull: any
+integer, zero included, is an ordinary log pull. An institution whose log is
+still empty has a high-water mark of 0, and reading 0 as "bootstrap" would make
+every later pull a full scan until someone wrote. `limit` paginates a large first pull;
 `more: true` means call again with the returned cursor.
 
 A paged first pull is the one case where the returned cursor is not yet a
@@ -219,7 +225,12 @@ The device sends it back as `since` unchanged; the server resumes the scan
 after that position. Only the final page returns the plain integer `seq`, equal
 to the mark, so a device never holds a `seq` cursor while rows at or below it
 are still unsent. Changes that land during the scan sit above the mark and
-arrive on the first ordinary pull. A malformed token is a 422.
+arrive on the first ordinary pull. A malformed token is a 422. Every row in a
+first pull carries the mark as its `seq`, so `seq` is not unique within it and
+a device keys on `(table, recordId)`. A page that fills exactly may be
+followed by an empty final page. Field names are camelCase on the wire and
+snake_case in storage, mapped at the top level only; a nested value, such as a
+conflict's sides, passes through as stored.
 
 Soft-deleted rows are included, never filtered out, because a device that
 missed a delete has no other way to learn of it.
