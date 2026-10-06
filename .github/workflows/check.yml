@@ -76,3 +76,19 @@ jobs:
       - run: cp .env.example .env
       - run: php artisan key:generate --ansi
       - run: php artisan test
+
+  # Not one of the required checks unless the branch ruleset says so. Fails a merge
+  # request that edits or deletes an existing migration, or touches a seeder, without
+  # bumping api/database/DEV_DATA_EPOCH, since `make up` rebuilds each machine's dev
+  # database only when that number moves (CONTRIBUTING.md). The description is passed
+  # through the environment, never interpolated into the shell.
+  epoch:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: .github/scripts/check-dev-data-epoch.sh
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
