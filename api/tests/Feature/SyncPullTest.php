@@ -234,6 +234,16 @@ test('pull needs a token, and rejects a bad since or limit', function () {
     }
 });
 
+test('pull is refused with 403 when the token lacks the sync ability', function () {
+    $g = buildGraph('School A', '-ability');
+
+    $withoutAbility = $g['teacher']->createToken('device', [])->plainTextToken;
+    pull($this, $withoutAbility)->assertForbidden();
+
+    app('auth')->forgetGuards();
+    pull($this, tokenFor($g['teacher']))->assertOk();
+});
+
 test('the bootstrap table list is exactly the Syncable models, so no table is silently left out', function () {
     $syncable = collect(File::files(app_path('Models')))
         ->map(fn ($file) => 'App\\Models\\'.$file->getBasename('.php'))
