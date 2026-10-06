@@ -13,11 +13,6 @@ use Illuminate\Support\Str;
    recording of rejections, create (rule 3), and a stale or ahead base. Assessment
    create is the table that exercises them. docs/spec/sync-protocol.md. */
 
-function postedResults(mixed $response): array
-{
-    return $response->assertOk()->json('results');
-}
-
 test('push needs a token and the sync ability', function () {
     $g = buildGraph('School A', '-push-auth');
 

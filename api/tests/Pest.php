@@ -198,3 +198,34 @@ function assessmentFields(array $graph, array $overrides = []): array
         'date' => '2026-08-18',
     ], $overrides);
 }
+
+/**
+ * A second user in the graph's institution; optionally an admin, optionally assigned to the graph's class and subject.
+ */
+function makeColleague(array $graph, string $email, bool $admin = false, bool $assigned = false): User
+{
+    $user = User::create([
+        'institution_id' => $graph['institution']->id,
+        'name' => 'A. Colleague',
+        'email' => $email,
+        'password' => 'a-hashed-password',
+        'is_admin' => $admin,
+    ]);
+
+    if ($assigned) {
+        TeacherAssignment::create([
+            'institution_id' => $graph['institution']->id,
+            'user_id' => $user->id,
+            'class_id' => $graph['class']->id,
+            'subject_id' => $graph['subject']->id,
+        ]);
+    }
+
+    return $user;
+}
+
+/** The decoded `results` of a POST /sync response that must have been a 200. */
+function postedResults(mixed $response): array
+{
+    return $response->assertOk()->json('results');
+}
