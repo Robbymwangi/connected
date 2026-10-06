@@ -13,6 +13,7 @@ use App\Models\SubjectModeration;
 use App\Models\TeacherAssignment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /*
@@ -163,4 +164,37 @@ function buildGraph(string $institutionName = 'Test School', string $suffix = ''
         'institution', 'teacher', 'subject', 'criterion', 'class', 'classSubject',
         'teacherAssignment', 'subjectModeration', 'student', 'enrolment', 'assessment', 'mark',
     );
+}
+
+/* POST /sync helpers (3.2a). Pest test-file functions are global, so they live
+   here once; a second definition of any of these names in a test file is fatal. */
+function pushEntries(mixed $test, string $token, array $entries)
+{
+    return $test->withToken($token)->postJson('/api/sync', ['entries' => $entries]);
+}
+
+/** One outbox entry, with a fresh UUIDv7 mutation id unless one is given. */
+function pushEntry(string $table, string $recordId, int $base, array $fields, ?string $id = null, ?string $at = null): array
+{
+    return array_filter([
+        'id' => $id ?? Str::uuid7()->toString(),
+        'table' => $table,
+        'recordId' => $recordId,
+        'baseVersion' => $base,
+        'fields' => $fields,
+        'at' => $at,
+    ], fn ($value) => $value !== null);
+}
+
+/** The fields of a valid assessment create against a graph from buildGraph. */
+function assessmentFields(array $graph, array $overrides = []): array
+{
+    return array_merge([
+        'classId' => $graph['class']->id,
+        'subjectId' => $graph['subject']->id,
+        'name' => 'CAT 2',
+        'term' => 2,
+        'year' => 2026,
+        'date' => '2026-08-18',
+    ], $overrides);
 }

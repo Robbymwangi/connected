@@ -10,6 +10,7 @@ use App\Http\Controllers\MeController;
 use App\Http\Controllers\StudentsController;
 use App\Http\Controllers\SubjectsController;
 use App\Http\Controllers\SyncController;
+use App\Http\Controllers\SyncPushController;
 use App\Http\Controllers\TeachersController;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\ResolveInstitution;
@@ -47,6 +48,7 @@ Route::middleware(['auth:sanctum', EnsureAccountIsActive::class])->group(functio
     // both verbs sit behind the one group below.
     Route::middleware(CheckAbilities::class.':sync')->group(function () {
         Route::get('/sync', SyncController::class)->name('sync.pull');
+        Route::post('/sync', SyncPushController::class)->name('sync.push');
     });
 
     // 2.1 (#48): reads unrestricted within the institution for any
