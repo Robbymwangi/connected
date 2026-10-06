@@ -69,3 +69,19 @@ teachers is a moderation matter.
 - If the agreement flow proves unworkable in practice, this decision is superseded by
   a later ADR; the model carries enough to fall back to moderator-only resolution
   without losing history.
+
+## Amendments
+
+### 2026-10-06: a conflict is a mark conflict
+
+This ADR defines a conflict as one mark edited on two devices, and a conflict record
+(`conflicts.mark_id`) is always about a mark. The sync protocol also rejects a stale,
+overlapping write to any other pushable table (an assessment). Such a rejection
+raises no conflict record and enters none of the flows above: the server answers
+`conflict` with the current row, no conflict record is created and the row is
+unchanged (the mutation's own outcome is still recorded, like every outcome, so a
+retry replays it), and the device drops the entry,
+adopts the current row, and shows a notice. Disjoint edits still merge, and an equal
+value is a no-op, on every table. Widening the conflicts table to any record was
+considered and rejected: it would rewrite this ADR's parties, proposals, and
+moderation rules for tables where nothing in the product needs them.

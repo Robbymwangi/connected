@@ -160,6 +160,16 @@ something #36 requires.
   `(institution_id, seq)`. The one deliberate exception to client-generated
   UUID keys: the rule exists because records are created offline, and a log row
   is only ever written by the server, whose sequence is the cursor itself.
+- **`sync_mutations`**: the record of every decided push entry, backing rule 1 of
+  `POST /sync` (`docs/spec/sync-protocol.md`). `id` (the client's mutation id, the
+  primary key), `institution_id`, `user_id`, `table`, `record_id`, `status`
+  (`accepted`, `merged`, `conflict`, `invalid`, `forbidden`), `version` (the
+  record's version in the outcome, null for a rejection), `conflict_id` (marks
+  only), `payload_hash` (of table, record id, `baseVersion`, and `fields`),
+  `reason` (for `invalid`), `at` (the device's claim, informational),
+  `received_at` (server clock). Append-only: no version, no soft delete, not
+  synchronisable, never on either verb. The id is a client UUID like every key.
+  Indexed on `(table, record_id, version)` for the per-record history rule 4 reads.
 
 ## Grains and identity
 

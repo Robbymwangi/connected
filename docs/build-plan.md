@@ -212,6 +212,10 @@ Marks and assessments, unrestricted; student, teacher, and class records, gated
 to ADMIN. Enforcement goes in Laravel policies, not in controller conditionals.
 Done when a Pest test confirms a non-admin teacher can write any mark in the
 school and cannot create a student.
+*Amended 2026-10-06:* mark and assessment writes move to `POST /sync` (3.2); the REST
+`POST`/`PUT` endpoints for marks and assessments are removed once `/sync` carries
+their rules and tests (enrolment, score maximum, finalized lock, class, subject, and
+year immutability). Unlock, and the student, teacher, and class writes, stay.
 
 **2.3 Finalize and unlock**
 `finalized_at` and `finalized_by` set on the assessment; unlock requires a
@@ -260,6 +264,14 @@ dependents.
 - Do not: infer conflicts from timestamps under any circumstances. Clock skew
   across teacher devices makes wall-clock comparison unsound, and this is the
   precise claim the simulation exists to demonstrate.
+- Delivered in slices, one merge request each, after #97 (rows start at version 1)
+  and the spec amendments in `docs/spec/sync-protocol.md`. 3.2a: `sync_mutations`,
+  the batch loop, rules 1 to 3 and 6, field mapping, the `sync` token ability on both
+  verbs, mark and assessment create and update; a stale base is a `conflict` until 3.2b.
+  3.2b: rule 4 (merge, conflict, delete case), the conflicts record with both sides,
+  the no-op. 3.2c: notification `unread`, conflict actions as commands, finalize
+  through sync, the `edit-blocked` notification. Then a cleanup merge request removes
+  the REST mark and assessment writes (2.2).
 
 **3.3 Local store**
 IndexedDB schema over Dexie, replacing the frontend fixtures. Dexie is a wrapper

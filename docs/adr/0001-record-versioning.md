@@ -58,3 +58,18 @@ This decision fixes them once, before the local store and outbox are built.
   here so the two halves agree.
 - A nullable `version` was considered and rejected: `0` as the sentinel keeps every
   comparison a plain integer comparison with no null guard.
+
+## Amendments
+
+### 2026-10-06: an entry is frozen once sent
+
+Rule 4 lets several edits to one record merge into one outbox entry. That is safe
+only until the entry has been sent. If a response is lost, the device resends the
+entry, and the server answers a known mutation id with the outcome it stored; an
+edit coalesced into the entry in the meantime would be silently dropped. So an entry
+is frozen once sent: it keeps the `fields` and `baseVersion` it was sent with, a
+later edit to the same record waits for the acknowledgement and is based on the
+version the server returned, and a resend carrying a different payload under a known
+id is rejected as `invalid`. Coalescing applies to entries not yet sent. A device
+therefore never holds two unacknowledged entries for one record. The server side of
+this is in `docs/spec/sync-protocol.md` (the mutation, and rule 1).
