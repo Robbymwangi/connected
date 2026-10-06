@@ -119,6 +119,29 @@ make check     # typecheck, lint, Vitest, and Pest: what must pass before a comm
 make down      # stop the containers
 ```
 
+### After pulling
+
+```sh
+git pull
+make setup     # the one command after a pull; may rebuild your dev database (see below)
+make dev
+```
+
+`make setup` reinstalls packages if the lockfiles changed, starts the containers, applies
+pending migrations, and seeds only an empty database. It also checks the **dev data
+epoch**: `api/database/DEV_DATA_EPOCH` holds a number that a merge request bumps when it
+needs everyone's dev database rebuilt (an edited migration, new seed data, a new rule
+about what the sync log must contain). If your machine's recorded epoch is behind, or
+its database has no schema, `make setup` and `make up` print the reason and run
+`migrate:fresh --seed`, which replaces your local dev data with the demo school.
+
+- `SKIP_DEV_RESET=1 make up` defers a rebuild; `make api-fresh` does one on demand.
+- `make up` alone starts the API and runs the epoch check, but does not apply new
+  additive migrations; use `make setup` (or `make api-migrate`) after a pull.
+- If you are the one whose change needs a rebuild, bump the epoch in your merge request
+  (see CONTRIBUTING.md). The `epoch` CI check (#102) fails a merge request that edits or
+  deletes an existing migration, or touches a seeder, without doing so.
+
 The Online/Offline pill reports whether the API answers `GET /api/health`, not only
 whether the browser has a network. `make dev` and `make offline` forward `/api` to the
 Sail container on :8000, so with `make up` stopped the pill reads Offline; that is the

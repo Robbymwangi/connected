@@ -1,0 +1,2 @@
+1
+sync_changes log (ADR 0010): rows seeded before it have no creating entries, so a first pull would be incomplete

@@ -40,11 +40,25 @@ what.
 1. `make check`: frontend typecheck, lint, and Vitest, then the API's Pest suite on
    Postgres. All of it must pass. The type check is not optional; the original
    Figma export contained syntax errors that the bundler stripped silently.
+   Also ask: does this change leave existing dev databases wrong (an edited or removed
+   migration, new seed data, a new rule about what the sync log must contain)? If so,
+   bump `api/database/DEV_DATA_EPOCH` before you commit, and say so in the merge request
+   (see "When a change needs everyone's dev database rebuilt" below).
 2. `coderabbit review --uncommitted -c AGENTS.md`, then address or explicitly decline
    each finding. Local and merge request reviews share one quota, so review in
    sweeps: one local pass per finished chunk, then let the bot on the merge request
    confirm. The bot comments; it does not block.
 3. Commit with a message whose first line says what changed and why in one sentence.
+
+## When a change needs everyone's dev database rebuilt
+
+A non-additive migration, new seed data, or a change to what the sync log must contain
+leaves existing dev databases wrong in ways a plain `migrate` does not fix. Do not rely
+on telling people. In the same merge request, bump the number on line 1 of
+`api/database/DEV_DATA_EPOCH` and put the reason on line 2. `make up` and `make setup`
+compare it with the epoch recorded on each machine and run `migrate:fresh --seed` when
+they differ, saying why. Set `SKIP_DEV_RESET=1` to defer it; `make api-fresh` does it on
+demand. Additive migrations do not need a bump.
 
 ## Architecture decision records
 
