@@ -58,9 +58,24 @@ row before any acknowledgement coalesce into one entry, keeping the earliest
 happens on the device, before the entry is ever sent.
 
 A mutation id is reused if the same entry is sent twice, which happens
-whenever a response is lost on a bad connection. The server recognises a
-known id and answers `replayed` without writing anything a second time,
-rather than treating the resend as a fresh, now-stale write.
+whenever a response is lost on a bad connection. The server records the
+outcome of every entry it decides (rule 1 below) and answers a resend with
+that stored outcome, flagged `replayed`, without writing anything a second
+time, rather than treating the resend as a fresh, now-stale write.
+
+An entry is frozen once it has been sent: it keeps exactly the `fields` and
+`baseVersion` it was sent with, and a later edit to the same record waits for
+the acknowledgement and is based on the version the server returned.
+Coalescing (ADR 0001 rule 4) therefore applies only to entries not yet sent.
+A resend must carry the same replay identity: the server stores a hash of each
+entry's table, record id, `baseVersion`, and `fields`, and a known id that
+arrives with a different hash is `invalid`, never `replayed`, because answering
+`replayed` would silently drop whatever the device had added. `at` is
+informational and is not part of that identity, so a resend that differs only in
+`at` is replayed normally. A
+device never holds two unacknowledged entries for one record; if it did, the
+second's base would be stale against the first and it would conflict with
+itself.
 
 ## POST /sync
 
@@ -78,19 +93,49 @@ Response: one result per entry, same order:
   { "id": "<entry id>", "status": "conflict", "current": { "...": "the row as it now stands" }, "conflictId": "<id>" },
   { "id": "<entry id>", "status": "forbidden" },
   { "id": "<entry id>", "status": "invalid",  "reason": "score exceeds criterion max" },
-  { "id": "<entry id>", "status": "replayed", "version": 7 }
+  { "id": "<entry id>", "status": "accepted", "version": 7, "replayed": true }
 ] }
 ```
 
-Per-entry rule, checked in this order, with the record locked for the
-transaction's duration:
+`replayed: true` marks an answer read back from the record of an earlier
+decision: every other field is what the first answer carried, except
+`current`, which is read fresh. `conflictId` appears only for a mark; a
+conflict on any other table has none (rule 4).
 
-1. **Known mutation id** → `replayed`, current version returned, nothing
-   written. This is what makes a lost response safe to resend.
+Per-entry order, with the record locked for the transaction's duration.
+Before the numbered rules: the envelope is checked (the table is pushable,
+every field is in that table's allowlist, none is server-owned, `baseVersion`
+is a non-negative integer); then rule 1; then the record is looked up within
+the caller's institution, soft-deleted rows included, since a deleted row
+that looked unknown would hide the update-against-delete case; then
+authorization (`forbidden`); then, for a mark, the finalized-assessment check
+(`invalid`, with the `edit-blocked` notification, `workflow.md`). Only then
+rules 2 to 4, and last the validation of the row that would result
+(`invalid`). So an unauthorized stale edit is never answered `conflict`,
+which would leave it retained in the outbox forever. Validation runs on the
+resulting row, not the payload: a patch such as `{score: 14}` cannot be
+checked without the cell's current `markKind` and its criterion. Every read
+the entry depends on happens inside its transaction, after the lock.
+
+1. **Known mutation id** → the stored outcome with `replayed: true`, nothing
+   written. This is what makes a lost response safe to resend, including a
+   lost `conflict`. Every terminal outcome is recorded when it is decided:
+   accepted, merged, a no-op, conflict, invalid, and forbidden. A rejection is
+   recorded in its own transaction once the entry's has rolled back, so the
+   record survives the rollback. An unexpected error is never recorded (see
+   below). The lookup is not scoped by institution or user: a known id that
+   belongs to another user or institution is `invalid`, never `replayed`,
+   which would leak that outcome and silently drop the write.
 2. **`baseVersion` equals the record's current version** → `accepted`: apply
-   the fields, increment `version`, log the change (see GET /sync).
+   the fields, increment `version`, log the change (see GET /sync). A
+   `baseVersion` *greater* than the current version is `invalid`, never
+   merged: a device can only hold a version the server issued, so this arises
+   when the server's database was rebuilt under it, and an empty set of changes
+   above a base ahead of the record would otherwise read as "no overlap".
 3. **`baseVersion` is `0` and the id is unknown** → create the row at
-   `version: 1`. A known id at `baseVersion: 0` is not a duplicate create;
+   `version: 1`; the server never stores version 0 (ADR 0001 rule 2), so
+   `baseVersion: 0` never equals an existing row's version. A known id at
+   `baseVersion: 0` is not a duplicate create;
    it falls through to rule 4, which is exactly how two devices creating the
    same mark cell offline (identical deterministic id) turn into an ordinary
    conflict instead of two rows.
@@ -102,16 +147,25 @@ transaction's duration:
    surface, per ADR 0001 rule 6, not merge silently just because its field
    names happen not to be `deletedAt`. Otherwise, look at every field whose
    stored value actually moved on that record at versions greater than
-   `baseVersion` (from the change log; a field a mutation merely touched
-   without changing its value, see the mixed-merge case below, doesn't
-   belong in this set, even though the change log still carries it for
-   `GET /sync`'s own purpose of telling a pulling device what to patch).
+   `baseVersion` (from the change log: every write appends only the fields
+   whose values actually changed, so a field a mutation merely touched without
+   changing it never appears in it, which is why the mixed-merge case below
+   needs no special handling. "Moved" means per write, not net: a field
+   changed from A to B and back to A is in the set. A create is logged with
+   every field it set, so at `baseVersion: 0` against a known id every field
+   the creator set counts as moved. The delete case above looks for a log row
+   above `baseVersion` whose `deletedAt` is non-null, so a restore, which logs
+   `deletedAt: null`, is not a delete. Before relying on the log the server
+   checks it is complete: the number of log rows for this record above
+   `baseVersion` must equal the current version minus `baseVersion`, and if it
+   does not, for example after a future compaction, the entry is a `conflict`,
+   never a `merged`).
    If the entry's fields don't overlap that set → `merged`:
    apply, increment, log, same as rule 2. If they overlap and the values on
-   both sides are equal, **and the record is a mark**, since the conflict
-   taxonomy below restricts automatic resolution to two sides holding the
-   same mark and nowhere else: if every field the entry touches, overlapping
-   or disjoint, already matches the record's current value → **(proposed
+   both sides are equal, on any table (an `unread` flag set on two of one
+   user's devices, a second finalize): if every field the entry touches,
+   overlapping or disjoint, already matches the record's current value →
+   **(proposed
    amendment, discussed 2026-10-03, not yet reviewed: a no-op)** the record
    itself is not touched again: no new `version`, no change-log row,
    `last_edited_by` unchanged, since the value the first side already wrote
@@ -125,7 +179,9 @@ transaction's duration:
    second time and appending a second `conflicts` side. "First" here means
    whichever write
    produced the version this entry collided with, ordered by version
-   number, never by either side's `at`. A `conflicts` row is still logged
+   number, never by either side's `at`; when several versions lie between the
+   base and the current row, it is the write that produced the current
+   version. For a mark, a `conflicts` row is still logged
    with `resolution.kind: "auto"` (ADR 0002 rule 6), recording both sides,
    so the second device sees the collision happened even though nothing
    about the record changed. The response to the second device is still
@@ -142,26 +198,39 @@ transaction's duration:
    entry as a full `merged` instead, logging a disjoint field as "changed"
    when its value didn't move, would give a later stale edit against that
    same field something to collide with that was never a real change; the
-   no-op avoids manufacturing that collision. For an overlapping field
-   equal on a record that is not a mark, or if the values differ →
-   `conflict`: nothing is written to the record itself; a `conflicts` row is
-   created (or, if one is already open on this cell, this entry becomes its
-   second side) holding both values, and the response carries the record's
-   current state so the device can raise the conflict immediately. The
+   no-op avoids manufacturing that collision. If the values differ →
+   `conflict`: nothing is written to the record itself. For a mark, a
+   `conflicts` row is created holding both sides (a conflict already open on
+   the cell is an open question below), and the response carries the record's
+   current state so the device can raise the conflict immediately. For any
+   other table there is no conflict record, since a conflict is one mark
+   edited on two devices (ADR 0002): the response is `conflict` with
+   `current` and no `conflictId`; no conflict record is created and the row is
+   unchanged, though the mutation's own outcome is recorded like any other, so a
+   resend replays it. The device drops the
+   entry, adopts `current`, and shows a notice, since there is no resolution
+   flow for it to retain the entry for. The
    device already shows the conflict from this rejection alone; the server
    writing the row is what lets the other teacher and any moderator see it
    on their next pull, since the server is the only party holding both
    sides at this moment. This refines ADR 0001 rule 3, which described the
    device raising the conflict but didn't say where the record lives.
-5. **A soft delete is `deletedAt` in `fields`, nothing else.** As an
-   outgoing edit it follows rules 2 through 4 like any other field, subject
-   to ordinary disjoint-field merging; it's only an *incoming* edit arriving
-   against an already-deleted record that rule 4's delete case catches.
+5. **A soft delete is `deletedAt` in `fields`, nothing else.** Where a table
+   allows a delete, a non-null value deletes with the server's own timestamp
+   and null restores; it is an intent, compared as null or non-null, so
+   deleting an already-deleted row is not a conflict over two timestamps. As
+   an outgoing edit it follows rules 2 through 4 like any other field; it's
+   only an *incoming* edit arriving against an already-deleted record that
+   rule 4's delete case catches. No pushable table allows a delete today:
+   `deletedAt` on a mark is `invalid` (a cleared cell is `markKind: empty`),
+   and on an assessment it is `invalid` until something sends one.
 6. **Authorization failure** (the acting user can't write this table, or
    the record doesn't resolve within their institution) → `forbidden`.
    **Validation failure** (a score over the criterion's max, a status
    moving backward) → `invalid` with a reason. Neither is retried
-   automatically; a correction is a new mutation, not a replay.
+   automatically; a correction is a new mutation, not a replay. Both are
+   decided before rules 2 to 4, except validation of the resulting row (see
+   the order above).
 
 Conflict actions, propose, accept, refer, resolve, are ordinary mutations
 with `table: "conflicts"` and `recordId` the conflict's own id: `fields`
@@ -179,6 +248,44 @@ Unlocking a finalized assessment is not a mutation through this endpoint.
 It's an ADMIN action (#36), almost certainly made online, that writes
 `unlock_notes` and the assessment's status directly; `unlock_notes` isn't
 synchronisable (#34) and was never meant to travel through the outbox.
+
+Conflict actions are commands, not field patches. A proposal sends only its
+own new proposal, never a `proposals` array; an acceptance, a referral, and a
+resolution each name what they act on. Each is validated against the
+conflict's current stored state and answered by rule 2 only (against the
+conflict's own version), never merged by rule 4, so two concurrent proposals
+cannot overwrite each other's history.
+
+**Field names on the wire.** Names are camelCase on the wire and each
+pushable table has an explicit wire-to-column allowlist; names are never
+converted generically, and the server-owned check runs on the wire name. Two
+names look server-owned but are informational, like `at`: `resolvedAt` on a
+resolution mutation is kept as `resolution.at`, separate from the server-set
+`resolved_at` column, and `finalizedAt` on a finalize mutation is ignored, the
+server stamping `finalized_at` from its own clock.
+
+**Unexpected errors** (a defect, not a rule outcome) abort the batch with a
+5xx. Earlier entries are committed and recorded, so the device resends the
+whole batch and they come back `replayed`; the failing entry is not recorded
+and is decided afresh. A poisoned entry can stall the outbox until the defect
+is fixed, which is the right pressure: a status that told the device to keep
+going would hide it. (Proposed.)
+
+**Open, to be settled in 3.2b and 3.2c.**
+- A further conflicting entry on a cell whose conflict is already open
+  (`side_a` and `side_b` are both required, so "becomes its second side" has no
+  third).
+- The `editId` of side A when the write that produced the current version has
+  no mutation id (a REST write, a server write): a fallback derived from the
+  change-log `seq`.
+- Whether a resolution's mark write checks the mark's version, since someone
+  may have edited it after the conflict opened.
+- A batch size limit.
+- An entry whose parent's create was rejected.
+- An outbox belongs to one user; a second sign-in on a device must not push
+  the first user's pending entries as itself (3.4).
+- Whether a moderator who is a party to a conflict may resolve it outright;
+  the client allows it, which sits uneasily with ADR 0002 rule 3.
 
 ## GET /sync
 
@@ -387,12 +494,24 @@ examples below.
 > which institution.
 
 The institution comes from the authenticated token (Sanctum, #36), never
-from the payload. A `recordId` that doesn't resolve within the caller's
-institution behaves exactly like an unknown id: at `baseVersion: 0` it's an
-ordinary create; at a nonzero `baseVersion` it's `forbidden`, since there's
-no record on this side to be stale against, consistent with how
-`docs/spec/access-model.md` describes a cross-institution row as simply not
-found.
+from the payload, and both verbs require the token's `sync` ability
+(`docs/spec/access-model.md`, Tokens). A `recordId` that doesn't resolve
+within the caller's institution behaves like an unknown id, with one
+exception: primary keys are global, so at `baseVersion: 0` an id that exists
+in *another* institution collides with the insert. That is `forbidden`, decided
+after the rolled-back insert, not an ordinary create. At a nonzero
+`baseVersion` it is `forbidden` too, since there's no record on this side to be
+stale against. The residual oracle, that a base-0 create is refused only when
+the id exists elsewhere, is accepted because ids are unguessable UUIDs.
+
+Marks are unrestricted by *who*, but every reference is institution-scoped:
+the assessment, the student, and the criterion must resolve in the caller's
+institution, the student must be enrolled in the assessment's class and year,
+and the criterion must belong to the assessment's subject, as the REST write
+path checked; foreign keys do not check an institution. A notification
+resolves only among the caller's own, so another user's behaves like an unknown
+id. Updating an assessment is scoped like finalizing it (its creator or an
+assigned teacher), not open to every authenticated user.
 
 **Proposed: a two-part rule for who a mutation's fields can claim to be.**
 A user id can legitimately appear in a payload: `workflow.md`'s finalize
@@ -411,26 +530,17 @@ would be false, but a split by what role the id plays in that entry:
    all: it never names its own author in `fields`, since `last_edited_by`
    is not a domain fact the device reports but a server-derived attribute,
    covered by the server-owned list below.
-2. **A field naming someone else as a reference to prior history**
-   (`proposals[].byId` for an earlier proposal the device is now
-   responding to, an "agreed" resolution's `proposedBy`) is never an
-   acting-user claim for the current mutation; the server accepts it only
-   when it matches what the server's own record already holds for that
-   history, and rejects the mutation as `invalid` if it doesn't. A device
-   relays a conflict's existing proposals back because the wire format
-   doesn't resend whole rows (only changed fields), not because it gets
-   to assert someone else's history on the server's behalf. The
-   client-sendable shape of a `proposals[]` entry, new or relayed, is
-   `{byId, choice, note, at}`; it never includes `receivedAt`, which is
-   storage the server alone fills, not a fact the device is ever asked
-   to report. For a brand-new entry the server fills it from its own
-   clock, same as any other write; for a relayed entry the server
-   restores it from what the entry already holds in its own history
-   (matched by `byId` and position in the stored array, not re-derived
-   from anything the relaying device sent), rather than trusting a
-   `receivedAt` the device might include. A payload that does include a
-   `receivedAt` inside a `proposals[]` entry is `invalid`, the same as
-   any other server-owned field appearing where it shouldn't.
+2. **A field naming someone else as a reference to prior history** (an
+   acceptance naming the proposal it accepts, an "agreed" resolution's
+   `proposedBy`) is never an acting-user claim for the current mutation; the
+   server accepts it only when it matches what the server's own record already
+   holds for that history, and rejects the mutation as `invalid` if it doesn't.
+   A device sends only its own new proposal, `{byId, choice, note, at}`, never
+   a `proposals` array (see "Conflict actions are commands" above), and never a
+   `receivedAt`: that is storage the server alone fills from its own clock when
+   it appends the proposal. A payload that includes a `receivedAt` anywhere is
+   `invalid`, the same as any other server-owned field appearing where it
+   shouldn't.
 
 Either way, a device cannot make an edit look like someone else's: it can
 correctly report who did what before, and it can act only as the user its
