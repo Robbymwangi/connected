@@ -21,7 +21,7 @@ return new class extends Migration
             $table->foreignUuid('student_id')->constrained('students');
             $table->foreignUuid('class_id')->constrained('classes');
             $table->unsignedSmallInteger('year');
-            $table->unsignedInteger('version')->default(0);
+            $table->unsignedInteger('version')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });

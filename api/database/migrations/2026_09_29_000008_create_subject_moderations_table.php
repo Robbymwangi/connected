@@ -18,7 +18,7 @@ return new class extends Migration
             $table->foreignUuid('institution_id')->constrained('institutions');
             $table->foreignUuid('user_id')->constrained('users');
             $table->foreignUuid('subject_id')->constrained('subjects');
-            $table->unsignedInteger('version')->default(0);
+            $table->unsignedInteger('version')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });

@@ -20,7 +20,7 @@ return new class extends Migration
             $table->unsignedInteger('total');
             $table->unsignedInteger('max');
             $table->enum('level', ['EE', 'ME', 'AE', 'BE']);
-            $table->unsignedInteger('version')->default(0);
+            $table->unsignedInteger('version')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });

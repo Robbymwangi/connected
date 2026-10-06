@@ -22,7 +22,7 @@ test('the creator can finalize an incomplete assessment without a teaching assig
         'status' => 'finalized',
         'finalized_at' => '2026-10-05 10:00:00',
         'finalized_by' => $graph['teacher']->id,
-        'version' => 1,
+        'version' => 2,
     ]);
     expect($graph['assessment']->status)->toBe('finalized');
 });
@@ -38,7 +38,7 @@ test('an assigned class and subject teacher can finalize another teachers assess
         'id' => $graph['assessment']->id,
         'status' => 'finalized',
         'finalized_by' => $graph['teacher']->id,
-        'version' => 2,
+        'version' => 3,
     ]);
 });
 
@@ -56,7 +56,7 @@ test('a same-school teacher without the matching assignment cannot finalize even
         'status' => 'scheduled',
         'finalized_at' => null,
         'finalized_by' => null,
-        'version' => 0,
+        'version' => 1,
     ]);
 })->with(['teacher' => [false], 'admin without lifecycle scope' => [true]]);
 
@@ -71,7 +71,7 @@ test('a teaching assignment must match both class and subject to allow finalize'
     $this->assertDatabaseHas('assessments', [
         'id' => $graph['assessment']->id,
         'status' => 'scheduled',
-        'version' => 1,
+        'version' => 2,
     ]);
 });
 
@@ -93,7 +93,7 @@ test('an open mark conflict prevents finalization without changing the assessmen
         'status' => 'scheduled',
         'finalized_at' => null,
         'finalized_by' => null,
-        'version' => 0,
+        'version' => 1,
     ]);
 });
 
@@ -128,7 +128,7 @@ test('finalization cannot overwrite an existing finalized cycle', function (stri
         'id' => $graph['assessment']->id,
         'status' => $status,
         'finalized_at' => '2026-10-05 10:00:00',
-        'version' => 1,
+        'version' => 2,
     ]);
 })->with(['finalized', 'reports-generated']);
 
@@ -150,14 +150,14 @@ test('unlock without reports clears finalization without writing an audit note',
         'status' => 'scheduled',
         'finalized_at' => null,
         'finalized_by' => null,
-        'version' => 2,
+        'version' => 3,
     ]);
     $this->assertDatabaseCount('unlock_notes', 0);
     $this->assertDatabaseHas('marks', [
         'id' => $graph['mark']->id,
         'mark_kind' => 'score',
         'score' => 8,
-        'version' => 0,
+        'version' => 1,
         'deleted_at' => null,
     ]);
 })->with([
@@ -191,12 +191,12 @@ test('unlock with a report rejects a missing or blank note without changing reco
         'status' => 'finalized',
         'finalized_at' => '2026-10-05 10:00:00',
         'finalized_by' => $admin->id,
-        'version' => 1,
+        'version' => 2,
     ]);
     $this->assertDatabaseHas('reports', [
         'id' => $report->id,
         'deleted_at' => null,
-        'version' => 0,
+        'version' => 1,
     ]);
     $this->assertDatabaseCount('unlock_notes', 0);
 })->with([
@@ -244,12 +244,12 @@ test('unlock with reports records the admin note and soft deletes the cycle whil
     $this->assertDatabaseCount('unlock_notes', 1);
     $this->assertSoftDeleted($comment);
     $this->assertSoftDeleted($report);
-    $this->assertDatabaseHas('comments', ['id' => $comment->id, 'version' => 1]);
-    $this->assertDatabaseHas('reports', ['id' => $report->id, 'version' => 1]);
+    $this->assertDatabaseHas('comments', ['id' => $comment->id, 'version' => 2]);
+    $this->assertDatabaseHas('reports', ['id' => $report->id, 'version' => 2]);
     $this->assertDatabaseHas('marks', [
         'id' => $graph['mark']->id,
         'score' => 8,
-        'version' => 0,
+        'version' => 1,
         'deleted_at' => null,
     ]);
     $this->assertDatabaseHas('assessments', [
@@ -257,7 +257,7 @@ test('unlock with reports records the admin note and soft deletes the cycle whil
         'status' => 'scheduled',
         'finalized_at' => null,
         'finalized_by' => null,
-        'version' => 2,
+        'version' => 3,
     ]);
     expect($assessment->status)->toBe('scheduled');
 })->with(['finalized with a partial report cycle' => ['finalized'], 'reports-generated' => ['reports-generated']]);
@@ -303,7 +303,7 @@ test('an assessment can be finalized again after unlock and historical reports d
         'status' => 'scheduled',
         'finalized_at' => null,
         'finalized_by' => null,
-        'version' => 4,
+        'version' => 5,
     ]);
     $this->assertSoftDeleted($report);
     $this->assertDatabaseCount('unlock_notes', 1);
@@ -318,7 +318,7 @@ test('a non-admin creator cannot unlock a finalized assessment', function () {
     $this->assertDatabaseHas('assessments', [
         'id' => $graph['assessment']->id,
         'status' => 'finalized',
-        'version' => 1,
+        'version' => 2,
     ]);
     $this->assertDatabaseCount('unlock_notes', 0);
 });
@@ -333,7 +333,7 @@ test('an admin cannot unlock a scheduled assessment', function () {
     $this->assertDatabaseHas('assessments', [
         'id' => $graph['assessment']->id,
         'status' => 'scheduled',
-        'version' => 0,
+        'version' => 1,
     ]);
     $this->assertDatabaseCount('unlock_notes', 0);
 });

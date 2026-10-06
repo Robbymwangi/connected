@@ -35,7 +35,7 @@ return new class extends Migration
             $table->enum('mark_kind', ['empty', 'score', 'absent']);
             $table->unsignedInteger('score')->nullable();
             $table->foreignUuid('last_edited_by')->constrained('users');
-            $table->unsignedInteger('version')->default(0);
+            $table->unsignedInteger('version')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });

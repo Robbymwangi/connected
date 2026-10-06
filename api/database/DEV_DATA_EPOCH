@@ -1,2 +1,2 @@
-1
-sync_changes log (ADR 0010): rows seeded before it have no creating entries, so a first pull would be incomplete
+2
+rows now start at version 1 (ADR 0001, #97); existing dev rows were created at 0 and would match a device base version of 0

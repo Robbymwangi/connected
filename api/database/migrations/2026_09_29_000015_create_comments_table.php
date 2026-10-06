@@ -20,7 +20,7 @@ return new class extends Migration
             $table->foreignUuid('author_id')->constrained('users');
             $table->text('body');
             $table->enum('state', ['draft', 'accepted']);
-            $table->unsignedInteger('version')->default(0);
+            $table->unsignedInteger('version')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });

@@ -46,7 +46,7 @@ test('creating a mark returns 422 when the assessment is locked', function (stri
     $this->assertDatabaseHas('assessments', [
         'id' => $graph['assessment']->id,
         'status' => $status,
-        'version' => 1,
+        'version' => 2,
     ]);
 })->with(['finalized', 'reports-generated']);
 
@@ -68,7 +68,7 @@ test('upserting a mark returns 422 when the assessment is locked', function (str
         'id' => $graph['mark']->id,
         'mark_kind' => 'score',
         'score' => 8,
-        'version' => 0,
+        'version' => 1,
         'last_edited_by' => $graph['teacher']->id,
     ]);
 })->with(['finalized', 'reports-generated']);
@@ -88,7 +88,7 @@ test('updating a mark returns 422 when the assessment is locked', function (stri
         'id' => $graph['mark']->id,
         'mark_kind' => 'score',
         'score' => 8,
-        'version' => 0,
+        'version' => 1,
         'last_edited_by' => $graph['teacher']->id,
     ]);
 })->with(['finalized', 'reports-generated']);
@@ -112,7 +112,7 @@ test('mark writes resume after an assessment is unlocked', function (string $met
         'id' => $graph['mark']->id,
         'mark_kind' => 'absent',
         'score' => null,
-        'version' => 1,
+        'version' => 2,
     ]);
 })->with(['POST', 'PUT']);
 
@@ -143,13 +143,13 @@ test('mark writes return 422 when finalization happens after the initial mark re
     $this->assertDatabaseHas('assessments', [
         'id' => $graph['assessment']->id,
         'status' => 'finalized',
-        'version' => 1,
+        'version' => 2,
     ]);
     $this->assertDatabaseHas('marks', [
         'id' => $graph['mark']->id,
         'mark_kind' => 'score',
         'score' => 8,
-        'version' => 0,
+        'version' => 1,
     ]);
 })->with(['POST', 'PUT']);
 
@@ -213,7 +213,7 @@ test('duplicate-cell recovery returns 422 when finalization commits before the r
     $this->assertDatabaseHas('assessments', [
         'id' => $graph['assessment']->id,
         'status' => 'finalized',
-        'version' => 1,
+        'version' => 2,
     ]);
     $this->assertDatabaseHas('marks', [
         'assessment_id' => $graph['assessment']->id,
@@ -221,7 +221,7 @@ test('duplicate-cell recovery returns 422 when finalization commits before the r
         'criterion_id' => $graph['criterion']->id,
         'mark_kind' => 'empty',
         'score' => null,
-        'version' => 0,
+        'version' => 1,
     ]);
 });
 
@@ -251,7 +251,7 @@ test('an admin can unlock without reports and receives the unlocked assessment',
         'status' => 'scheduled',
         'finalized_at' => null,
         'finalized_by' => null,
-        'version' => 2,
+        'version' => 3,
     ]);
     $this->assertDatabaseCount('unlock_notes', 0);
 });
@@ -303,7 +303,7 @@ test('unlock with a report records the authenticated admin rather than client-su
         'status' => 'scheduled',
         'finalized_at' => null,
         'finalized_by' => null,
-        'version' => 2,
+        'version' => 3,
     ]);
     $this->assertSoftDeleted($report);
     $this->assertSoftDeleted($comment);
@@ -330,9 +330,9 @@ test('unlock returns 422 with a resolution-note error when reports exist', funct
     $this->assertDatabaseHas('assessments', [
         'id' => $graph['assessment']->id,
         'status' => 'finalized',
-        'version' => 1,
+        'version' => 2,
     ]);
-    $this->assertDatabaseHas('reports', ['id' => $report->id, 'deleted_at' => null, 'version' => 0]);
+    $this->assertDatabaseHas('reports', ['id' => $report->id, 'deleted_at' => null, 'version' => 1]);
     $this->assertDatabaseCount('unlock_notes', 0);
 });
 
@@ -350,7 +350,7 @@ test('unlock returns 422 when the optional note is not a string', function () {
     $this->assertDatabaseHas('assessments', [
         'id' => $graph['assessment']->id,
         'status' => 'finalized',
-        'version' => 1,
+        'version' => 2,
     ]);
     $this->assertDatabaseCount('unlock_notes', 0);
 });
@@ -367,7 +367,7 @@ test('unlock returns 403 for a non-admin even when they created the assessment',
     $this->assertDatabaseHas('assessments', [
         'id' => $graph['assessment']->id,
         'status' => 'finalized',
-        'version' => 1,
+        'version' => 2,
     ]);
     $this->assertDatabaseCount('unlock_notes', 0);
 });
@@ -387,7 +387,7 @@ test('unlock returns 404 for an assessment in another institution', function () 
     $this->assertDatabaseHas('assessments', [
         'id' => $graph['assessment']->id,
         'status' => 'finalized',
-        'version' => 1,
+        'version' => 2,
     ]);
     $this->assertDatabaseCount('unlock_notes', 0);
 });
@@ -451,7 +451,7 @@ test('a non-admin teacher can write a mark for an unassigned class and subject',
     $this->assertModelExists($mark);
     expect($mark->institution_id)->toBe($graph['institution']->id)
         ->and($mark->last_edited_by)->toBe($graph['teacher']->id)
-        ->and($mark->version)->toBe(0);
+        ->and($mark->version)->toBe(1);
 });
 
 test('a concurrent first write to a mark cell updates the winning row', function () {
@@ -508,7 +508,7 @@ test('a concurrent first write to a mark cell updates the winning row', function
     expect($concurrentWriteInserted)->toBeTrue()
         ->and($response->json('data.id'))->toBe($mark->id)
         ->and($mark->score)->toBe(8)
-        ->and($mark->version)->toBe(1)
+        ->and($mark->version)->toBe(2)
         ->and($mark->last_edited_by)->toBe($graph['teacher']->id);
 });
 
@@ -585,7 +585,7 @@ test('an assessment with marks cannot change its class, subject, or year', funct
     expect($assessment->class_id)->toBe($graph['class']->id)
         ->and($assessment->subject_id)->toBe($graph['subject']->id)
         ->and($assessment->year)->toBe(2026)
-        ->and($assessment->version)->toBe(0);
+        ->and($assessment->version)->toBe(1);
 });
 
 test('an assessment with marks can update its name and date without changing scope', function () {
@@ -623,7 +623,7 @@ test('a non-admin teacher can update any mark in the school', function () {
 
     $mark = $graph['mark']->fresh();
     expect($mark->score)->toBeNull()
-        ->and($mark->version)->toBe(1)
+        ->and($mark->version)->toBe(2)
         ->and($mark->last_edited_by)->toBe($graph['teacher']->id);
 });
 

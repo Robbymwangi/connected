@@ -20,7 +20,7 @@ return new class extends Migration
             $table->foreignUuid('user_id')->constrained('users');
             $table->foreignUuid('class_id')->constrained('classes');
             $table->foreignUuid('subject_id')->constrained('subjects');
-            $table->unsignedInteger('version')->default(0);
+            $table->unsignedInteger('version')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });
