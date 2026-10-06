@@ -27,10 +27,14 @@ trait Syncable
     protected static function bootSyncable(): void
     {
         static::creating(function (Model $model) {
-            // Mirrors the column's own database default of 0; set explicitly
-            // so the in-memory attribute matches the row from the moment
-            // create() returns, rather than staying null until a refresh().
-            $model->version = 0;
+            // ADR 0001 rules 2 and 5: the server never assigns 0, and creating a
+            // record returns 1. 0 is what a device holds for a record the server
+            // has not acknowledged, so it must never equal a real version, or a
+            // second device's create at baseVersion 0 would match rule 2 instead of
+            // conflicting under rule 4. Mirrors the column's database default of 1;
+            // set explicitly so the in-memory attribute matches the row from the
+            // moment create() returns, rather than staying null until a refresh().
+            $model->version = 1;
         });
 
         static::saving(function (Model $model) {

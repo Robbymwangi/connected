@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('grade');
             $table->string('stream');
             $table->foreignUuid('class_teacher_id')->nullable()->constrained('users');
-            $table->unsignedInteger('version')->default(0);
+            $table->unsignedInteger('version')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });

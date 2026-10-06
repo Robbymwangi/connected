@@ -25,7 +25,7 @@ return new class extends Migration
             $table->jsonb('referral')->nullable();
             $table->jsonb('resolution')->nullable();
             $table->timestamp('resolved_at')->nullable();
-            $table->unsignedInteger('version')->default(0);
+            $table->unsignedInteger('version')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });

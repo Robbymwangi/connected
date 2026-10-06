@@ -97,7 +97,7 @@ test('class_subjects is only ever written through ClassSubject, never a pivot wr
     // with their own id, institution_id, version, and soft delete intact.
     $relation = $g['class']->classSubjects->first();
     expect($relation->is($g['classSubject']))->toBeTrue();
-    expect($relation->version)->toBe(0);
+    expect($relation->version)->toBe(1);
 });
 
 test('two independent creates for the same mark identity triple collide on id, not on producing two rows', function () {
@@ -137,22 +137,22 @@ test('a client-supplied id is kept as given, never overridden', function () {
     expect($client->id)->toBe('01991827-0000-7000-8000-000000000001');
 });
 
-test('version starts at 0, increments server-side on update and on soft delete, and is never mass-assignable', function () {
+test('version starts at 1, increments server-side on update and on soft delete, and is never mass-assignable', function () {
     $g = buildGraph();
     $subject = $g['subject'];
 
-    expect($subject->version)->toBe(0);
+    expect($subject->version)->toBe(1);
 
     $subject->name = 'Mathematics';
     $subject->save();
-    expect($subject->version)->toBe(1);
+    expect($subject->version)->toBe(2);
 
     $subject->delete();
-    expect($subject->version)->toBe(1 + 1);
-    expect(Subject::withTrashed()->find($subject->id)->version)->toBe(2);
+    expect($subject->version)->toBe(2 + 1);
+    expect(Subject::withTrashed()->find($subject->id)->version)->toBe(3);
 
     $subject->fill(['version' => 999, 'name' => 'Ignored version']);
-    expect($subject->version)->toBe(2);
+    expect($subject->version)->toBe(3);
     expect($subject->name)->toBe('Ignored version');
 });
 
@@ -161,10 +161,10 @@ test('a no-op save and a bare touch do not bump version', function () {
     $subject = $g['subject'];
 
     $subject->save();
-    expect($subject->fresh()->version)->toBe(0);
+    expect($subject->fresh()->version)->toBe(1);
 
     $subject->touch();
-    expect($subject->fresh()->version)->toBe(0);
+    expect($subject->fresh()->version)->toBe(1);
     expect($subject->fresh()->updated_at)->not->toBeNull();
 });
 
@@ -177,7 +177,7 @@ test('a stale update loses the race instead of silently overwriting the winner',
 
     $writerA->name = 'Mathematics (A)';
     $writerA->save();
-    expect($writerA->version)->toBe(1);
+    expect($writerA->version)->toBe(2);
 
     $writerB->name = 'Mathematics (B)';
     expect(fn () => $writerB->save())->toThrow(StaleVersionException::class);
@@ -185,7 +185,7 @@ test('a stale update loses the race instead of silently overwriting the winner',
     // A's write is intact; B's was rejected, not merged or silently lost.
     $fromDb = Subject::find($g['subject']->id);
     expect($fromDb->name)->toBe('Mathematics (A)');
-    expect($fromDb->version)->toBe(1);
+    expect($fromDb->version)->toBe(2);
 });
 
 test('a stale delete loses the race the same way an update does', function () {

@@ -29,7 +29,7 @@ test('creating a row appends one change with its initial fields and none of the 
     $rows = logRowsFor('subjects', $subject->id);
     expect($rows)->toHaveCount(1);
     expect($rows[0]->institution_id)->toBe($g['institution']->id);
-    expect($rows[0]->version)->toBe(0);
+    expect($rows[0]->version)->toBe(1);
     expect($rows[0]->fields)->toBe(['name' => 'Science']);
 });
 
@@ -41,7 +41,7 @@ test('updating a row appends only the changed fields at the new version', functi
 
     $rows = logRowsFor('subjects', $subject->id);
     expect($rows)->toHaveCount(2);
-    expect($rows[1]->version)->toBe(1);
+    expect($rows[1]->version)->toBe(2);
     expect($rows[1]->fields)->toBe(['name' => 'Physics']);
 });
 
@@ -53,10 +53,10 @@ test('a soft delete appends deleted_at as the one changed field, and a restore a
 
     $rows = logRowsFor('students', $g['student']->id);
     expect($rows)->toHaveCount(3);
-    expect($rows[1]->version)->toBe(1);
+    expect($rows[1]->version)->toBe(2);
     expect(array_keys($rows[1]->fields))->toBe(['deleted_at']);
     expect($rows[1]->fields['deleted_at'])->not->toBeNull();
-    expect($rows[2]->version)->toBe(2);
+    expect($rows[2]->version)->toBe(3);
     expect($rows[2]->fields)->toBe(['deleted_at' => null]);
 });
 
@@ -68,7 +68,7 @@ test('a no-op save and a bare touch append nothing', function () {
     $g['subject']->touch();
 
     expect(SyncChange::count())->toBe($before);
-    expect($g['subject']->fresh()->version)->toBe(0);
+    expect($g['subject']->fresh()->version)->toBe(1);
 });
 
 test('a rolled-back transaction leaves neither the row nor its change', function () {
@@ -145,7 +145,7 @@ test('a PUT to a mark appends exactly one change', function () {
 
     $rows = logRowsFor('marks', $g['mark']->id);
     expect($rows)->toHaveCount($before + 1);
-    expect($rows->last()->version)->toBe(1);
+    expect($rows->last()->version)->toBe(2);
     expect($rows->last()->fields)->toBe(['score' => 9]);
 });
 
