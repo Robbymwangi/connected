@@ -229,3 +229,13 @@ function postedResults(mixed $response): array
 {
     return $response->assertOk()->json('results');
 }
+
+/** The deterministic id of a mark cell, as a device computes it. */
+function markIdFor(string $assessmentId, string $studentId, string $criterionId): string
+{
+    return (new Mark([
+        'assessment_id' => $assessmentId,
+        'student_id' => $studentId,
+        'criterion_id' => $criterionId,
+    ]))->newUniqueId();
+}

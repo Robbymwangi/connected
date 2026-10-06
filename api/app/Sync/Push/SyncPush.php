@@ -40,6 +40,7 @@ final class SyncPush
     /** @var array<string, class-string<PushHandler>> */
     private const HANDLERS = [
         'assessments' => AssessmentPushHandler::class,
+        'marks' => MarkPushHandler::class,
     ];
 
     /** Wire names the server alone owns; a device sending one is told, not silently ignored. */
