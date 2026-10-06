@@ -87,3 +87,11 @@ test('a log row cannot name an institution that does not exist', function () {
         'fields' => json_encode(['score' => 1]),
     ]))->toThrow(QueryException::class);
 });
+
+test('a caller cannot choose received_at, the server stamps it', function () {
+    $g = buildGraph('School A', '-stamp');
+
+    $change = SyncChange::create(syncChangeAttributes($g['institution']->id, ['received_at' => '2001-01-01T00:00:00Z']));
+
+    expect(SyncChange::find($change->seq)->received_at->year)->toBeGreaterThan(2001);
+});
