@@ -13,6 +13,7 @@ use App\Models\SubjectModeration;
 use App\Models\TeacherAssignment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /*
@@ -163,4 +164,78 @@ function buildGraph(string $institutionName = 'Test School', string $suffix = ''
         'institution', 'teacher', 'subject', 'criterion', 'class', 'classSubject',
         'teacherAssignment', 'subjectModeration', 'student', 'enrolment', 'assessment', 'mark',
     );
+}
+
+/* POST /sync helpers (3.2a). Pest test-file functions are global, so they live
+   here once; a second definition of any of these names in a test file is fatal. */
+function pushEntries(mixed $test, string $token, array $entries)
+{
+    return $test->withToken($token)->postJson('/api/sync', ['entries' => $entries]);
+}
+
+/** One outbox entry, with a fresh UUIDv7 mutation id unless one is given. */
+function pushEntry(string $table, string $recordId, int $base, array $fields, ?string $id = null, ?string $at = null): array
+{
+    return array_filter([
+        'id' => $id ?? Str::uuid7()->toString(),
+        'table' => $table,
+        'recordId' => $recordId,
+        'baseVersion' => $base,
+        'fields' => $fields,
+        'at' => $at,
+    ], fn ($value) => $value !== null);
+}
+
+/** The fields of a valid assessment create against a graph from buildGraph. */
+function assessmentFields(array $graph, array $overrides = []): array
+{
+    return array_merge([
+        'classId' => $graph['class']->id,
+        'subjectId' => $graph['subject']->id,
+        'name' => 'CAT 2',
+        'term' => 2,
+        'year' => 2026,
+        'date' => '2026-08-18',
+    ], $overrides);
+}
+
+/**
+ * A second user in the graph's institution; optionally an admin, optionally assigned to the graph's class and subject.
+ */
+function makeColleague(array $graph, string $email, bool $admin = false, bool $assigned = false): User
+{
+    $user = User::create([
+        'institution_id' => $graph['institution']->id,
+        'name' => 'A. Colleague',
+        'email' => $email,
+        'password' => 'a-hashed-password',
+        'is_admin' => $admin,
+    ]);
+
+    if ($assigned) {
+        TeacherAssignment::create([
+            'institution_id' => $graph['institution']->id,
+            'user_id' => $user->id,
+            'class_id' => $graph['class']->id,
+            'subject_id' => $graph['subject']->id,
+        ]);
+    }
+
+    return $user;
+}
+
+/** The decoded `results` of a POST /sync response that must have been a 200. */
+function postedResults(mixed $response): array
+{
+    return $response->assertOk()->json('results');
+}
+
+/** The deterministic id of a mark cell, as a device computes it. */
+function markIdFor(string $assessmentId, string $studentId, string $criterionId): string
+{
+    return (new Mark([
+        'assessment_id' => $assessmentId,
+        'student_id' => $studentId,
+        'criterion_id' => $criterionId,
+    ]))->newUniqueId();
 }

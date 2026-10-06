@@ -150,6 +150,20 @@ final class SyncPull
         return ['changes' => $changes, 'cursor' => $mark, 'more' => false];
     }
 
+    /**
+     * One record as a pull change, without a seq: the shape POST /sync returns as
+     * `current` in a conflict, so a device applies it with the code it uses for a pull row.
+     *
+     * @return array{table: string, recordId: string, version: int, fields: array<string, mixed>}
+     */
+    public static function row(Model $model): array
+    {
+        $change = self::change(0, $model->getTable(), $model->getKey(), $model->version, SyncLog::fieldsFor($model, array_keys($model->getAttributes())));
+        unset($change['seq']);
+
+        return $change;
+    }
+
     /* Storage is snake_case, the wire is camelCase. Only the top-level field
        names are mapped: a nested value (a conflict's sides) passes through as
        stored, since its keys are already the wire's. A snapshot row carries

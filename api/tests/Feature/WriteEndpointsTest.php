@@ -588,6 +588,25 @@ test('an assessment with marks cannot change its class, subject, or year', funct
         ->and($assessment->version)->toBe(1);
 });
 
+test('a teacher who neither created nor teaches an assessment gets 403 updating it over REST', function () {
+    $graph = buildGraph('School A', '-assessment-update-bystander');
+    $bystander = makeColleague($graph, 'bystander-rest-update@example.com');
+
+    $this->withToken(tokenFor($bystander))->putJson(
+        '/api/assessments/'.$graph['assessment']->id,
+        [
+            'class_id' => $graph['class']->id,
+            'subject_id' => $graph['subject']->id,
+            'name' => 'Hijacked',
+            'term' => 1,
+            'year' => 2026,
+            'date' => '2026-03-01',
+        ],
+    )->assertForbidden();
+
+    expect($graph['assessment']->fresh()->name)->toBe('CAT 1');
+});
+
 test('an assessment with marks can update its name and date without changing scope', function () {
     $graph = buildGraph('School A', '-assessment-metadata-update');
 
@@ -730,7 +749,7 @@ test('an admin can create a teacher account', function () {
         ->and($teacher->password)->not->toBe('long-enough-password');
 });
 
-test('write policies allow marks and assessments but reserve roster records to admins', function () {
+test('write policies allow marks and assessment creation, scope assessment edits to whoever answers for them, and reserve roster records to admins', function () {
     $graph = buildGraph('School A', '-policy-matrix');
     $admin = User::create([
         'institution_id' => $graph['institution']->id,
@@ -766,5 +785,7 @@ test('write policies allow marks and assessments but reserve roster records to a
     ];
 
     expect($teacherAbilities)->toBe([true, true, true, true, false, false, false, false, false, false]);
-    expect($adminAbilities)->toBe([true, true, true, true, true, true, true, true, true, true]);
+    // The admin neither created nor teaches the assessment, so editing it is not theirs;
+    // an admin's override is unlock alone (docs/spec/access-model.md), tested elsewhere.
+    expect($adminAbilities)->toBe([true, true, true, false, true, true, true, true, true, true]);
 });

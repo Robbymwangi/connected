@@ -10,10 +10,12 @@ use App\Http\Controllers\MeController;
 use App\Http\Controllers\StudentsController;
 use App\Http\Controllers\SubjectsController;
 use App\Http\Controllers\SyncController;
+use App\Http\Controllers\SyncPushController;
 use App\Http\Controllers\TeachersController;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\ResolveInstitution;
 use Illuminate\Support\Facades\Route;
+use Laravel\Sanctum\Http\Middleware\CheckAbilities;
 
 /* Outside authentication, the institution scope, and the throttle: it is
    what a device asks before it has anything else (#44). ResolveInstitution
@@ -38,7 +40,16 @@ Route::post('/login', LoginController::class)->name('login')->middleware('thrott
 Route::middleware(['auth:sanctum', EnsureAccountIsActive::class])->group(function () {
     Route::post('/logout', LogoutController::class)->name('logout');
     Route::get('/me', MeController::class)->name('me');
-    Route::get('/sync', SyncController::class)->name('sync.pull');
+
+    // Both sync verbs need the token's `sync` ability (docs/spec/access-model.md,
+    // Tokens; docs/spec/sync-protocol.md, Authorization and scoping). A device
+    // token carries it; a token without it is refused with 403. Sanctum's
+    // CheckAbilities is used directly, so no middleware alias is registered and
+    // both verbs sit behind the one group below.
+    Route::middleware(CheckAbilities::class.':sync')->group(function () {
+        Route::get('/sync', SyncController::class)->name('sync.pull');
+        Route::post('/sync', SyncPushController::class)->name('sync.push');
+    });
 
     // 2.1 (#48): reads unrestricted within the institution for any
     // authenticated user (docs/spec/access-model.md, The principle).

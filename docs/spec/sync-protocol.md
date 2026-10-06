@@ -82,7 +82,20 @@ itself.
 Request: `{ "entries": [ ... ] }`, in outbox order. Each entry is processed
 in its own transaction, in the order sent, so one rejected entry doesn't
 block the rest: a batch of thirty entries with one conflict still persists
-the other twenty-nine.
+the other twenty-nine. A batch holds at most 100 entries; more, or entries that
+are not a list of objects, is a 422 for the whole request and nothing is
+processed. Each entry is its own transaction, so the limit does not lengthen any
+lock; it bounds a request's duration and how much a dropped response costs on a
+poor connection (a full grid of about 45 students by 5 criteria is three
+requests).
+
+An entry that cannot be keyed, because its `id` or `recordId` is not a UUID or its
+`table` is not a lowercase identifier of at most 64 characters, is answered
+`invalid` and is not recorded, since there is nothing to record it under; its
+result carries the `id` only when that was a valid UUID, so a device matches
+results to entries by position. Any other rejection, including one at the
+envelope (an unknown table, a server-owned field, a bad `baseVersion`), is
+recorded like every outcome, so a resend of it replays the stored rejection.
 
 Response: one result per entry, same order:
 
@@ -271,6 +284,29 @@ and is decided afresh. A poisoned entry can stall the outbox until the defect
 is fixed, which is the right pressure: a status that told the device to keep
 going would hide it. (Proposed.)
 
+**Decided while building POST /sync (3.2a).**
+- A patch that changes nothing, at the current version, is `accepted` at the
+  unchanged version and logs nothing; the version moves only when a value does.
+  (A different user sending the same values changes `last_edited_by` on a mark, and
+  that bumps it.)
+- An edit at the current version against a soft-deleted row is `invalid`, not
+  applied to the deleted row. A stale edit against one is rule 4's delete case.
+- A reference that does not resolve inside the institution (an assessment, student,
+  criterion, class, or subject) is `invalid`; `forbidden` is for the record itself
+  and the actor.
+- On a mark, the identity fields (`assessmentId`, `studentId`, `criterionId`) may
+  repeat the cell's own values but never change them; repeating them is how two
+  devices creating one cell reach a conflict, so it is not refused.
+- `at` is stored as sent, as a string of at most 64 characters, and is never a
+  reason to reject: a longer one, or one containing a NUL, is dropped and the entry
+  is decided normally.
+- Values the database would refuse (a NUL byte, year 0000, a name longer than the
+  column in characters, a table name outside the identifier alphabet) are answered
+  `invalid`, never left to fail in the database: an entry that causes a 5xx every
+  time it is sent stalls every entry behind it in the outbox.
+- Until 3.2b, a stale base on any table is `conflict` with the current row and no
+  `conflictId`, and nothing is merged.
+
 **Open, to be settled in 3.2b and 3.2c.**
 - A further conflicting entry on a cell whose conflict is already open
   (`side_a` and `side_b` are both required, so "becomes its second side" has no
@@ -280,7 +316,6 @@ going would hide it. (Proposed.)
   change-log `seq`.
 - Whether a resolution's mark write checks the mark's version, since someone
   may have edited it after the conflict opened.
-- A batch size limit.
 - An entry whose parent's create was rejected.
 - An outbox belongs to one user; a second sign-in on a device must not push
   the first user's pending entries as itself (3.4).

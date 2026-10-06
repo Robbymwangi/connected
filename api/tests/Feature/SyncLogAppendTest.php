@@ -187,7 +187,7 @@ test('every table with a version column has a Syncable model, so none can skip t
 
     $versionedTables = collect(Schema::getTables())
         ->pluck('name')
-        ->reject(fn ($table) => $table === 'sync_changes') // its version column records another row's version
+        ->reject(fn ($table) => in_array($table, ['sync_changes', 'sync_mutations'], true)) // their version columns record another row's version
         ->filter(fn ($table) => Schema::hasColumn($table, 'version'));
 
     expect($versionedTables->diff($syncableTables)->values()->all())->toBe([]);
