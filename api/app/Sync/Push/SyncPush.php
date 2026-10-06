@@ -2,12 +2,14 @@
 
 namespace App\Sync\Push;
 
+use App\Models\SyncChange;
 use App\Models\SyncMutation;
 use App\Models\User;
 use App\Support\CurrentInstitution;
 use App\Support\SyncLog;
 use App\Sync\SyncPull;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Validation\ValidationException;
 use LogicException;
@@ -177,14 +179,33 @@ final class SyncPush
 
         $model = $handler->resulting($entry, $record);
 
+        $before = $record?->version ?? 0;
         $creating = $record === null;
         $model->save();
         $creating = false;
 
         $outcome = PushOutcome::accepted($entry->id, $model->version);
-        $this->record($entry, $outcome, $model->version);
+        $this->record($entry, $outcome, $model->version, $this->changeSeqOf($model, $before));
 
         return $outcome;
+    }
+
+    /* The sync_changes row this entry just wrote, or null when it wrote none: a patch that
+       changes nothing leaves the version where it was and appends nothing. Read under the
+       lock, so the row at this version is the one this save produced. */
+    private function changeSeqOf(Model $model, int $versionBefore): ?int
+    {
+        if ($model->version === $versionBefore) {
+            return null;
+        }
+
+        $seq = SyncChange::query()
+            ->where('table', $model->getTable())
+            ->where('record_id', $model->getKey())
+            ->where('version', $model->version)
+            ->value('seq');
+
+        return $seq === null ? null : (int) $seq;
     }
 
     /* A known mutation id: the stored outcome, read back. The lookup is not scoped by
@@ -213,7 +234,7 @@ final class SyncPush
         return PushOutcome::fromStored($known, $current);
     }
 
-    private function record(PushEntry $entry, PushOutcome $outcome, ?int $version): void
+    private function record(PushEntry $entry, PushOutcome $outcome, ?int $version, ?int $changeSeq = null): void
     {
         SyncMutation::create([
             'id' => $entry->id,
@@ -223,6 +244,8 @@ final class SyncPush
             'record_id' => $entry->recordId,
             'status' => $outcome->status,
             'version' => $version,
+            'conflict_id' => $outcome->conflictId,
+            'change_seq' => $changeSeq,
             'payload_hash' => $entry->payloadHash,
             'reason' => $outcome->reason,
             'at' => $entry->at,

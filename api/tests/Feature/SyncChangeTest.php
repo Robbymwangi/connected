@@ -95,3 +95,9 @@ test('a caller cannot choose received_at, the server stamps it', function () {
 
     expect(SyncChange::find($change->seq)->received_at->year)->toBeGreaterThan(2001);
 });
+
+test('sync_changes is indexed for one record\'s history in version order', function () {
+    $indexes = collect(Schema::getIndexes('sync_changes'))->pluck('columns');
+
+    expect($indexes->contains(['institution_id', 'table', 'record_id', 'version']))->toBeTrue();
+});

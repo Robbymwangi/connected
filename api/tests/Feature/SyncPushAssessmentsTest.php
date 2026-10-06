@@ -45,6 +45,21 @@ test('an update that changes nothing is accepted at the unchanged version and lo
     expect(DB::table('sync_changes')->where('record_id', $g['assessment']->id)->count())->toBe($before);
 });
 
+test('an update records the seq of the change it wrote, and one that changes nothing records none', function () {
+    $g = buildGraph('School A', '-asm-seq');
+    $token = tokenFor($g['teacher']);
+    $real = assessmentUpdate($g, ['date' => '2026-03-02']);
+    $nothing = assessmentUpdate($g, ['date' => '2026-03-02'], base: 2);
+
+    postedResults(pushEntries($this, $token, [$real]));
+    app('auth')->forgetGuards();
+    postedResults(pushEntries($this, $token, [$nothing]));
+
+    $seq = DB::table('sync_changes')->where('record_id', $g['assessment']->id)->where('version', 2)->value('seq');
+    expect(DB::table('sync_mutations')->where('id', $real['id'])->value('change_seq'))->toBe($seq);
+    expect(DB::table('sync_mutations')->where('id', $nothing['id'])->first())->toMatchArray(['status' => 'accepted', 'version' => 2, 'change_seq' => null]);
+});
+
 test('a teacher assigned to the class and subject may update an assessment they did not create', function () {
     $g = buildGraph('School A', '-asm-assigned');
     $assigned = makeColleague($g, 'assigned-asm@example.com', assigned: true);
