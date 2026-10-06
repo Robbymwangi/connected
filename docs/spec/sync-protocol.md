@@ -67,10 +67,12 @@ An entry is frozen once it has been sent: it keeps exactly the `fields` and
 `baseVersion` it was sent with, and a later edit to the same record waits for
 the acknowledgement and is based on the version the server returned.
 Coalescing (ADR 0001 rule 4) therefore applies only to entries not yet sent.
-A resend must carry the identical payload: the server stores a hash of each
+A resend must carry the same replay identity: the server stores a hash of each
 entry's table, record id, `baseVersion`, and `fields`, and a known id that
-arrives with a different payload is `invalid`, never `replayed`, because
-answering `replayed` would silently drop whatever the device had added. A
+arrives with a different hash is `invalid`, never `replayed`, because answering
+`replayed` would silently drop whatever the device had added. `at` is
+informational and is not part of that identity, so a resend that differs only in
+`at` is replayed normally. A
 device never holds two unacknowledged entries for one record; if it did, the
 second's base would be stale against the first and it would conflict with
 itself.
