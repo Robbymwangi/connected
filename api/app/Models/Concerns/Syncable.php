@@ -3,6 +3,8 @@
 namespace App\Models\Concerns;
 
 use App\Exceptions\StaleVersionException;
+use App\Support\CurrentInstitution;
+use App\Support\SyncLog;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -36,6 +38,45 @@ trait Syncable
                 $model->version = ((int) $model->getOriginal('version')) + 1;
             }
         });
+    }
+
+    /* Every write to a synchronisable table appends to sync_changes in the
+       same transaction, behind the institution's advisory lock (ADR 0010,
+       SyncLog). save() covers create, update, and restore (which saves with
+       deleted_at cleared); delete() covers the soft delete. The institution
+       falls back to the current request's when a new row has not been given
+       one yet, since BelongsToInstitution fills it in only inside the
+       creating event. With neither, the write goes ahead unwrapped and fails
+       on the column's NOT NULL, as it always did. */
+    public function save(array $options = [])
+    {
+        $institutionId = $this->institution_id ?? app(CurrentInstitution::class)->id();
+
+        if ($institutionId === null) {
+            return parent::save($options);
+        }
+
+        return SyncLog::transaction($institutionId, fn () => parent::save($options));
+    }
+
+    public function delete()
+    {
+        if ($this->institution_id === null) {
+            return parent::delete();
+        }
+
+        return SyncLog::transaction($this->institution_id, fn () => parent::delete());
+    }
+
+    protected function performInsert(Builder $query)
+    {
+        if (! parent::performInsert($query)) {
+            return false;
+        }
+
+        SyncLog::append($this, array_keys($this->getAttributes()));
+
+        return true;
     }
 
     /* Excludes a bare touch() (only updated_at dirty) and a genuine no-op
@@ -79,6 +120,8 @@ trait Syncable
             if ($affected === 0) {
                 throw new StaleVersionException($this);
             }
+
+            SyncLog::append($this, array_keys($dirty));
 
             $this->syncChanges();
 
@@ -125,6 +168,8 @@ trait Syncable
 
         $this->version = $newVersion;
         $this->syncOriginalAttributes(array_keys($columns));
+
+        SyncLog::append($this, [$this->getDeletedAtColumn()]);
 
         $this->fireModelEvent('trashed', false);
     }

@@ -40,7 +40,8 @@ cursor to it, and 10 commits afterwards and is never returned.
    writing transaction commits or rolls back. Writers to synchronisable tables
    therefore serialise at the append, so `seq` order equals commit order and a
    pull can never advance past a change that has yet to commit. A rolled-back
-   write leaves no log row and no gap that matters.
+   write leaves no log row and no gap that matters. (Amended 2026-10-06: where the
+   lock is taken and its key; see Amendments.)
 
 4. `since=0` reads the live tables, one change per current row, in the same
    `{seq, table, recordId, version, fields}` shape. The high-water mark is the
@@ -67,8 +68,8 @@ cursor to it, and 10 commits afterwards and is never returned.
   volume is small, so this costs little; it would not suit a multi-region
   deployment, which is not this system.
 - A long transaction holds the lock and blocks other writers until it ends. Writes
-  stay short, and the lock is taken at the append, not at the start of the
-  transaction, to keep the window small.
+  stay short. (Amended 2026-10-06: the lock is now taken at the start of the
+  transaction, not at the append; see Amendments.)
 - The log grows with every edit. Compaction is future work; nothing here prevents
   it, provided a device's cursor is never moved past a pruned range.
 - A paged bootstrap carries a token for the scan position; the server validates it
@@ -77,3 +78,44 @@ cursor to it, and 10 commits afterwards and is never returned.
 - Rejected alternative: pulling only up to the lowest in-flight `seq`. It avoids
   serialising writers but needs the server to know which transactions are in
   flight, which is harder to reason about and to defend.
+
+## Amendments
+
+### 2026-10-06: the lock is taken first, per institution
+
+Decision 3 said the lock is taken at the append. Reading the write paths for the
+implementation showed that this can deadlock, because some transactions lock a row
+before they write. The mark PUT is one: it locks its assessment row
+(`lockEditableAssessment`) and then writes the mark. A bare model write such as
+`AssessmentsController::update()` calls `$assessment->update()` with no
+transaction of its own. If a model write took the advisory lock before its row
+update, the interleaving is:
+
+1. The PUT locks the assessment row.
+2. The bare update takes the advisory lock, then waits for the assessment row.
+3. The PUT writes the mark, which appends to the log, and waits for the advisory lock.
+
+Each holds what the other needs, and Postgres aborts one. Taking the lock at the
+append has the mirror-image problem for a transaction that appends and then
+touches a row another writer already holds. The fix is one lock order everywhere:
+
+- The advisory lock is the first statement of every transaction that writes a
+  synchronisable table, before any row is locked or written. Rows come after it.
+- `SyncLog::transaction()` is the only way to open a transaction in `app/`, so the
+  order is structural, not a convention. A test fails on any other transaction
+  call in `app/`, and another fails if a table with a `version` column has no
+  `Syncable` model. The lock is re-entrant, and a nested call joins the open
+  transaction instead of adding a savepoint.
+- The key is per institution (`hashtextextended(institution_id, 0)`). A pull is
+  institution-scoped, so only one institution's rows need a commit order. `seq` is
+  global and other institutions' writes leave gaps in it; those are harmless
+  because a pull never reads another institution's rows. A hash collision between
+  two institutions would cost throughput, never correctness.
+- A log row never carries a hidden attribute (a password hash), because
+  `getDirty()` and `getAttributes()` return hidden columns (only `toArray()`
+  and `toJson()` honour `$hidden`), so the append excludes them explicitly, and the
+  log is pulled by every device in the school. A write whose only change is hidden
+  appends nothing.
+
+The remaining cost is as before: writers in one institution serialise, and a long
+transaction holds the lock until it ends.

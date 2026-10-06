@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToInstitution;
 use App\Models\Concerns\Syncable;
+use App\Support\SyncLog;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -36,7 +37,7 @@ class Assessment extends Model
 
     public function finalize(User $user): void
     {
-        $assessment = $this->getConnection()->transaction(function () use ($user): self {
+        $assessment = SyncLog::transaction($this->institution_id, function () use ($user): self {
             $assessment = $this->newQuery()->lockForUpdate()->findOrFail($this->getKey());
 
             Gate::forUser($user)->authorize('finalize', $assessment);
@@ -70,7 +71,7 @@ class Assessment extends Model
 
     public function unlock(User $user, ?string $note = null): void
     {
-        $assessment = $this->getConnection()->transaction(function () use ($user, $note): self {
+        $assessment = SyncLog::transaction($this->institution_id, function () use ($user, $note): self {
             $assessment = $this->newQuery()->lockForUpdate()->findOrFail($this->getKey());
 
             Gate::forUser($user)->authorize('unlock', $assessment);

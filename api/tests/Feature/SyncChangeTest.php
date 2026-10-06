@@ -73,7 +73,7 @@ test('log rows are institution-scoped like every other table', function () {
 
     app(CurrentInstitution::class)->set($a['institution']->id);
 
-    expect(SyncChange::count())->toBe(1);
+    expect(SyncChange::pluck('institution_id')->unique()->all())->toBe([$a['institution']->id]);
     expect(SyncChange::find($rowA->seq))->not->toBeNull();
     expect(SyncChange::find($rowB->seq))->toBeNull();
 });
