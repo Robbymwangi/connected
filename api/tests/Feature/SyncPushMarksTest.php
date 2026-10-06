@@ -13,47 +13,6 @@ use Illuminate\Support\Str;
    markKind/score pair, and the version rules on a real cell. The shared decisions
    (replay, envelope, forbidden) are in SyncPushTest. docs/spec/sync-protocol.md. */
 
-function newCriterion(array $graph, string $name = 'Reasoning', int $max = 10): Criterion
-{
-    return Criterion::create([
-        'institution_id' => $graph['institution']->id,
-        'subject_id' => $graph['subject']->id,
-        'name' => $name,
-        'max_score' => $max,
-    ]);
-}
-
-function enrolledStudent(array $graph, string $name): Student
-{
-    $student = Student::create([
-        'institution_id' => $graph['institution']->id,
-        'name' => $name,
-        'gender' => 'F',
-        'dob' => '2015-03-01',
-    ]);
-    Enrolment::create([
-        'institution_id' => $graph['institution']->id,
-        'student_id' => $student->id,
-        'class_id' => $graph['class']->id,
-        'year' => $graph['assessment']->year,
-    ]);
-
-    return $student;
-}
-
-/** A create entry for a new cell, with the deterministic id a device would compute. */
-function markCreate(array $graph, Student $student, Criterion $criterion, array $cell = ['markKind' => 'score', 'score' => 7]): array
-{
-    $triple = ['assessmentId' => $graph['assessment']->id, 'studentId' => $student->id, 'criterionId' => $criterion->id];
-
-    return pushEntry('marks', markIdFor($triple['assessmentId'], $triple['studentId'], $triple['criterionId']), 0, [...$triple, ...$cell]);
-}
-
-function markUpdate(array $graph, array $fields, int $base = 1): array
-{
-    return pushEntry('marks', $graph['mark']->id, $base, $fields);
-}
-
 test('a non-admin teacher with no assignment to the class and subject creates and updates a mark, and both are accepted', function () {
     $g = buildGraph('School A', '-mk-unassigned');
     $teacher = makeColleague($g, 'unassigned-mk@example.com');
@@ -100,6 +59,7 @@ test('thirty entries with one stale entry in the middle: twenty-nine persisted, 
     expect(collect($results)->except(14)->pluck('status')->unique()->all())->toBe(['accepted']);
     expect(DB::table('marks')->where('criterion_id', $criterion->id)->count())->toBe(29);
     expect(DB::table('marks')->where('id', $g['mark']->id)->value('score'))->toBe(8);
+    expect(DB::table('conflicts')->where('mark_id', $g['mark']->id)->count())->toBe(1);
 });
 
 test('a reference from another institution is invalid', function (string $reference) {
@@ -315,10 +275,12 @@ test('a stale base is a conflict carrying the current cell, and writes nothing',
     $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
 
     expect($result['status'])->toBe('conflict');
+    expect($result['conflictId'])->toBeString();
     expect($result['current']['version'])->toBe(2);
     expect($result['current']['fields']['score'])->toBe(6);
     expect($result['current']['fields']['markKind'])->toBe('score');
     expect(DB::table('marks')->where('id', $g['mark']->id)->value('score'))->toBe(6);
+    expect(DB::table('conflicts')->where('mark_id', $g['mark']->id)->count())->toBe(1);
 });
 
 test('a base ahead of the server on a mark is invalid', function () {

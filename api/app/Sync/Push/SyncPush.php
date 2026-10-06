@@ -2,6 +2,7 @@
 
 namespace App\Sync\Push;
 
+use App\Models\Conflict;
 use App\Models\SyncChange;
 use App\Models\SyncMutation;
 use App\Models\User;
@@ -222,8 +223,11 @@ final class SyncPush
 
         return match ($verdict) {
             StaleVerdict::Merged => $this->merge($entry, $handler, $record),
-            StaleVerdict::Unchanged, StaleVerdict::UnchangedAfterCollision => $this->unchanged($entry, $record),
-            StaleVerdict::ConflictOverlap, StaleVerdict::ConflictIncomplete, StaleVerdict::ConflictDeleted => $this->conflict($entry, $record, $current),
+            StaleVerdict::Unchanged => $this->unchanged($entry, $record),
+            StaleVerdict::UnchangedAfterCollision => $this->collided($entry, $handler, $record, $history, $sent),
+            StaleVerdict::ConflictOverlap, StaleVerdict::ConflictIncomplete => $this->conflict($entry, $record, $current, $this->openConflict($handler, $entry, $record, $history, $sent)),
+            // Nothing live remains to choose between, and no pushable table can be deleted from a device, so no record.
+            StaleVerdict::ConflictDeleted => $this->conflict($entry, $record, $current),
             StaleVerdict::TrashedBase => throw SyncRejection::invalid('the record has been deleted'),
         };
     }
@@ -253,15 +257,38 @@ final class SyncPush
         return $outcome;
     }
 
+    /* Two edits that agree. The cell is untouched and the outcome is the plain no-op, because
+       the device's value is the one that stands; for a mark the collision is also written down as
+       an already-resolved conflict, so the second teacher can see it happened and who was first.
+       The conflict is written before the mutation row, which does not reference it. */
+    private function collided(PushEntry $entry, PushHandler $handler, Model $record, RecordHistory $history, array $sent): PushOutcome
+    {
+        if ($handler instanceof MarkPushHandler) {
+            (new MarkConflicts($this->user))->raise($entry, $record, $history, $sent, auto: true);
+        }
+
+        return $this->unchanged($entry, $record);
+    }
+
     /**
      * @param  array<string, mixed>  $current  the record as it stood before anything filled it
      */
-    private function conflict(PushEntry $entry, Model $record, array $current): PushOutcome
+    private function conflict(PushEntry $entry, Model $record, array $current, ?Conflict $conflict = null): PushOutcome
     {
-        $outcome = PushOutcome::conflict($entry->id, $current);
+        $outcome = PushOutcome::conflict($entry->id, $current, $conflict?->id);
         $this->record($entry, $outcome, $record->version);
 
         return $outcome;
+    }
+
+    /* A conflict record is a mark conflict (ADR 0002 amendment): any other table's conflict is
+       only the response, with the current row and no record. Written before the mutation row,
+       which references it. */
+    private function openConflict(PushHandler $handler, PushEntry $entry, Model $record, RecordHistory $history, array $sent): ?Conflict
+    {
+        return $handler instanceof MarkPushHandler
+            ? (new MarkConflicts($this->user))->raise($entry, $record, $history, $sent, auto: false)
+            : null;
     }
 
     /* The sync_changes row this entry just wrote, or null when it wrote none: a patch that

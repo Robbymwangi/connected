@@ -239,3 +239,45 @@ function markIdFor(string $assessmentId, string $studentId, string $criterionId)
         'criterion_id' => $criterionId,
     ]))->newUniqueId();
 }
+
+/* Mark-cell helpers shared by the POST /sync mark and conflict tests (3.2a, 3.2b). */
+function newCriterion(array $graph, string $name = 'Reasoning', int $max = 10): Criterion
+{
+    return Criterion::create([
+        'institution_id' => $graph['institution']->id,
+        'subject_id' => $graph['subject']->id,
+        'name' => $name,
+        'max_score' => $max,
+    ]);
+}
+
+function enrolledStudent(array $graph, string $name): Student
+{
+    $student = Student::create([
+        'institution_id' => $graph['institution']->id,
+        'name' => $name,
+        'gender' => 'F',
+        'dob' => '2015-03-01',
+    ]);
+    Enrolment::create([
+        'institution_id' => $graph['institution']->id,
+        'student_id' => $student->id,
+        'class_id' => $graph['class']->id,
+        'year' => $graph['assessment']->year,
+    ]);
+
+    return $student;
+}
+
+/** A create entry for a new cell, with the deterministic id a device would compute. */
+function markCreate(array $graph, Student $student, Criterion $criterion, array $cell = ['markKind' => 'score', 'score' => 7]): array
+{
+    $triple = ['assessmentId' => $graph['assessment']->id, 'studentId' => $student->id, 'criterionId' => $criterion->id];
+
+    return pushEntry('marks', markIdFor($triple['assessmentId'], $triple['studentId'], $triple['criterionId']), 0, [...$triple, ...$cell]);
+}
+
+function markUpdate(array $graph, array $fields, int $base = 1): array
+{
+    return pushEntry('marks', $graph['mark']->id, $base, $fields);
+}
