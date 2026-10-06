@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\SyncChange;
+use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -75,7 +76,7 @@ final class SyncLog
         $fields = [];
 
         foreach (array_diff($columns, $excluded) as $column) {
-            $fields[$column] = $model->getAttribute($column);
+            $fields[$column] = self::wireValue($model, $column);
         }
 
         if ($fields === []) {
@@ -89,5 +90,22 @@ final class SyncLog
             'version' => $model->version,
             'fields' => $fields,
         ]);
+    }
+
+    /* Log rows are never rewritten, so a value's format is frozen the moment
+       it is logged. A date-only column (a student's dob, an assessment's date)
+       is a calendar day, not an instant: logged as a timestamp it would carry
+       a midnight-UTC time that a client in another timezone can read as the
+       neighbouring day. It is logged as Y-m-d, matching the fixtures; every
+       other value keeps the model's own serialisation, ISO 8601 for instants. */
+    private static function wireValue(Model $model, string $column): mixed
+    {
+        $value = $model->getAttribute($column);
+
+        if ($value instanceof CarbonInterface && $model->hasCast($column, ['date'])) {
+            return $value->format('Y-m-d');
+        }
+
+        return $value;
     }
 }

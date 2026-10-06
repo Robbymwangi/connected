@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Concerns\Syncable;
+use App\Models\Student;
 use App\Models\Subject;
 use App\Models\SyncChange;
 use App\Models\User;
@@ -190,4 +191,20 @@ test('every table with a version column has a Syncable model, so none can skip t
         ->filter(fn ($table) => Schema::hasColumn($table, 'version'));
 
     expect($versionedTables->diff($syncableTables)->values()->all())->toBe([]);
+});
+
+test('date-only columns are logged as plain dates, datetimes as ISO timestamps', function () {
+    $g = buildGraph('School A', '-dates');
+
+    $student = Student::create([
+        'institution_id' => $g['institution']->id,
+        'name' => 'Dated Student',
+        'gender' => 'F',
+        'dob' => '2015-03-01',
+    ]);
+    $student->delete();
+
+    $rows = logRowsFor('students', $student->id);
+    expect($rows[0]->fields['dob'])->toBe('2015-03-01');
+    expect($rows[1]->fields['deleted_at'])->toMatch('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/');
 });
