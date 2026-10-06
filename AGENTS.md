@@ -93,6 +93,11 @@ These are load-bearing. Do not work around them.
 frontend, which runs natively on Node 22. `make check` is what must pass before a
 commit. The README has the platform notes; `CONTRIBUTING.md` has the workflow.
 
+If your change needs existing dev databases rebuilt (a non-additive migration, new seed
+data, a change to what the sync log must contain), bump `api/database/DEV_DATA_EPOCH` in
+the same merge request; `make up` then rebuilds each machine's database, so nobody has
+to be told. Say so in the merge request description.
+
 ## Conventions
 
 The workflow (branches, merge requests, reviews, ADRs) is in `CONTRIBUTING.md`. The
@@ -101,6 +106,11 @@ rules an agent applies while writing:
 - No em dashes in prose or comments; use semicolons, conjunctions, or colons.
 - Oxford comma.
 - "Merge request", not "pull request".
+- If a change leaves existing dev databases wrong (an edited or removed migration, new
+  seed data, a new rule about what the sync log must contain), bump
+  `api/database/DEV_DATA_EPOCH` in the same commit and say so in the merge request. Ask
+  yourself this before every commit that touches `api/database/`, the sync log, or
+  seeders; do not rely on telling anyone.
 - Branches: `feat/`, `fix/`, `docs/`, `chore/` followed by a short slug.
 - Squash merge into `main`. One commit per completed work item.
 - `make check` must pass before any piece of work is finished: the frontend type
