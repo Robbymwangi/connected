@@ -28,7 +28,7 @@ test('a row created through its model starts at version 1, and its first update 
 test('every versioned table defaults version to 1, so a raw insert cannot create a version 0 row', function () {
     $tables = collect(Schema::getTables())
         ->pluck('name')
-        ->reject(fn ($table) => $table === 'sync_changes') // its version records another row's version
+        ->reject(fn ($table) => in_array($table, ['sync_changes', 'sync_mutations'], true)) // their version records another row's version
         ->filter(fn ($table) => Schema::hasColumn($table, 'version'))
         ->values();
 
