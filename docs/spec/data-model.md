@@ -157,9 +157,23 @@ something #36 requires.
   written by `Syncable` on every create, update, and soft delete inside the
   writing transaction, serialised so `seq` order equals commit order (ADR 0010).
   Not itself synchronisable and never on either verb as a table. Indexed on
-  `(institution_id, seq)`. The one deliberate exception to client-generated
+  `(institution_id, seq)` for pull, and on `(institution_id, table, record_id,
+  version)` for the per-record history `POST /sync` rule 4 reads, so a stale-write
+  check does not scan the log as it grows. The one deliberate exception to client-generated
   UUID keys: the rule exists because records are created offline, and a log row
   is only ever written by the server, whose sequence is the cursor itself.
+- **`sync_mutations`**: the record of every decided push entry, backing rule 1 of
+  `POST /sync` (`docs/spec/sync-protocol.md`). `id` (the client's mutation id, the
+  primary key), `institution_id`, `user_id`, `table`, `record_id`, `status`
+  (`accepted`, `merged`, `conflict`, `invalid`, `forbidden`), `version` (the
+  record's version in the outcome, null for a rejection), `conflict_id` (marks
+  only), `payload_hash` (of table, record id, `baseVersion`, and `fields`),
+  `reason` (for `invalid`), `at` (the device's claim, informational),
+  `received_at` (server clock). Append-only: no version, no soft delete, not
+  synchronisable, never on either verb. The id is a client UUID like every key.
+  Indexed on `(table, record_id, version)`: the lookup that finds the mutation
+  which produced a given version of a record, for a conflict side's `editId`. It
+  is not the index rule 4's history read uses; that read is on `sync_changes`.
 
 ## Grains and identity
 
