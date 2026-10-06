@@ -119,11 +119,11 @@ make check     # typecheck, lint, Vitest, and Pest: what must pass before a comm
 make down      # stop the containers
 ```
 
-### After pulling
+### After pulling (This is the full set of steps to update fully from the main branch)
 
 ```sh
 git pull
-make setup     # the one command after a pull; may rebuild your dev database (see below)
+make setup     # safe to re-run; the one command after a pull
 make dev
 ```
 
