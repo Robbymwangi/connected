@@ -7,18 +7,27 @@
 SAIL := ./vendor/bin/sail
 COMPOSER_IMAGE := laravelsail/php84-composer:latest
 
+# The dev data epoch: line 1 of api/database/DEV_DATA_EPOCH is a number the repo
+# bumps whenever a change needs the dev database rebuilt (a non-additive migration,
+# new seed data, the shape of the sync log). Each machine records the epoch its
+# database was built at in an ignored local file; `make up` and `make setup` compare
+# the two and rebuild when they differ, so nobody has to be told. Line 2 is the reason.
+EPOCH_WANT := api/database/DEV_DATA_EPOCH
+EPOCH_HAVE := api/storage/app/.dev-data-epoch
+
 .DEFAULT_GOAL := help
 .PHONY: help setup up down restart logs api-shell api-test api-migrate api-fresh \
-        dev offline fe-check fe-test check reset
+        api-epoch dev offline fe-check fe-test check reset
 
 help: ## List the targets
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[1m%-13s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 # --- One-time setup ---------------------------------------------------------
 
-setup: api/vendor/bin/sail api/.env frontend/node_modules ## First run: install, start, key, migrate, seed if empty
+setup: api/vendor/bin/sail api/.env frontend/node_modules ## First run: install, start, key, epoch check, migrate, seed if empty
 	cd api && $(SAIL) up -d
 	@if grep -q '^APP_KEY=$$' api/.env; then cd api && $(SAIL) artisan key:generate --no-interaction; fi
+	@$(MAKE) --no-print-directory api-epoch
 	cd api && $(SAIL) artisan migrate --no-interaction
 	@cd api && output=$$($(SAIL) artisan tinker --execute='echo \App\Models\Institution::count();' 2>&1); \
 	status=$$?; \
@@ -53,8 +62,9 @@ frontend/node_modules: frontend/package-lock.json
 
 # --- API (Docker) ---------------------------------------------------------------
 
-up: ## Start the API, Postgres, and the queue worker
+up: ## Start the API, Postgres, and the queue worker (rebuilds the dev data if the epoch moved)
 	cd api && $(SAIL) up -d
+	@$(MAKE) --no-print-directory api-epoch
 
 down: ## Stop them (data kept)
 	cd api && $(SAIL) down
@@ -75,6 +85,21 @@ api-migrate: ## Run pending migrations
 
 api-fresh: ## Drop and rebuild the database with seeders
 	cd api && $(SAIL) artisan migrate:fresh --seed
+	@sed -n 1p $(EPOCH_WANT) > $(EPOCH_HAVE)
+
+api-epoch: ## Rebuild the dev database if the repo's data epoch moved past this machine's, or it has no schema
+	@want=$$(sed -n 1p $(EPOCH_WANT)); have=$$(cat $(EPOCH_HAVE) 2>/dev/null || echo none); \
+	if [ "$$want" = "$$have" ]; then \
+		if (cd api && $(SAIL) artisan migrate:status >/dev/null 2>&1); then exit 0; fi; \
+		echo "Dev database has no schema (volume removed?); the recorded epoch $$have cannot be trusted."; \
+	else \
+		echo "Dev data epoch $$have -> $$want: $$(sed -n 2p $(EPOCH_WANT))"; \
+	fi; \
+	if [ -n "$$SKIP_DEV_RESET" ]; then \
+		echo "SKIP_DEV_RESET is set; not rebuilding. Run 'make api-fresh' when ready."; exit 0; \
+	fi; \
+	echo "Rebuilding the dev database (migrate:fresh --seed); local dev data is replaced by the demo school."; \
+	(cd api && $(SAIL) artisan migrate:fresh --seed --no-interaction) && echo "$$want" > $(EPOCH_HAVE)
 
 # --- Frontend (native Node) ---------------------------------------------------
 
