@@ -26,7 +26,7 @@ return new class extends Migration
             $table->string('title');
             $table->text('body');
             $table->boolean('unread')->default(true);
-            $table->unsignedInteger('version')->default(0);
+            $table->unsignedInteger('version')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });

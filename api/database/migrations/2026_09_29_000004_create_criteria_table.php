@@ -23,7 +23,7 @@ return new class extends Migration
             $table->foreignUuid('subject_id')->constrained('subjects');
             $table->string('name');
             $table->unsignedInteger('max_score');
-            $table->unsignedInteger('version')->default(0);
+            $table->unsignedInteger('version')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });

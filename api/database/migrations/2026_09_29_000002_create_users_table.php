@@ -28,7 +28,7 @@ return new class extends Migration
             $table->string('password');
             $table->boolean('is_admin')->default(false);
             $table->timestamp('deactivated_at')->nullable();
-            $table->unsignedInteger('version')->default(0);
+            $table->unsignedInteger('version')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });

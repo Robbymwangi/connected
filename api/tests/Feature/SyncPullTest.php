@@ -58,8 +58,8 @@ test('pull, write on the server, pull again: exactly the changed rows and nothin
     expect($changes)->toHaveCount(3);
     expect(array_column($changes, 'seq'))->toBe(collect(array_column($changes, 'seq'))->sort()->values()->all());
     $byKey = keyed($changes);
-    expect($byKey['subjects/'.$g['subject']->id])->toMatchArray(['version' => 1, 'fields' => ['name' => 'Changed subject']]);
-    expect($byKey['marks/'.$g['mark']->id])->toMatchArray(['version' => 1, 'fields' => ['score' => 9]]);
+    expect($byKey['subjects/'.$g['subject']->id])->toMatchArray(['version' => 2, 'fields' => ['name' => 'Changed subject']]);
+    expect($byKey['marks/'.$g['mark']->id])->toMatchArray(['version' => 2, 'fields' => ['score' => 9]]);
     expect(array_keys($byKey['students/'.$g['student']->id]['fields']))->toBe(['deletedAt']);
     expect($byKey['students/'.$g['student']->id]['fields']['deletedAt'])->not->toBeNull();
     expect($second->json('cursor'))->toBe(max(array_column($changes, 'seq')));

@@ -40,7 +40,7 @@ return new class extends Migration
             $table->foreignUuid('created_by')->constrained('users');
             $table->timestamp('finalized_at')->nullable();
             $table->foreignUuid('finalized_by')->nullable()->constrained('users');
-            $table->unsignedInteger('version')->default(0);
+            $table->unsignedInteger('version')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });

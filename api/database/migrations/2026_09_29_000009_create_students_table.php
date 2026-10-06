@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('name');
             $table->enum('gender', ['F', 'M']);
             $table->date('dob');
-            $table->unsignedInteger('version')->default(0);
+            $table->unsignedInteger('version')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });

@@ -22,7 +22,7 @@ return new class extends Migration
             $table->foreignUuid('student_id')->constrained('students');
             $table->timestamp('generated_at');
             $table->string('s3_key');
-            $table->unsignedInteger('version')->default(0);
+            $table->unsignedInteger('version')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });
