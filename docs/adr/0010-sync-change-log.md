@@ -43,7 +43,7 @@ cursor to it, and 10 commits afterwards and is never returned.
    write leaves no log row and no gap that matters. (Amended 2026-10-06: where the
    lock is taken and its key; see Amendments.)
 
-4. `since=0` reads the live tables, one change per current row, in the same
+4. An omitted `since` reads the live tables (amended 2026-10-06, see Amendments), one change per current row, in the same
    `{seq, table, recordId, version, fields}` shape. The high-water mark is the
    highest `seq` at the start of the bootstrap, taken before the first table scan,
    so a change that lands during the scan is returned again by a later pull rather
@@ -119,3 +119,20 @@ touches a row another writer already holds. The fix is one lock order everywhere
 
 The remaining cost is as before: writers in one institution serialise, and a long
 transaction holds the lock until it ends.
+
+### 2026-10-06: an integer `since` is always a log pull
+
+Decision 4 said `since=0` starts a bootstrap. An institution with no log rows has a
+high-water mark of 0, so the final bootstrap page would return cursor 0 and the
+next request would bootstrap again, a full scan on every pull until someone wrote.
+Only an omitted `since` starts a bootstrap now. Any integer, zero included, is a
+log pull after that `seq`, and anything else is a continuation token or a 422.
+
+Pull stays institution-wide, with one exception: a user is sent only their own
+notifications, in a first pull and in the log. A notification is a personal feed,
+and the institution-wide reasoning in the spec is about grading data. The log pull
+filters notification changes by `record_id` against that user's notification ids,
+because an update's log row carries only the changed field, not `user_id`.
+
+A device that was seeded before the log existed has live rows with no creating
+entries in it. `migrate:fresh --seed` rebuilds it from the first write.

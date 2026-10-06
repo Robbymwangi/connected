@@ -71,13 +71,7 @@ final class SyncLog
      */
     public static function append(Model $model, array $columns): void
     {
-        $excluded = [...self::SERVER_OWNED, $model->getKeyName(), ...$model->getHidden()];
-
-        $fields = [];
-
-        foreach (array_diff($columns, $excluded) as $column) {
-            $fields[$column] = self::wireValue($model, $column);
-        }
+        $fields = self::fieldsFor($model, $columns);
 
         if ($fields === []) {
             return;
@@ -90,6 +84,27 @@ final class SyncLog
             'version' => $model->version,
             'fields' => $fields,
         ]);
+    }
+
+    /**
+     * The client-visible fields among the given columns, in the one shape both
+     * the log and a bootstrap row use: no key, no server-owned column, no
+     * hidden attribute, and values in their wire format.
+     *
+     * @param  array<int, string>  $columns
+     * @return array<string, mixed>
+     */
+    public static function fieldsFor(Model $model, array $columns): array
+    {
+        $excluded = [...self::SERVER_OWNED, $model->getKeyName(), ...$model->getHidden()];
+
+        $fields = [];
+
+        foreach (array_diff($columns, $excluded) as $column) {
+            $fields[$column] = self::wireValue($model, $column);
+        }
+
+        return $fields;
     }
 
     /* Log rows are never rewritten, so a value's format is frozen the moment
