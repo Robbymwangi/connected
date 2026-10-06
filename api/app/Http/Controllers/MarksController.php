@@ -7,10 +7,10 @@ use App\Models\Criterion;
 use App\Models\Enrolment;
 use App\Models\Mark;
 use App\Models\Student;
+use App\Support\SyncLog;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -94,7 +94,7 @@ class MarksController extends Controller
         ]);
 
         try {
-            DB::transaction(function () use ($mark, $isNewMark, $markAttributes): void {
+            SyncLog::transaction($institutionId, function () use ($mark, $isNewMark, $markAttributes): void {
                 $this->lockEditableAssessment($mark->assessment_id);
 
                 if (! $isNewMark) {
@@ -109,7 +109,7 @@ class MarksController extends Controller
                 throw $exception;
             }
 
-            $mark = DB::transaction(function () use ($mark, $markAttributes, $exception): Mark {
+            $mark = SyncLog::transaction($institutionId, function () use ($mark, $markAttributes, $exception): Mark {
                 $this->lockEditableAssessment($mark->assessment_id);
 
                 $existingMark = Mark::query()->find($mark->newUniqueId());
@@ -146,7 +146,7 @@ class MarksController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($mark, $attributes, $request): void {
+        SyncLog::transaction($mark->institution_id, function () use ($mark, $attributes, $request): void {
             $this->lockEditableAssessment($mark->assessment_id);
             $mark->refresh();
             $mark->update([
