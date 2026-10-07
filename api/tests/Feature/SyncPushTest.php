@@ -77,6 +77,28 @@ test('a valid assessment create is accepted at version 1 and logged and recorded
     expect($mutation->payload_hash)->toHaveLength(64);
 });
 
+test('an accepted create records the seq of the change it wrote', function () {
+    $g = buildGraph('School A', '-push-seq');
+    $recordId = Str::uuid7()->toString();
+    $entry = pushEntry('assessments', $recordId, 0, assessmentFields($g));
+
+    postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]));
+
+    $seq = DB::table('sync_changes')->where('table', 'assessments')->where('record_id', $recordId)->where('version', 1)->value('seq');
+    expect($seq)->not->toBeNull();
+    expect(DB::table('sync_mutations')->where('id', $entry['id'])->value('change_seq'))->toBe($seq);
+});
+
+test('a rejection or a conflict records no change seq, since it wrote nothing', function () {
+    $g = buildGraph('School A', '-push-noseq');
+    $rejected = pushEntry('widgets', Str::uuid7()->toString(), 0, ['name' => 'x']);
+    $stale = pushEntry('assessments', $g['assessment']->id, 0, ['name' => 'Another name']);
+
+    postedResults(pushEntries($this, tokenFor($g['teacher']), [$rejected, $stale]));
+
+    expect(DB::table('sync_mutations')->whereIn('id', [$rejected['id'], $stale['id']])->whereNotNull('change_seq')->count())->toBe(0);
+});
+
 test('an unknown table is invalid and recorded', function () {
     $g = buildGraph('School A', '-push-unknown');
     $entry = pushEntry('widgets', Str::uuid7()->toString(), 0, ['name' => 'x']);

@@ -36,7 +36,7 @@ function insertMutationRaw(array $attributes): void
 test('sync_mutations has its data-model columns and none of the synchronisable ones', function () {
     expect(Schema::hasColumns('sync_mutations', [
         'id', 'institution_id', 'user_id', 'table', 'record_id', 'status', 'version',
-        'conflict_id', 'payload_hash', 'reason', 'at', 'received_at',
+        'conflict_id', 'change_seq', 'payload_hash', 'reason', 'at', 'received_at',
     ]))->toBeTrue();
 
     foreach (['deleted_at', 'created_at', 'updated_at'] as $column) {
@@ -91,6 +91,22 @@ test('a conflict id is allowed only on a conflict', function () {
     insertMutationRaw(mutationAttributes($g, ['status' => 'conflict', 'conflict_id' => $conflict->id]));
 
     expect(DB::table('sync_mutations')->where('conflict_id', $conflict->id)->count())->toBe(1);
+});
+
+test('change_seq names at most one mutation, only an accepted or merged one, and only a real change', function () {
+    $g = buildGraph('School A', '-mut-seq');
+    $seq = DB::table('sync_changes')->where('record_id', $g['mark']->id)->value('seq');
+
+    expect(fn () => insertMutationRaw(mutationAttributes($g, ['status' => 'conflict', 'change_seq' => $seq])))
+        ->toThrow(QueryException::class);
+    expect(fn () => insertMutationRaw(mutationAttributes($g, ['change_seq' => 999999999])))
+        ->toThrow(QueryException::class);
+
+    insertMutationRaw(mutationAttributes($g, ['status' => 'merged', 'change_seq' => $seq]));
+
+    expect(fn () => insertMutationRaw(mutationAttributes($g, ['change_seq' => $seq])))
+        ->toThrow(QueryException::class);
+    expect(DB::table('sync_mutations')->where('change_seq', $seq)->count())->toBe(1);
 });
 
 test('received_at is stamped by the server and cannot be filled', function () {

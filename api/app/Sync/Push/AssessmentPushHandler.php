@@ -32,6 +32,20 @@ final class AssessmentPushHandler extends PushHandler
         ];
     }
 
+    /* An offered class and subject is one fact: a merged pair neither device chose should
+       surface as a conflict, not be assembled from two edits. */
+    public function mergeGroups(): array
+    {
+        return [['classId', 'subjectId']];
+    }
+
+    public function incoming(PushEntry $entry, Model $record): array
+    {
+        $this->validateTypes($entry->fields);
+
+        return $entry->fields;
+    }
+
     public function refused(): array
     {
         return [

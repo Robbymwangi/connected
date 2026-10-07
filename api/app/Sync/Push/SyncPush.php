@@ -2,12 +2,15 @@
 
 namespace App\Sync\Push;
 
+use App\Models\Conflict;
+use App\Models\SyncChange;
 use App\Models\SyncMutation;
 use App\Models\User;
 use App\Support\CurrentInstitution;
 use App\Support\SyncLog;
 use App\Sync\SyncPull;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Validation\ValidationException;
 use LogicException;
@@ -19,8 +22,9 @@ use LogicException;
    The order, per the amended spec: the envelope (no database); rule 1, replay;
    the record, found scoped to the institution and soft-deleted rows included, and
    locked; authorization; the table's own checks; then the version rules (a base
-   ahead of the server is invalid; behind is a conflict; equal applies; base 0 on
-   an unknown id creates); and last the validation of the row that would result.
+   ahead of the server is invalid; behind is rule 4, decided by StaleBase from what moved
+   on the record since; equal applies; base 0 on an unknown id creates); and last the
+   validation of the row that would result.
    An unauthorized stale edit is therefore never answered `conflict`, which would
    leave it retained in the outbox forever.
 
@@ -166,25 +170,143 @@ final class SyncPush
                 throw SyncRejection::invalid('baseVersion is ahead of the server');
             }
 
-            // Rule 4 (merge or conflict, from the change log) is 3.2b; until then any stale base conflicts.
             if ($entry->baseVersion < $record->version) {
-                $outcome = PushOutcome::conflict($entry->id, SyncPull::row($record));
-                $this->record($entry, $outcome, $record->version);
-
-                return $outcome;
+                return $this->stale($entry, $handler, $record);
             }
         }
 
         $model = $handler->resulting($entry, $record);
 
+        $before = $record?->version ?? 0;
         $creating = $record === null;
         $model->save();
         $creating = false;
 
         $outcome = PushOutcome::accepted($entry->id, $model->version);
-        $this->record($entry, $outcome, $model->version);
+        $this->record($entry, $outcome, $model->version, $this->changeSeqOf($model, $before));
 
         return $outcome;
+    }
+
+    /* Rule 4: an entry whose base is behind the record's. What it touches is compared with
+       what moved on the record since, from the change log (StaleBase decides; this class
+       only gathers its inputs and acts on the verdict).
+
+       Order matters. The record is snapshotted first, because resulting() fills the locked
+       record in place and a conflict must show the row as it stood. The entry's own values
+       are validated before any branch, so a stale entry holding an invalid value is invalid,
+       never stored as a conflict side. resulting() runs only on a merge. */
+    private function stale(PushEntry $entry, PushHandler $handler, Model $record): PushOutcome
+    {
+        $current = SyncPull::row($record);
+        $history = RecordHistory::above($record, $entry->baseVersion);
+        $sent = $handler->incoming($entry, $record);
+
+        $currentValues = [];
+
+        foreach (array_keys($sent) as $wire) {
+            $currentValues[$wire] = $handler->currentValue($record, $wire);
+        }
+
+        $verdict = StaleBase::decide(
+            sent: $sent,
+            base: $entry->baseVersion,
+            current: $record->version,
+            history: $history,
+            columns: $handler->columns(),
+            groups: $handler->mergeGroups(),
+            identity: $handler->identity(),
+            currentValues: $currentValues,
+            trashed: $record->trashed(),
+            entryDeletes: array_key_exists('deletedAt', $entry->fields) && $entry->fields['deletedAt'] !== null,
+        );
+
+        return match ($verdict) {
+            StaleVerdict::Merged => $this->merge($entry, $handler, $record),
+            StaleVerdict::Unchanged => $this->unchanged($entry, $record),
+            StaleVerdict::UnchangedAfterCollision => $this->collided($entry, $handler, $record, $history, $sent),
+            StaleVerdict::ConflictOverlap, StaleVerdict::ConflictIncomplete => $this->conflict($entry, $record, $current, $this->openConflict($handler, $entry, $record, $history, $sent)),
+            // Nothing live remains to choose between, and no pushable table can be deleted from a device, so no record.
+            StaleVerdict::ConflictDeleted => $this->conflict($entry, $record, $current),
+            StaleVerdict::TrashedBase => throw SyncRejection::invalid('the record has been deleted'),
+        };
+    }
+
+    /* Disjoint fields: applied through the model like any write, so the version bumps, the
+       log row is appended, and the version-guarded UPDATE runs. A merge always has at least
+       one differing field, so it always writes a log row. */
+    private function merge(PushEntry $entry, PushHandler $handler, Model $record): PushOutcome
+    {
+        $before = $record->version;
+        $model = $handler->resulting($entry, $record);
+        $model->save();
+
+        $outcome = PushOutcome::merged($entry->id, $model->version);
+        $this->record($entry, $outcome, $model->version, $this->changeSeqOf($model, $before));
+
+        return $outcome;
+    }
+
+    /* Everything it touches already holds the value it sent: nothing to write. No version, no
+       log row, last_edited_by unchanged; the outcome is still recorded, so a resend replays. */
+    private function unchanged(PushEntry $entry, Model $record): PushOutcome
+    {
+        $outcome = PushOutcome::accepted($entry->id, $record->version);
+        $this->record($entry, $outcome, $record->version);
+
+        return $outcome;
+    }
+
+    /* Two edits that agree. The cell is untouched and the outcome is the plain no-op, because
+       the device's value is the one that stands; for a mark the collision is also written down as
+       an already-resolved conflict, so the second teacher can see it happened and who was first.
+       The conflict is written before the mutation row, which does not reference it. */
+    private function collided(PushEntry $entry, PushHandler $handler, Model $record, RecordHistory $history, array $sent): PushOutcome
+    {
+        if ($handler instanceof MarkPushHandler) {
+            (new MarkConflicts($this->user))->raise($entry, $record, $history, $sent, auto: true);
+        }
+
+        return $this->unchanged($entry, $record);
+    }
+
+    /**
+     * @param  array<string, mixed>  $current  the record as it stood before anything filled it
+     */
+    private function conflict(PushEntry $entry, Model $record, array $current, ?Conflict $conflict = null): PushOutcome
+    {
+        $outcome = PushOutcome::conflict($entry->id, $current, $conflict?->id);
+        $this->record($entry, $outcome, $record->version);
+
+        return $outcome;
+    }
+
+    /* A conflict record is a mark conflict (ADR 0002 amendment): any other table's conflict is
+       only the response, with the current row and no record. Written before the mutation row,
+       which references it. */
+    private function openConflict(PushHandler $handler, PushEntry $entry, Model $record, RecordHistory $history, array $sent): ?Conflict
+    {
+        return $handler instanceof MarkPushHandler
+            ? (new MarkConflicts($this->user))->raise($entry, $record, $history, $sent, auto: false)
+            : null;
+    }
+
+    /* The sync_changes row this entry just wrote, or null when it wrote none: a patch that
+       changes nothing leaves the version where it was and appends nothing. Read under the
+       lock, so the row at this version is the one this save produced. */
+    private function changeSeqOf(Model $model, int $versionBefore): ?int
+    {
+        if ($model->version === $versionBefore) {
+            return null;
+        }
+
+        $seq = SyncChange::query()
+            ->where('table', $model->getTable())
+            ->where('record_id', $model->getKey())
+            ->where('version', $model->version)
+            ->value('seq');
+
+        return $seq === null ? null : (int) $seq;
     }
 
     /* A known mutation id: the stored outcome, read back. The lookup is not scoped by
@@ -213,7 +335,7 @@ final class SyncPush
         return PushOutcome::fromStored($known, $current);
     }
 
-    private function record(PushEntry $entry, PushOutcome $outcome, ?int $version): void
+    private function record(PushEntry $entry, PushOutcome $outcome, ?int $version, ?int $changeSeq = null): void
     {
         SyncMutation::create([
             'id' => $entry->id,
@@ -223,6 +345,8 @@ final class SyncPush
             'record_id' => $entry->recordId,
             'status' => $outcome->status,
             'version' => $version,
+            'conflict_id' => $outcome->conflictId,
+            'change_seq' => $changeSeq,
             'payload_hash' => $entry->payloadHash,
             'reason' => $outcome->reason,
             'at' => $entry->at,

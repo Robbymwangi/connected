@@ -38,6 +38,35 @@ final class MarkPushHandler extends PushHandler
         return [...self::IDENTITY, 'markKind' => 'mark_kind', 'score' => 'score'];
     }
 
+    /* The cell is one fact: a score edit overlaps a change of kind, and the reverse. */
+    public function mergeGroups(): array
+    {
+        return [['markKind', 'score']];
+    }
+
+    public function identity(): array
+    {
+        return array_keys(self::IDENTITY);
+    }
+
+    /* The cell the entry itself says. A device sends changed fields only, so a score edit
+       is {score: 14} with no markKind; the kind it means is score, not whatever the cell
+       holds now, or a cell since made absent would answer invalid instead of raising the
+       genuine conflict. Validated through cell(), without filling the record. */
+    public function incoming(PushEntry $entry, Model $record): array
+    {
+        $fields = $entry->fields;
+
+        $criterion = Criterion::withTrashed()->find($record->criterion_id)
+            ?? throw SyncRejection::invalid('criterionId does not resolve');
+
+        $implied = $fields['markKind'] ?? (is_int($fields['score'] ?? null) ? 'score' : $record->mark_kind);
+
+        [$kind, $score] = $this->cell(['markKind' => $implied] + $fields, $record, $criterion);
+
+        return ['markKind' => $kind, 'score' => $score];
+    }
+
     public function refused(): array
     {
         return ['deletedAt' => 'a mark cannot be deleted; clear it with markKind empty'];

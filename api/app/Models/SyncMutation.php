@@ -15,7 +15,7 @@ use LogicException;
    with every row and never generated, so there is no HasUuids. received_at is
    deliberately not fillable: it is the server's audit stamp, filled by the
    column default, never chosen by a caller. */
-#[Fillable(['id', 'institution_id', 'user_id', 'table', 'record_id', 'status', 'version', 'conflict_id', 'payload_hash', 'reason', 'at'])]
+#[Fillable(['id', 'institution_id', 'user_id', 'table', 'record_id', 'status', 'version', 'conflict_id', 'change_seq', 'payload_hash', 'reason', 'at'])]
 class SyncMutation extends Model
 {
     use BelongsToInstitution;
@@ -36,6 +36,7 @@ class SyncMutation extends Model
     {
         return [
             'version' => 'integer',
+            'change_seq' => 'integer',
             'received_at' => 'datetime',
         ];
     }
