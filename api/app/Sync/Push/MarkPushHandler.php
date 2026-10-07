@@ -175,8 +175,7 @@ final class MarkPushHandler extends PushHandler
     /* A patch is checked against the cell it patches, not on its own: {score: 14}
        means nothing without the current markKind and the criterion's maximum. Moving
        to absent or empty clears the score, as the grid does. last_edited_by is the
-       token's user, never the payload's; it is the one field a patch sets that the
-       device did not send. */
+       token's user, never the payload's, and is set only when a value changes. */
     private function revision(PushEntry $entry, Mark $record): Mark
     {
         if ($record->trashed()) {
@@ -190,7 +189,14 @@ final class MarkPushHandler extends PushHandler
 
         [$kind, $score] = $this->cell($entry->fields, $record, $criterion);
 
-        $record->fill(['mark_kind' => $kind, 'score' => $score, 'last_edited_by' => $this->user->id]);
+        $record->fill(['mark_kind' => $kind, 'score' => $score]);
+
+        // Credit moves only with a value: a repeat of what the cell already holds, from anyone,
+        // changes nothing and is the same no-op rule 4 gives it at a stale base. The user is
+        // the token's, never the payload's.
+        if ($record->isDirty(['mark_kind', 'score'])) {
+            $record->last_edited_by = $this->user->id;
+        }
 
         return $record;
     }

@@ -296,9 +296,8 @@ going would hide it. (Proposed.)
 
 **Decided while building POST /sync (3.2a).**
 - A patch that changes nothing, at the current version, is `accepted` at the
-  unchanged version and logs nothing; the version moves only when a value does.
-  (A different user sending the same values changes `last_edited_by` on a mark, and
-  that bumps it.)
+  unchanged version and logs nothing; the version moves only when a value does,
+  from any user (see "Decided while building the rest of POST /sync (3.2c)" below).
 - An edit at the current version against a soft-deleted row is `invalid`, not
   applied to the deleted row. A stale edit against one is rule 4's delete case.
 - A reference that does not resolve inside the institution (an assessment, student,
@@ -362,17 +361,22 @@ going would hide it. (Proposed.)
   a resolution treats a second open record is 3.2c's open question. The `sync-conflict`
   notification belongs to 3.2c with `edit-blocked`.
 
+**Decided while building the rest of POST /sync (3.2c).**
+- Credit moves only with a value. A mark patch that repeats the cell's values, from any user, at
+  base version not ahead of the server, changes nothing: no version, no log row,
+  `last_edited_by` kept. A base ahead of the server stays `invalid`. At the current
+  version (rule 2) that is now the same no-op rule 4 gives it at a stale base, so the outcome no
+  longer depends on `baseVersion`. A patch that changes the value takes the credit, as before.
+  This reverses the 3.2a behaviour, where a repeat from a different user bumped the version.
+- An entry whose parent's create was rejected needs no rule of its own. A mark create whose
+  assessment did not resolve is `invalid` ("assessmentId does not resolve"), recorded, and the
+  batch goes on. `invalid` is never retried, so recovery is a new mutation with a new id once
+  the parent exists; when a device stops sending an entry whose parent failed is the device's
+  decision (3.4).
+
 **Open, to be settled in 3.2c.**
-- Same values from a different user. At an equal base (rule 2) a mark patch that repeats the
-  cell's values still changes `last_edited_by`, so it bumps the version and takes the credit;
-  at a stale base (rule 4) the same patch is the no-op and withholds both. The outcome
-  therefore depends on `baseVersion`, which can create avoidable stale conflicts. The
-  recommendation is for rule 2 to be a no-op too: set `last_edited_by` only when the cell's
-  own value changes. It is not done in 3.2b because it changes 3.2a's behaviour and the tests
-  built on it.
 - Whether a resolution's mark write checks the mark's version, since someone
   may have edited it after the conflict opened.
-- An entry whose parent's create was rejected.
 - An outbox belongs to one user; a second sign-in on a device must not push
   the first user's pending entries as itself (3.4).
 - Whether a moderator who is a party to a conflict may resolve it outright;

@@ -308,15 +308,55 @@ test('a resent mark create is replayed, and nothing is written twice', function 
 test('a version that only moved who is credited does not block a stale mark edit', function () {
     $g = buildGraph('School A', '-mk-who-moved');
     $colleague = makeColleague($g, 'who-moved-mk@example.com');
-    $resend = markUpdate($g, ['score' => 8]);
+    // Move only the credit, out of band and through the model, so the log holds a write that touched no cell value.
+    $g['mark']->update(['last_edited_by' => $colleague->id]);
     $stale = markUpdate($g, ['score' => 9]);
 
-    $first = postedResults(pushEntries($this, tokenFor($colleague), [$resend]))[0];
-    expect($first)->toBe(['id' => $resend['id'], 'status' => 'accepted', 'version' => 2]);
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$stale]))[0];
 
-    app('auth')->forgetGuards();
-    $second = postedResults(pushEntries($this, tokenFor($g['teacher']), [$stale]))[0];
-
-    expect($second)->toBe(['id' => $stale['id'], 'status' => 'merged', 'version' => 3]);
+    expect($result)->toBe(['id' => $stale['id'], 'status' => 'merged', 'version' => 3]);
     expect(DB::table('marks')->where('id', $g['mark']->id)->first())->toMatchArray(['score' => 9, 'last_edited_by' => $g['teacher']->id, 'version' => 3]);
+});
+
+test('a different user repeating the cell\'s values at the current version is accepted at the unchanged version, keeps the credit, and logs nothing', function () {
+    $g = buildGraph('School A', '-mk-repeat');
+    $colleague = makeColleague($g, 'repeat-mk@example.com');
+    $logRows = DB::table('sync_changes')->where('record_id', $g['mark']->id)->count();
+    $entry = markUpdate($g, ['score' => 8]);
+
+    $result = postedResults(pushEntries($this, tokenFor($colleague), [$entry]))[0];
+
+    expect($result)->toBe(['id' => $entry['id'], 'status' => 'accepted', 'version' => 1]);
+    expect(DB::table('marks')->where('id', $g['mark']->id)->first())->toMatchArray(['score' => 8, 'last_edited_by' => $g['teacher']->id, 'version' => 1]);
+    expect(DB::table('sync_changes')->where('record_id', $g['mark']->id)->count())->toBe($logRows);
+    expect(DB::table('sync_mutations')->where('id', $entry['id'])->first())->toMatchArray(['status' => 'accepted', 'version' => 1, 'change_seq' => null]);
+});
+
+test('a different user changing the value at the current version takes the credit', function () {
+    $g = buildGraph('School A', '-mk-changed');
+    $colleague = makeColleague($g, 'changed-mk@example.com');
+    $entry = markUpdate($g, ['score' => 9]);
+
+    $result = postedResults(pushEntries($this, tokenFor($colleague), [$entry]))[0];
+
+    expect($result)->toBe(['id' => $entry['id'], 'status' => 'accepted', 'version' => 2]);
+    expect(DB::table('marks')->where('id', $g['mark']->id)->first())->toMatchArray(['score' => 9, 'last_edited_by' => $colleague->id, 'version' => 2]);
+});
+
+test('a mark create whose assessment create was rejected earlier in the batch is invalid, recorded, and the batch goes on', function () {
+    $g = buildGraph('School A', '-mk-parent-rejected');
+    $parentId = (string) Str::uuid7();
+    $parent = pushEntry('assessments', $parentId, 0, assessmentFields($g, ['term' => 9]));
+    $child = pushEntry('marks', markIdFor($parentId, $g['student']->id, $g['criterion']->id), 0, [
+        'assessmentId' => $parentId, 'studentId' => $g['student']->id, 'criterionId' => $g['criterion']->id,
+        'markKind' => 'score', 'score' => 5,
+    ]);
+    $unrelated = pushEntry('assessments', (string) Str::uuid7(), 0, assessmentFields($g, ['name' => 'Unrelated']));
+
+    $results = postedResults(pushEntries($this, tokenFor($g['teacher']), [$parent, $child, $unrelated]));
+
+    expect(array_column($results, 'status'))->toBe(['invalid', 'invalid', 'accepted']);
+    expect($results[0]['reason'])->toBe('term must be 1, 2, or 3');
+    expect($results[1]['reason'])->toBe('assessmentId does not resolve');
+    expect(DB::table('sync_mutations')->whereIn('id', array_column([$parent, $child, $unrelated], 'id'))->count())->toBe(3);
 });
