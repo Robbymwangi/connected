@@ -100,8 +100,11 @@ something #36 requires.
 - **`assessments`**: `id`, `institution_id`, `class_id`, `subject_id`, `name`,
   `term`, `year`, `date`, `status`, `created_by`, `finalized_at`,
   `finalized_by`. One row is one sitting of one subject in one stream, per
-  your answer; `status` is `scheduled → in-progress → complete → finalized →
-  reports-generated`, forward-only except through `unlock_notes`.
+  your answer; `status` stores `scheduled`, `finalized`, and
+  `reports-generated`. The lifecycle `scheduled → in-progress → complete → finalized →
+  reports-generated` includes two derived states, `in-progress` and `complete`, computed from the
+  grid's completeness each time it is read and never stored (`docs/spec/workflow.md`); it is
+  forward-only except through `unlock_notes`.
   `created_by` is new against the brief: #36's Option B scopes lifecycle
   actions to the creator or an assigned teacher, and there was nothing to
   check the creator against.
@@ -112,12 +115,19 @@ something #36 requires.
   `(assessment_id, student_id, criterion_id)` under a fixed project namespace,
   computed identically on the device and the server (see Grains and identity),
   so the primary key itself is the uniqueness constraint on that triple.
-- **`conflicts`**: `id`, `institution_id`, `mark_id`, `base_version`, `side_a`,
+- **`conflicts`**: `id`, `institution_id`, `mark_id`, `base_version`, `mark_version` (the mark's
+  version when the conflict was raised, which is the version side A produced; recorded on the
+  conflict itself because a follow-up conflict, raised by a resolution command, has no mutation
+  of its own to read it from), `side_a`,
   `side_b` (each `{editId, userId, who, markKind, score, at, receivedAt}`; on side A `who`, `at`,
   and `receivedAt` may be null, on side B only `at` may be; `base_version` is the version side B
   was edited against), `proposals`
-  (ordered array of `{byId, choice, note, at}`), `referral` (nullable),
-  `resolution` (nullable `{kind, ...}`), `resolved_at`. The nested fields are
+  (ordered array of `{byId, by, choice, note, at, receivedAt}`), `referral` (nullable:
+  `{reason: "party", byId, by, at, receivedAt}` or `{reason: "rounds", at, receivedAt}`),
+  `resolution` (nullable `{kind, ...}` per ADR 0002; a human resolution (`self`, `agreed`,
+  `moderated`) also carries the display names and `at`, and an `auto` resolution is exactly
+  `{kind: "auto"}`),
+  `resolved_at` (the server clock when it was settled). The nested fields are
   stored as JSON columns rather than normalised into child tables, matching
   the shapes ADR 0002 and `fixtures/conflicts.ts` already define; a conflict
   is read and written as one document, never queried by the contents of one
@@ -170,7 +180,8 @@ something #36 requires.
   `POST /sync` (`docs/spec/sync-protocol.md`). `id` (the client's mutation id, the
   primary key), `institution_id`, `user_id`, `table`, `record_id`, `status`
   (`accepted`, `merged`, `conflict`, `invalid`, `forbidden`), `version` (the
-  record's version in the outcome, null for a rejection), `conflict_id` (marks
+  record's version in the outcome; null only for `invalid` and `forbidden`, and for a `conflict` the
+  record's version at the moment it was decided), `conflict_id` (marks
   only), `change_seq` (the `sync_changes` row the entry wrote: unique, only on an accepted or
   merged outcome, null when the entry wrote nothing; how a conflict finds the write that
   produced a record's current version), `payload_hash` (of table, record id, `baseVersion`, and `fields`),

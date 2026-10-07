@@ -269,9 +269,11 @@ dependents.
   the batch loop, rules 1 to 3 and 6, field mapping, the `sync` token ability on both
   verbs, mark and assessment create and update; a stale base is a `conflict` until 3.2b.
   3.2b: rule 4 (merge, conflict, delete case), the conflicts record with both sides,
-  the no-op. 3.2c: notification `unread`, conflict actions as commands, finalize
-  through sync, the `edit-blocked` notification. Then a cleanup merge request removes
-  the REST mark and assessment writes (2.2).
+  the no-op. 3.2c, in seven merge requests: credit moves only with a value; notification
+  `unread`; finalize through sync; the `edit-blocked` and `sync-conflict` notifications;
+  the docs for the conflict commands; then the commands themselves, propose and refer, then
+  accept and resolve. Then a cleanup merge request removes the REST mark and assessment
+  writes (2.2).
 
 **3.3 Local store**
 IndexedDB schema over Dexie, replacing the frontend fixtures. Dexie is a wrapper

@@ -255,37 +255,22 @@ happens inside its transaction, after the lock.
    decided before rules 2 to 4, except validation of the resulting row (see
    the order above).
 
-Conflict actions, propose, accept, refer, resolve, are ordinary mutations
-with `table: "conflicts"` and `recordId` the conflict's own id: `fields`
-is `{proposals: [...]}` for a proposal, `{referral: {...}}` for a referral,
-`{resolution: {...}, resolvedAt}` for an acceptance or a resolution. Each is
-validated against the same policy `lib/conflicts.ts` encodes on the device
-(the proposal bound of one round, who may act on a self- versus a
-cross-teacher conflict, who may moderate which subject), so the rule can't
-drift between the two. A resolution writes the mark and increments its
-version in the same transaction as the conflict's own update, and both
-changes are logged, so a pull brings the settled mark and its history
-together rather than one ahead of the other.
+Conflict actions (propose, accept, refer, resolve) are commands on `table: "conflicts"`, specified in
+"Conflict commands" below. They are never field patches.
 
 Unlocking a finalized assessment is not a mutation through this endpoint.
 It's an ADMIN action (#36), almost certainly made online, that writes
 `unlock_notes` and the assessment's status directly; `unlock_notes` isn't
 synchronisable (#34) and was never meant to travel through the outbox.
 
-Conflict actions are commands, not field patches. A proposal sends only its
-own new proposal, never a `proposals` array; an acceptance, a referral, and a
-resolution each name what they act on. Each is validated against the
-conflict's current stored state and answered by rule 2 only (against the
-conflict's own version), never merged by rule 4, so two concurrent proposals
-cannot overwrite each other's history.
-
 **Field names on the wire.** Names are camelCase on the wire and each
 pushable table has an explicit wire-to-column allowlist; names are never
-converted generically, and the server-owned check runs on the wire name. Two
-names look server-owned but are informational, like `at`: `resolvedAt` on a
-resolution mutation is kept as `resolution.at`, separate from the server-set
-`resolved_at` column, and `finalizedAt` on a finalize mutation is ignored, the
-server stamping `finalized_at` from its own clock.
+converted generically, and the server-owned check runs on the wire name. A
+finalize mutation's `finalizedAt` is informational, like `at`, and is ignored,
+the server stamping `finalized_at` from its own clock. A conflict command has
+no separate time field either: the device's claimed time is the entry's own
+`at`, kept as the `at` of the proposal, the referral, or the resolution, so the
+`resolvedAt` a device pulls is only ever the server's `resolved_at`.
 
 **Unexpected errors** (a defect, not a rule outcome) abort the batch with a
 5xx. Earlier entries are committed and recorded, so the device resends the
@@ -374,13 +359,121 @@ going would hide it. (Proposed.)
   the parent exists; when a device stops sending an entry whose parent failed is the device's
   decision (3.4).
 
-**Open, to be settled in 3.2c.**
-- Whether a resolution's mark write checks the mark's version, since someone
-  may have edited it after the conflict opened.
-- An outbox belongs to one user; a second sign-in on a device must not push
-  the first user's pending entries as itself (3.4).
-- Whether a moderator who is a party to a conflict may resolve it outright;
-  the client allows it, which sits uneasily with ADR 0002 rule 3.
+- Notifications over sync. A user pushes `unread` for their own notifications only: the lookup is scoped
+  to the user on every path (find, lock, a replay's `current`), so another user's or institution's
+  notification is indistinguishable from an unknown id. A device never creates one; any id the user cannot
+  see at base 0 is `invalid` ("notifications are written by the server"). `unread` must be a true boolean.
+  Two devices of one user marking it read is the no-op; one reading while another un-reads it is a conflict
+  with the current row and no record.
+- Finalize over sync is its own entry: `status: "finalized"` and `finalizedBy` (which must be the token's
+  user), with `finalizedAt` ignored. It runs the online finalize's checks through one shared rule
+  (authorize, require the stored status `scheduled`, since `in-progress` and `complete` are derived and never stored, lock the marks, refuse while a mark conflict is open). Mixed with
+  another field, missing a half, a status other than `finalized`, or on a create is `invalid`. Two devices
+  finalizing is the no-op, with the credit kept by the first; an already finalized or reports-generated
+  assessment is the no-op too; a finalize queued before an unlock is a conflict. Unlock stays an online
+  administrator action and is never a mutation.
+- Server-written notifications. A mark edit refused because its assessment is finalized writes
+  `edit-blocked` to the rejected teacher and each teacher assigned to the assessment's class and subject, in
+  the fresh transaction that records the rejection, since the entry's own rolled back; a resend writes
+  nothing. A raised mark conflict writes `sync-conflict` to its parties, once for a self-conflict; an auto
+  conflict and the delete case notify nobody. A recipient gets one unread notice per kind and assessment
+  (`notifications.assessment_id`), so a grid edited after finalize writes one notice, not one per cell.
+- A moderator who is a party to a conflict acts only as a party (ADR 0002 amendment). A resolution against a
+  mark that has moved since the conflict opened is a stale write, and a follow-up conflict records what it
+  could not apply.
+
+**Open, for the client (3.4).**
+- An outbox belongs to one user; a second sign-in on a device must not push the first user's pending
+  entries as itself.
+- An outbox keeps a finalize as its own entry at the end of the queue. Coalescing (ADR 0001 rule 4) would
+  fold it into an earlier entry for the same assessment, and the marks queued after it would then be
+  refused as `edit-blocked`. The server refuses a finalize mixed with other fields, so the mistake
+  surfaces instead of hiding.
+
+## Conflict commands
+
+A conflict is settled by four commands on `table: "conflicts"`, with `recordId` the conflict's own id and
+`baseVersion` the conflict's own version. They are commands, not field patches: each names what it acts on,
+is validated against the conflict's current stored state, and is answered by rule 2 only, never merged by
+rule 4, so two concurrent commands cannot overwrite each other's history. An entry carries exactly one of
+these in `fields`:
+
+```json
+{ "proposal":   { "byId": "<me>", "choice": { "kind": "side", "editId": "<a side's editId>" }, "note": "..." } }
+{ "proposal":   { "byId": "<me>", "choice": { "kind": "corrected", "mark": { "kind": "score", "value": 9 } }, "note": "..." } }
+{ "referral":   { "byId": "<me>" } }
+{ "resolution": { "kind": "agreed", "proposedById": "<the pending proposer>", "acceptedById": "<me>" } }
+{ "resolution": { "kind": "self", "byId": "<me>", "choice": { "...": "as a proposal's" } } }
+{ "resolution": { "kind": "moderated", "byId": "<me>", "choice": { "...": "as a proposal's" }, "note": "..." } }
+```
+
+A corrected `mark` is `{kind: "score", value}` or `{kind: "absent"}`, never `empty`. The wire carries ids only, under
+the client's `*Id` names, and the server fills the display names. The device's claimed time is the entry's `at`;
+no nested field carries a time, and a payload that includes `receivedAt` anywhere is `invalid`. An acceptance
+names only the proposer; the server copies the choice and the note from the stored pending proposal, so it never
+compares what a device relays against what it holds.
+
+What is stored. A proposal is `{byId, by, choice, note, at, receivedAt}`. A referral is
+`{reason: "party", byId, by, at, receivedAt}`, or `{reason: "rounds", at, receivedAt}`; the reason is computed from
+the stored proposal count (two or more means `rounds`), never taken from the device. A resolution is the shape
+ADR 0002 defines for its kind, with the display names filled and the entry's `at`; `resolved_at` is the server clock.
+`choice` is always rebuilt from validated pieces, never passed through as sent, and `receivedAt` is the server
+clock when the command is processed.
+
+**Who may do what.** A party is a user named on either side. A moderator is a user with a live
+`subject_moderations` row for the assessment's subject. A moderator who is also a party acts only as a party.
+
+| Actor and state | propose | accept | refer | resolve |
+|---|---|---|---|---|
+| Neither a party nor a moderator | forbidden | forbidden | forbidden | forbidden |
+| Moderator, not a party, on a cross-teacher conflict | forbidden | forbidden | forbidden | `moderated`, at any time, referred or not; a note is required |
+| Moderator, not a party, on someone else's self-conflict | forbidden | forbidden | forbidden | forbidden |
+| The author of a self-conflict | invalid | invalid | invalid | `self`; no note, and a `note` key is invalid |
+| Cross-teacher party, the conflict is referred | invalid | invalid | invalid | forbidden |
+| Cross-teacher party, nothing pending | allowed | invalid | allowed | forbidden |
+| Cross-teacher party, their own first proposal pending | invalid | invalid | allowed | forbidden |
+| Cross-teacher party, their own counter pending (two proposals exist) | invalid | invalid | invalid | forbidden |
+| Cross-teacher party, the other's proposal pending | allowed while fewer than two proposals exist, else invalid | allowed | allowed | forbidden |
+| Anyone, the conflict already resolved (auto included) | invalid | invalid | invalid | invalid |
+
+After a proposal and a counter, only the original proposer may accept or refer (ADR 0002 rule 4), so the author of
+the counter waits; earlier, either party may refer instead of proposing or responding. A referral records the
+reason and nothing else changes; a referred conflict accepts no further proposal or
+referral. A resolution whose kind does not fit the conflict (`self` on a cross-teacher conflict, `moderated` on a
+self-conflict) is `invalid`, and `auto` is never sent: only the server writes it.
+
+**Validation.** A side choice must name one of the conflict's two `editId`s. A corrected score must be an integer
+from 0 to the criterion's current maximum, and an accepted choice is checked against that maximum again when it is
+applied. A note is required for a proposal and for a moderated resolution, non-blank after trimming, at most 2000
+characters, with no NUL. `byId` and `acceptedById` must equal the token's user.
+
+**Order.** After rule 1: the conflict is found and locked (the assessment, then the mark, then the conflict, the
+order finalize uses); an id the user cannot see is `forbidden` at a nonzero base and `invalid` at base 0
+("conflicts are raised by the server"); authorization is identity only, a party or a moderator of the subject; the
+command's shape and the actor rules in the table; a base ahead of the conflict's version is `invalid`; a base behind
+it is `conflict` with the conflict as `current` and no `conflictId`; and only at an equal version the state checks
+(`invalid`) and the write. State is checked after the version, so a device that had not yet seen the other party's
+proposal gets the fresh conflict, not an `invalid`.
+
+**A resolution writes the mark.** The chosen mark is that side's `markKind` and `score`, or the corrected value, and
+the mark is credited to that side's user for a side choice and to the acting user for a corrected one. It is written
+through the same transaction as the conflict's own update, and both changes are logged, so a pull brings the settled
+mark and its history together. If the cell already holds the chosen value the mark is not touched: no version, no
+log row; the conflict's update is still logged. The mark's version when the conflict was raised is `conflicts.mark_version`, recorded
+when it was raised (a follow-up conflict has no mutation of its own to read it from, since the command that
+raised it is `accepted`). If the mark has moved since, the chosen value is a stale write at
+that base and rule 4 decides it: nothing it touches moved, or the cell already holds it, writes nothing or applies;
+an overlap, or a history that is not whole, records the resolution, leaves the mark, and raises a follow-up conflict
+(side A the producer of the current version, side B the chosen value with `editId` the command's mutation id and the
+credited user) and notifies its parties. A deleted mark is `invalid`. The command's outcome is `accepted` at the
+conflict's new version, and its `change_seq` names the conflict's log row.
+
+**Notifications.** A referral writes `sync-conflict` ("Conflict referred to you") to the subject's moderators who
+are not parties, since the referral is what obliges them to act. Everything else about notification dedupe is as
+for a raised conflict.
+
+**Replay.** A command resent after the state moved on replays the stored outcome; it is not validated again. A resend
+whose note was edited is a different payload under a used id and is `invalid`.
 
 ## GET /sync
 
@@ -495,14 +588,12 @@ change-log row `GET /sync` reads (`sync_changes`, already named in that
 section below) and copied from there into a conflict's `side_a`/`side_b`
 and into a `proposals[]` entry, alongside the existing client `at`, never
 instead of it. The same applies to a conflict's `resolved_at` column: a
-resolution mutation's `fields` already carry a client-sent `resolvedAt`
-(`fields: {resolution: {...}, resolvedAt}`, same shape as any other
-mutation's `at`); that field is `at` by another name for this mutation
-type and stays exactly as informational, kept as sent, never rejected or
-overwritten. The server-set `resolved_at` column is new, separate storage
-alongside it, filled from the server's own clock when the resolving
-mutation is processed, not read from the device's `resolvedAt`, for the
-identical reason `receivedAt` isn't read from `at`. `receivedAt` and
+resolution command's device claim is the entry's own `at`, kept as the
+`at` of the resolution, informational and never rejected or overwritten
+(see "Conflict commands"). The server-set `resolved_at` column is
+separate storage, filled from the server's own clock when the resolving
+command is processed, for the identical reason `receivedAt` isn't read
+from `at`. `receivedAt` and
 `resolved_at` are both audit-only: neither is ever the `GET /sync`
 cursor, which stays the opaque `seq` integer described below, and a
 replayed mutation (rule 1) does not get a new `receivedAt`. Neither
@@ -618,7 +709,7 @@ would be false, but a split by what role the id plays in that entry:
 
 1. **A domain field naming who performed *this* mutation** (`finalizedBy`
    on a finalize, a new proposal's own `byId`, an acceptance's
-   `acceptedBy`) must equal the authenticated token's user; if the
+   `acceptedById`) must equal the authenticated token's user; if the
    payload sends a different id in such a field, that is `invalid`, not
    silently overridden, so a device sending the wrong id finds out rather
    than having its mistake hidden. A mark edit has no field like this at
@@ -630,8 +721,9 @@ would be false, but a split by what role the id plays in that entry:
    `proposedBy`) is never an acting-user claim for the current mutation; the
    server accepts it only when it matches what the server's own record already
    holds for that history, and rejects the mutation as `invalid` if it doesn't.
-   A device sends only its own new proposal, `{byId, choice, note, at}`, never
-   a `proposals` array (see "Conflict actions are commands" above), and never a
+   A device sends only its own new proposal, `{byId, choice, note}`, with its
+   claimed time in the entry's `at`, never a `proposals` array (see "Conflict
+   commands" below), and never a
    `receivedAt`: that is storage the server alone fills from its own clock when
    it appends the proposal. A payload that includes a `receivedAt` anywhere is
    `invalid`, the same as any other server-owned field appearing where it
@@ -644,10 +736,9 @@ the server alone owns (`version`, `institution_id`, `last_edited_by`,
 `created_by`, `receivedAt`, `resolved_at`) are never read from the
 payload at all; `fields` carrying any of them is `invalid`, rejected
 outright rather than silently stripped, so a device sending one finds
-out rather than having it quietly ignored. This is distinct from the
-resolution mutation's own client-sent `resolvedAt`, which is `at` by
-another name and stays informational exactly as described above; the
-difference is the column, not the camelCase/snake_case spelling.
+out rather than having it quietly ignored. A resolution command carries
+no field named `resolvedAt` at all: its device claim is the entry's `at`,
+so the `resolvedAt` a device pulls is only ever the server's.
 
 Push authorization mirrors #36 exactly: marks and assessment creation are
 unrestricted for any authenticated user; updating, finalizing, or unlocking
