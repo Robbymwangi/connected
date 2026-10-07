@@ -40,33 +40,46 @@ class Assessment extends Model
         $assessment = SyncLog::transaction($this->institution_id, function () use ($user): self {
             $assessment = $this->newQuery()->lockForUpdate()->findOrFail($this->getKey());
 
-            Gate::forUser($user)->authorize('finalize', $assessment);
-
-            if ($assessment->status !== 'scheduled') {
-                throw ValidationException::withMessages([
-                    'status' => 'The assessment must be unlocked before it can be finalized again.',
-                ]);
-            }
-
-            $markIds = $assessment->marks()->orderBy('id')->lockForUpdate()->pluck('id');
-
-            if (Conflict::query()->whereIn('mark_id', $markIds)->whereNull('resolved_at')->exists()) {
-                throw ValidationException::withMessages([
-                    'status' => 'An assessment with open mark conflicts cannot be finalized.',
-                ]);
-            }
-
-            $assessment->fill([
-                'status' => 'finalized',
-                'finalized_at' => now(),
-                'finalized_by' => $user->id,
-            ])->save();
+            $assessment->prepareFinalize($user);
+            $assessment->save();
 
             return $assessment;
         });
 
         $this->setRawAttributes($assessment->getAttributes(), true);
         $this->unsetRelations();
+    }
+
+    /* Everything finalizing checks and sets, without saving: authorize, require the assessment
+       to be scheduled, lock its marks, refuse while a mark conflict is open, and fill the
+       status, the server clock, and the user. Two callers, one rule: finalize() above, and the
+       sync push, which saves the record itself so the order of checks, the version rules, and
+       the recording of the outcome stay in one place. The caller holds the assessment row lock
+       inside SyncLog::transaction, so the lock order is the advisory lock, the assessment,
+       then its marks. */
+    public function prepareFinalize(User $user): void
+    {
+        Gate::forUser($user)->authorize('finalize', $this);
+
+        if ($this->status !== 'scheduled') {
+            throw ValidationException::withMessages([
+                'status' => 'The assessment must be unlocked before it can be finalized again.',
+            ]);
+        }
+
+        $markIds = $this->marks()->orderBy('id')->lockForUpdate()->pluck('id');
+
+        if (Conflict::query()->whereIn('mark_id', $markIds)->whereNull('resolved_at')->exists()) {
+            throw ValidationException::withMessages([
+                'status' => 'An assessment with open mark conflicts cannot be finalized.',
+            ]);
+        }
+
+        $this->fill([
+            'status' => 'finalized',
+            'finalized_at' => now(),
+            'finalized_by' => $user->id,
+        ]);
     }
 
     public function unlock(User $user, ?string $note = null): void
