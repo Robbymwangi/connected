@@ -216,6 +216,7 @@ test('the remaining tables (conflicts, results, comments, reports, notifications
         'institution_id' => $g['institution']->id,
         'mark_id' => $g['mark']->id,
         'base_version' => 0,
+        'mark_version' => 1,
         'side_a' => ['editId' => 'e1', 'userId' => $g['teacher']->id, 'markKind' => 'score', 'score' => 8, 'at' => now()->toIso8601String()],
         'side_b' => ['editId' => 'e2', 'userId' => $g['teacher']->id, 'markKind' => 'score', 'score' => 6, 'at' => now()->toIso8601String()],
     ]);

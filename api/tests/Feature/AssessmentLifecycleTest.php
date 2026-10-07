@@ -81,6 +81,7 @@ test('an open mark conflict prevents finalization without changing the assessmen
         'institution_id' => $graph['institution']->id,
         'mark_id' => $graph['mark']->id,
         'base_version' => 0,
+        'mark_version' => 1,
         'side_a' => [],
         'side_b' => [],
     ]);
@@ -103,6 +104,7 @@ test('a resolved mark conflict does not prevent finalization', function () {
         'institution_id' => $graph['institution']->id,
         'mark_id' => $graph['mark']->id,
         'base_version' => 0,
+        'mark_version' => 1,
         'side_a' => [],
         'side_b' => [],
         'resolved_at' => '2026-10-05 09:00:00',

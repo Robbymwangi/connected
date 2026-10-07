@@ -381,8 +381,38 @@ going would hide it. (Proposed.)
 - A moderator who is a party to a conflict acts only as a party (ADR 0002 amendment). A resolution against a
   mark that has moved since the conflict opened is a stale write, and a follow-up conflict records what it
   could not apply.
+- Resolving, as built (3.2c, G). The wire kind decides the command: `agreed` is an acceptance, `self` and
+  `moderated` are direct resolutions, `auto` and anything else are `invalid`. A party sending `self` or
+  `moderated` is `forbidden` (the table's "resolve" column, actor rules first); the kind not fitting a role that
+  may resolve at all is `invalid` (a moderator sending `self`, the author of a self-conflict sending `moderated`).
+  `proposedById` is compared with the stored pending proposal at an equal version only, so a device that was
+  behind gets the conflict back, not an `invalid`.
+- Credit for a resolution follows the value: a side choice credits that side's user, a corrected value credits the
+  user acting, which for an acceptance is the acceptor. The chosen value is validated as a mark cell before any
+  rule-4 branch, a side's too: its score against the criterion's current maximum, and the user it is credited to
+  must resolve through the institution scope. An accepted proposal can therefore become unacceptable after the
+  maximum drops; the parties refer it, or a moderator or the author resolves with a corrected value.
+- A resolution is refused (`invalid`) for a deleted mark, a deleted assessment, or a finalized one, with no
+  `edit-blocked` notice. Finalize refuses while a conflict is open, so the finalized case needs an unlock in
+  between. An open conflict on a deleted mark can never be resolved and does not block finalize (a finalize counts
+  live marks only); no device can delete a mark, so this waits for mark deletion to exist.
+- `conflicts.mark_version` is the server's own bookkeeping: hidden on the model, so it is never in the change log,
+  a pull, or a bootstrap, and adding it needs no dev-data epoch bump. A `mark_version` above the mark's own
+  version is corrupt data and fails safe to a follow-up. A history with a hole raises a follow-up even when the
+  two values agree, as for an ordinary stale write.
+- A follow-up's side B is the chosen value: `editId` the command's mutation id, `userId` and `who` the credited
+  user, `at` the command's `at`. Its side A is the producer of the current version, found as for any conflict;
+  when that producer was an earlier resolution there is no mutation that points at the mark's log row, so side A
+  gets the derived `editId`, the credited user, and no `at`. The command's own outcome is `accepted` with no
+  `conflictId`, and `sync_mutations.conflict_id` stays for mark conflicts raised by a mark write; the device learns
+  of a follow-up from its notification and the pull. A resolution notifies nobody itself; revisit with the client (3.5).
+- Order inside the entry's transaction: the conflict is saved and logged first, then the mark is written or the
+  follow-up raised, so a pull page may split the two, and `more: true` brings the rest.
 
 **Open, for the client (3.4).**
+- The device sends only the command for a resolution and takes the settled mark from the pull. Its own
+  local write of the chosen value, queued as a mark patch, would reach the server after the server has already
+  written it, and rule 4 would record a spurious auto conflict (or a real one, when a follow-up was raised).
 - An outbox belongs to one user; a second sign-in on a device must not push the first user's pending
   entries as itself.
 - An outbox keeps a finalize as its own entry at the end of the queue. Coalescing (ADR 0001 rule 4) would

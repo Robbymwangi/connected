@@ -333,10 +333,23 @@ function openConflictBetween(array $graph, User $a, User $b, array $overrides = 
         'institution_id' => $graph['institution']->id,
         'mark_id' => $graph['mark']->id,
         'base_version' => 1,
+        'mark_version' => $graph['mark']->version,
         'side_a' => $side($a, 6),
         'side_b' => $side($b, 9),
         'proposals' => [],
         'referral' => null,
         'resolution' => null,
     ], $overrides));
+}
+
+/** The conflicts for a mark, oldest first, with the JSON columns decoded. */
+function conflictsFor(string $markId): array
+{
+    return DB::table('conflicts')->where('mark_id', $markId)->orderBy('id')->get()->map(fn ($row) => [
+        ...(array) $row,
+        'side_a' => json_decode($row->side_a, true),
+        'side_b' => json_decode($row->side_b, true),
+        'proposals' => json_decode($row->proposals, true),
+        'resolution' => $row->resolution === null ? null : json_decode($row->resolution, true),
+    ])->all();
 }

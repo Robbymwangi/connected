@@ -29,10 +29,6 @@ use Ramsey\Uuid\Uuid;
    its user is whoever the cell credits. `who` is looked up through the institution scope,
    so a user the scope hides has no name and nothing leaks.
 
-   Side B's receivedAt is one clock reading taken here: nothing is logged for side B, and the
-   mutation's own row cannot come first, because it references the conflict. It precedes the
-   mutation's received_at by microseconds; both are the server's clock.
-
    An auto conflict (both teachers entered the same value) is recorded already resolved, with
    resolved_at set: finalize refuses while any conflict is unresolved. */
 final class MarkConflicts
@@ -43,16 +39,18 @@ final class MarkConflicts
     public function __construct(private readonly User $user) {}
 
     /**
-     * @param  array<string, mixed>  $incoming  the entry's own validated cell: markKind and score
+     * @param  array<string, mixed>  $sideB  from side()
      */
-    public function raise(PushEntry $entry, Mark $record, RecordHistory $history, array $incoming, bool $auto): Conflict
+    public function raise(Mark $record, RecordHistory $history, int $baseVersion, array $sideB, bool $auto): Conflict
     {
         $conflict = Conflict::create([
             'institution_id' => $this->user->institution_id,
             'mark_id' => $record->id,
-            'base_version' => $entry->baseVersion,
+            'base_version' => $baseVersion,
+            // The version side A produced: what a resolution measures "has the mark moved since" against.
+            'mark_version' => $record->version,
             'side_a' => $this->producerSide($record, $history),
-            'side_b' => $this->incomingSide($entry, $incoming),
+            'side_b' => $sideB,
             'proposals' => [],
             'referral' => null,
             'resolution' => $auto ? ['kind' => 'auto'] : null,
@@ -65,6 +63,28 @@ final class MarkConflicts
         }
 
         return $conflict;
+    }
+
+    /* Side B: the write that is not in the record. For a rule-4 conflict it is the entry (its mutation id,
+       the token's user); for a follow-up raised by a resolution it is the chosen value (the command's mutation
+       id, the credited user). receivedAt is one clock reading taken here: nothing is logged for side B, and the
+       mutation's own row cannot come first, because it references the conflict. It precedes the mutation's
+       received_at by microseconds; both are the server's clock. `who` is null where the scope hides the user.
+
+       @param  array<string, mixed>  $cell  markKind and score
+       @return array<string, mixed>
+     */
+    public function side(string $editId, string $userId, ?string $who, array $cell, ?string $at): array
+    {
+        return [
+            'editId' => $editId,
+            'userId' => $userId,
+            'who' => $who,
+            'markKind' => $cell['markKind'],
+            'score' => $cell['score'],
+            'at' => $at,
+            'receivedAt' => ServerClock::now(),
+        ];
     }
 
     /**
@@ -94,23 +114,6 @@ final class MarkConflicts
             'score' => $record->score,
             'at' => $at,
             'receivedAt' => $row['receivedAt'] ?? null,
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $incoming
-     * @return array<string, mixed>
-     */
-    private function incomingSide(PushEntry $entry, array $incoming): array
-    {
-        return [
-            'editId' => $entry->id,
-            'userId' => $this->user->id,
-            'who' => $this->user->name,
-            'markKind' => $incoming['markKind'],
-            'score' => $incoming['score'],
-            'at' => $entry->at,
-            'receivedAt' => ServerClock::now(),
         ];
     }
 }

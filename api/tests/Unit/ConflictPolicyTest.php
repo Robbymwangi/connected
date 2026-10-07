@@ -4,6 +4,7 @@ use App\Sync\Push\CommandKind;
 use App\Sync\Push\ConflictPolicy;
 use App\Sync\Push\ConflictRole;
 use App\Sync\Push\ConflictState;
+use App\Sync\Push\SyncRejection;
 
 /* Who may do what to a mark conflict, decided with no database (docs/spec/sync-protocol.md,
    "Conflict commands"; ADR 0002 and its 2026-10-07 amendment). The cases are one shared file, also read by the
@@ -66,4 +67,28 @@ test('each rejection carries its status and a reason the device can show', funct
     expect($forbidden->status)->toBe('forbidden')
         ->and($invalid->status)->toBe('invalid')
         ->and($invalid->reasonText)->toBeString()->not->toBe('');
+});
+
+/* The wire kind of a resolution (3.2c, G): agreed is an acceptance, self and moderated are direct resolutions, and
+   the kind must fit who is resolving. These are server-only cases, so they stay out of the case file the client reads. */
+
+test('the wire kinds map to commands, and auto and anything unknown are refused', function () {
+    expect(ConflictPolicy::commandFor('agreed'))->toBe(CommandKind::Accept)
+        ->and(ConflictPolicy::commandFor('self'))->toBe(CommandKind::Resolve)
+        ->and(ConflictPolicy::commandFor('moderated'))->toBe(CommandKind::Resolve);
+
+    foreach (['auto', 'forced', '', 7, null, ['agreed']] as $kind) {
+        $refused = ConflictPolicy::commandFor($kind);
+
+        expect($refused)->toBeInstanceOf(SyncRejection::class)->and($refused->status)->toBe('invalid');
+    }
+    expect(ConflictPolicy::commandFor('auto')->reasonText)->toBe('auto is written only by the server');
+});
+
+test('a self resolution fits only the author of a self-conflict, and a moderated one only a moderator', function () {
+    expect(ConflictPolicy::resolutionFits(ConflictRole::SelfAuthor, 'self'))->toBeNull()
+        ->and(ConflictPolicy::resolutionFits(ConflictRole::Moderator, 'moderated'))->toBeNull()
+        ->and(ConflictPolicy::resolutionFits(ConflictRole::Party, 'agreed'))->toBeNull()
+        ->and(ConflictPolicy::resolutionFits(ConflictRole::Moderator, 'self')->status)->toBe('invalid')
+        ->and(ConflictPolicy::resolutionFits(ConflictRole::SelfAuthor, 'moderated')->status)->toBe('invalid');
 });

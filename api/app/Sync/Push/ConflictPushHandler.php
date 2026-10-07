@@ -22,6 +22,10 @@ use LogicException;
    server, the clock is the server's, the referral's reason is computed from the stored proposals. A conflict is never
    created from a device (they are raised by the server), so every entry here has a record to act on.
 
+   A resolution (an acceptance, or a direct resolution by the author of a conflict with themself or by a moderator) also
+   writes the mark, through MarkSettlement, in the same transaction: planned in resulting(), where a refusal still rolls
+   the entry back, and carried out in written(), after the conflict itself is saved.
+
    Locks are taken in the order finalize uses: the assessment, then the mark, then the conflict. The two ids read before
    locking (mark_id, assessment_id) never change, so reading them unlocked is safe. Anything a device could point at that
    the institution scope hides is answered invalid, not dereferenced: a foreign key does not check the institution. */
@@ -42,6 +46,13 @@ final class ConflictPushHandler extends PushHandler
 
     private string $note = '';
 
+    private string $resolutionKind = '';
+
+    /** The pending proposal an acceptance copies, read in resulting(). @var array<string, mixed> */
+    private array $accepted = [];
+
+    private ?MarkSettlement $settlement = null;
+
     public function columns(): array
     {
         return ['proposal' => 'proposals', 'referral' => 'referral', 'resolution' => 'resolution'];
@@ -52,7 +63,6 @@ final class ConflictPushHandler extends PushHandler
         return [
             'proposals' => 'a device sends one proposal, never the proposals array',
             'resolvedAt' => 'resolvedAt is the server\'s clock',
-            'resolution' => 'resolving a conflict is not accepted yet',
         ];
     }
 
@@ -119,17 +129,15 @@ final class ConflictPushHandler extends PushHandler
         }
 
         if (count($entry->fields) !== 1) {
-            throw SyncRejection::invalid('a conflict command is sent on its own: one of proposal or referral');
+            throw SyncRejection::invalid('a conflict command is sent on its own: one of proposal, referral, or resolution');
         }
 
         $name = (string) array_key_first($entry->fields);
-        $this->kind = match ($name) {
-            'proposal' => CommandKind::Propose,
-            'referral' => CommandKind::Refer,
-            default => throw SyncRejection::invalid('resolving a conflict is not accepted yet'),
-        };
+        $value = $entry->fields[$name];
+        $this->kind = $name === 'resolution' ? $this->resolutionCommand($value) : ($name === 'proposal' ? CommandKind::Propose : CommandKind::Refer);
 
-        $rejection = ConflictPolicy::actor($this->role, $this->kind);
+        $rejection = ConflictPolicy::actor($this->role, $this->kind)
+            ?? ($name === 'resolution' ? ConflictPolicy::resolutionFits($this->role, $this->resolutionKind) : null);
 
         if ($rejection !== null) {
             throw $rejection;
@@ -137,12 +145,11 @@ final class ConflictPushHandler extends PushHandler
 
         $this->assertNoReceivedAt($entry->fields);
 
-        $value = $entry->fields[$name];
-
         match ($this->kind) {
             CommandKind::Propose => $this->validateProposal($value, $record),
             CommandKind::Refer => $this->validateReferral($value),
-            default => throw new LogicException('Not reachable before the resolve command exists.'),
+            CommandKind::Accept => $this->validateAgreement($value),
+            CommandKind::Resolve => $this->validateDirectResolution($value, $record),
         };
     }
 
@@ -159,6 +166,10 @@ final class ConflictPushHandler extends PushHandler
             throw $rejection;
         }
 
+        if (in_array($this->kind, [CommandKind::Accept, CommandKind::Resolve], true)) {
+            return $this->resolved($entry, $record);
+        }
+
         $record->fill($this->kind === CommandKind::Propose
             ? ['proposals' => [...($record->proposals ?? []), $this->proposalFor($entry)]]
             : ['referral' => $this->referralFor($entry, $record)]);
@@ -166,12 +177,118 @@ final class ConflictPushHandler extends PushHandler
         return $record;
     }
 
-    /* A referral tells the subject's moderators who are not parties. Inside the entry's own transaction, so a replay,
-       which never reaches here, writes nothing a second time. */
+    /* A referral tells the subject's moderators who are not parties; a resolution writes the mark or raises its
+       follow-up. Inside the entry's own transaction, so a replay, which never reaches here, writes nothing a second time. */
     public function written(PushEntry $entry, Model $saved): void
     {
         if ($this->kind === CommandKind::Refer) {
             (new ServerNotifications)->referred($saved, $this->assessment);
+        }
+
+        $this->settlement?->execute($entry, $this->mark, $saved, $this->user);
+    }
+
+    /* The conflict resolved: its stored resolution and the server's clock for when, and the plan for the mark. An
+       acceptance copies the choice and the note from the stored pending proposal, never from the device, and the
+       choice is validated again against what holds now (the criterion's maximum may have dropped since it was proposed). */
+    private function resolved(PushEntry $entry, Conflict $conflict): Conflict
+    {
+        $resolution = $this->kind === CommandKind::Accept
+            ? $this->agreement($entry, $conflict)
+            : $this->directResolution($entry);
+
+        $this->settlement = MarkSettlement::plan($this->user, $this->assessment, $this->mark, $conflict, $this->choice);
+
+        $conflict->fill(['resolution' => $resolution, 'resolved_at' => now()]);
+
+        return $conflict;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function agreement(PushEntry $entry, Conflict $conflict): array
+    {
+        $proposals = $conflict->proposals ?? [];
+        $pending = $proposals === [] ? [] : $proposals[array_key_last($proposals)];
+
+        if (($pending['byId'] ?? null) !== $this->accepted['proposedById']) {
+            throw SyncRejection::invalid('proposedById must name the author of the pending proposal');
+        }
+
+        $this->choice = $this->validatedChoice($pending['choice'] ?? null, $conflict);
+
+        return [
+            'kind' => 'agreed',
+            'proposedById' => (string) $pending['byId'],
+            'proposedBy' => $pending['by'] ?? null,
+            'acceptedById' => (string) $this->user->id,
+            'acceptedBy' => $this->user->name,
+            'choice' => $this->choice,
+            'note' => $pending['note'] ?? null,
+            'at' => $entry->at,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function directResolution(PushEntry $entry): array
+    {
+        $resolution = ['kind' => $this->resolutionKind, 'byId' => (string) $this->user->id, 'by' => $this->user->name, 'choice' => $this->choice];
+
+        if ($this->resolutionKind === 'moderated') {
+            $resolution['note'] = $this->note;
+        }
+
+        return [...$resolution, 'at' => $entry->at];
+    }
+
+    /* The wire kind decides which command a resolution is, before anything else is read from it. */
+    private function resolutionCommand(mixed $value): CommandKind
+    {
+        if (! is_array($value) || array_is_list($value) || ! is_string($value['kind'] ?? null)) {
+            throw SyncRejection::invalid('resolution must be an object with a kind');
+        }
+
+        $command = ConflictPolicy::commandFor($value['kind']);
+
+        if ($command instanceof SyncRejection) {
+            throw $command;
+        }
+
+        $this->resolutionKind = $value['kind'];
+
+        return $command;
+    }
+
+    private function validateAgreement(mixed $resolution): void
+    {
+        $this->assertObject($resolution, ['kind', 'proposedById', 'acceptedById'], 'an agreement');
+        $this->assertIsMe($resolution['acceptedById'], 'acceptedById');
+
+        if (! is_string($resolution['proposedById'])) {
+            throw SyncRejection::invalid('proposedById must be a string');
+        }
+
+        // Compared with the stored pending proposal in resulting(), where the state is known to be the one the device saw.
+        $this->accepted = ['proposedById' => $resolution['proposedById']];
+    }
+
+    private function validateDirectResolution(mixed $resolution, Conflict $conflict): void
+    {
+        if ($this->resolutionKind === 'self' && is_array($resolution) && array_key_exists('note', $resolution)) {
+            throw SyncRejection::invalid('a self resolution carries no note');
+        }
+
+        $keys = $this->resolutionKind === 'moderated' ? ['kind', 'byId', 'choice', 'note'] : ['kind', 'byId', 'choice'];
+        $this->assertObject($resolution, $keys, "a {$this->resolutionKind} resolution");
+        $this->assertIsMe($resolution['byId'], 'byId');
+
+        $this->choice = $this->validatedChoice($resolution['choice'], $conflict);
+
+        if ($this->resolutionKind === 'moderated') {
+            $this->note = $this->validatedNote($resolution['note']);
         }
     }
 
@@ -229,23 +346,25 @@ final class ConflictPushHandler extends PushHandler
     private function validateProposal(mixed $proposal, Conflict $conflict): void
     {
         $this->assertObject($proposal, ['byId', 'choice', 'note'], 'proposal');
-        $this->assertByIsMe($proposal['byId']);
+        $this->assertIsMe($proposal['byId'], 'byId');
 
         $this->choice = $this->validatedChoice($proposal['choice'], $conflict);
+        $this->note = $this->validatedNote($proposal['note']);
+    }
 
-        $note = $proposal['note'];
-
+    private function validatedNote(mixed $note): string
+    {
         if (! is_string($note) || str_contains($note, "\0") || trim($note) === '' || mb_strlen($note) > self::NOTE_LIMIT) {
             throw SyncRejection::invalid('note must be a non-blank string of at most '.self::NOTE_LIMIT.' characters');
         }
 
-        $this->note = $note;
+        return $note;
     }
 
     private function validateReferral(mixed $referral): void
     {
         $this->assertObject($referral, ['byId'], 'referral');
-        $this->assertByIsMe($referral['byId']);
+        $this->assertIsMe($referral['byId'], 'byId');
     }
 
     /**
@@ -323,10 +442,10 @@ final class ConflictPushHandler extends PushHandler
         }
     }
 
-    private function assertByIsMe(mixed $byId): void
+    private function assertIsMe(mixed $id, string $name): void
     {
-        if (! is_string($byId) || $byId !== (string) $this->user->id) {
-            throw SyncRejection::invalid('byId must be the signed-in user');
+        if (! is_string($id) || $id !== (string) $this->user->id) {
+            throw SyncRejection::invalid("{$name} must be the signed-in user");
         }
     }
 }

@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
    instance is made per entry, since a handler may hold what it locked (a mark
    holds its assessment) between steps.
 
-   A handler never saves. SyncPush does, so the order of checks, the version rules,
+   A handler never saves its own record. SyncPush does, so the order of checks, the version rules,
    and the recording of the outcome are decided in one place rather than once per
    table. Anything a handler cannot accept it throws as a SyncRejection. */
 abstract class PushHandler

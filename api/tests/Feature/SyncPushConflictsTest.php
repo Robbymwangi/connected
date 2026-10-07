@@ -14,18 +14,6 @@ use Ramsey\Uuid\Uuid;
 
 const UTC_STAMP = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/';
 
-/** The conflicts for a mark, oldest first, with the JSON columns decoded. */
-function conflictsFor(string $markId): array
-{
-    return DB::table('conflicts')->where('mark_id', $markId)->orderBy('id')->get()->map(fn ($row) => [
-        ...(array) $row,
-        'side_a' => json_decode($row->side_a, true),
-        'side_b' => json_decode($row->side_b, true),
-        'proposals' => json_decode($row->proposals, true),
-        'resolution' => $row->resolution === null ? null : json_decode($row->resolution, true),
-    ])->all();
-}
-
 /** received_at of the change-log row at a version, as the history formats it. */
 function loggedAt(string $recordId, int $version): ?string
 {
@@ -338,4 +326,60 @@ test('a lone score edit over the maximum is still invalid when the cell has sinc
 
     expect($result)->toBe(['id' => $entry['id'], 'status' => 'invalid', 'reason' => 'The score may not be greater than the criterion maximum.']);
     expect(conflictsFor($g['mark']->id))->toBe([]);
+});
+
+/* 3.2c, G: conflicts.mark_version is the mark's version when the conflict was raised, which is the version side A
+   produced. It is what a later resolution command measures "has the mark moved since" against, and it is recorded
+   because a follow-up conflict has no mutation of its own to read it from. It is the server's alone: never in the
+   log, never pulled. */
+
+test('mark_version is the mark\'s version when the conflict was raised, not the entry\'s stale base', function () {
+    $g = buildGraph('School A', '-cf-markversion');
+    $b = makeColleague($g, 'b-cf-markversion@example.com');
+    deviceAScores($this, $g, 6);
+    postedResults(pushEntries($this, tokenFor($g['teacher']), [pushEntry('marks', $g['mark']->id, 2, ['score' => 7])]));
+    app('auth')->forgetGuards();
+
+    $result = postedResults(pushEntries($this, tokenFor($b), [pushEntry('marks', $g['mark']->id, 1, ['score' => 9])]))[0];
+
+    expect($result['status'])->toBe('conflict');
+    expect(conflictsFor($g['mark']->id)[0])->toMatchArray(['base_version' => 1, 'mark_version' => 3]);
+});
+
+test('mark_version is recorded for a create collision and for an auto conflict', function () {
+    $g = buildGraph('School A', '-cf-markversion-create');
+    $b = makeColleague($g, 'b-cf-markversion-create@example.com');
+    $criterion = newCriterion($g);
+    $first = markCreate($g, $g['student'], $criterion, ['markKind' => 'score', 'score' => 5]);
+    $differs = markCreate($g, $g['student'], $criterion, ['markKind' => 'score', 'score' => 7]);
+    $same = markCreate($g, $g['student'], $criterion, ['markKind' => 'score', 'score' => 5]);
+
+    postedResults(pushEntries($this, tokenFor($g['teacher']), [$first]));
+    app('auth')->forgetGuards();
+    postedResults(pushEntries($this, tokenFor($b), [$differs, $same]));
+
+    $conflicts = conflictsFor($first['recordId']);
+    expect($conflicts)->toHaveCount(2);
+    expect(array_column($conflicts, 'mark_version'))->toBe([1, 1]);
+    expect(collect($conflicts)->pluck('resolution')->filter()->values()->all())->toBe([['kind' => 'auto']]);
+});
+
+test('mark_version never reaches a device: not in the log, a pull, or a bootstrap', function () {
+    $g = buildGraph('School A', '-cf-markversion-hidden');
+    $b = makeColleague($g, 'b-cf-markversion-hidden@example.com');
+    deviceAScores($this, $g, 6);
+    postedResults(pushEntries($this, tokenFor($b), [pushEntry('marks', $g['mark']->id, 1, ['score' => 9])]));
+    app('auth')->forgetGuards();
+
+    $log = DB::table('sync_changes')->where('table', 'conflicts')->pluck('fields')->all();
+    $pulled = $this->withToken(tokenFor($g['teacher']))->getJson('/api/sync?since=0')->assertOk()->json('changes');
+    app('auth')->forgetGuards();
+    $bootstrap = $this->withToken(tokenFor($g['teacher']))->getJson('/api/sync')->assertOk()->json('changes');
+
+    expect($log)->toHaveCount(1);
+    expect($log[0])->not->toContain('mark_version')->not->toContain('markVersion');
+    foreach ([$pulled, $bootstrap] as $changes) {
+        $conflict = collect($changes)->firstWhere('table', 'conflicts');
+        expect($conflict['fields'])->toHaveKey('baseVersion')->not->toHaveKey('markVersion')->not->toHaveKey('mark_version');
+    }
 });
