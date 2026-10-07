@@ -23,8 +23,8 @@ use Ramsey\Uuid\Uuid;
    when it saw that write, which is what an auditor checks `at` against.
 
    Side A's producer is found by link: sync_mutations.change_seq names the change-log row a
-   mutation wrote. A write that is not a sync mutation (a REST write, a server write, data
-   from before the link existed, or a hole in the log) has no mutation, so its editId is a
+   mutation wrote. A write that is not a sync mutation (a resolution's write, a server write,
+   data from before the link existed, or a hole in the log) has no mutation, so its editId is a
    UUIDv5 of the cell and the version, which exists even where the log row is missing, and
    its user is whoever the cell credits. `who` is looked up through the institution scope,
    so a user the scope hides has no name and nothing leaks.

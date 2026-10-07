@@ -23,8 +23,8 @@ use Illuminate\Support\Str;
    matters, because two devices creating one cell both send it at base 0 against a
    known id, and that must reach the version rules as a conflict, not be refused.
 
-   Rows are locked assessment first, then the mark, the order finalize and the REST
-   path use, so this never takes them the other way round. */
+   Rows are locked assessment first, then the mark, the order finalize and the
+   conflict commands use, so this never takes them the other way round. */
 final class MarkPushHandler extends PushHandler
 {
     private const IDENTITY = ['assessmentId' => 'assessment_id', 'studentId' => 'student_id', 'criterionId' => 'criterion_id'];
