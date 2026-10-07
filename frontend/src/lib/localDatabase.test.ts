@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LocalDatabase, SYNC_TABLES } from './localDatabase'
+import { LocalDatabase, localDatabaseFor, SYNC_TABLES } from './localDatabase'
 
 describe('LocalDatabase schema', () => {
   it('contains every synchronisable table plus local metadata and session tables', () => {
@@ -21,5 +21,19 @@ describe('LocalDatabase schema', () => {
     ])
 
     database.close()
+  })
+
+  it('keeps each account in its own database', () => {
+    const first = localDatabaseFor('user-a')
+    const sameAccount = localDatabaseFor('user-a')
+    const other = localDatabaseFor('user-b')
+
+    expect(sameAccount).toBe(first)
+    expect(other).not.toBe(first)
+    expect(first.name).toBe('connected-user-user-a')
+    expect(other.name).toBe('connected-user-user-b')
+
+    first.close()
+    other.close()
   })
 })

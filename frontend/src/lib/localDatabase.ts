@@ -32,6 +32,8 @@ export type MetadataRecord = { key: string; value: unknown }
 export type SessionRecord = { key: 'current'; session: Session }
 
 const DATABASE_NAME = 'connected'
+const USER_DATABASE_PREFIX = 'connected-user-'
+const userDatabases = new Map<string, LocalDatabase>()
 
 export class LocalDatabase extends Dexie {
   assessments!: EntityTable<LocalRecord, 'id'>
@@ -80,3 +82,12 @@ export class LocalDatabase extends Dexie {
 }
 
 export const localDatabase = new LocalDatabase()
+
+export function localDatabaseFor(userId: string): LocalDatabase {
+  let database = userDatabases.get(userId)
+  if (!database) {
+    database = new LocalDatabase(`${USER_DATABASE_PREFIX}${userId}`)
+    userDatabases.set(userId, database)
+  }
+  return database
+}
