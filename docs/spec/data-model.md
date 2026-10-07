@@ -137,7 +137,9 @@ something #36 requires.
   reaching `status: 'reports-generated'`) shows that a term report card is
   simply the report for whichever assessment happens to be named "End of
   Term," not a different kind of record.
-- **`notifications`**: `id`, `institution_id`, `user_id`, `kind`
+- **`notifications`**: `id`, `institution_id`, `user_id`, `assessment_id` (nullable: the
+  assessment a notice concerns, for a link and so a recipient gets one unread notice per kind and
+  assessment, not one per cell; it reaches a device as `assessmentId`), `kind`
   (`sync-conflict`, `submission`, `report-ready`, `enrolment`,
   `edit-blocked`), `tone`, `title`, `body`, `unread` (boolean). Written by
   the server (a conflict raised, a report ready), read by a device by pull;
