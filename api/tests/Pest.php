@@ -6,6 +6,7 @@ use App\Models\Criterion;
 use App\Models\Enrolment;
 use App\Models\Institution;
 use App\Models\Mark;
+use App\Models\Notification;
 use App\Models\SchoolClass;
 use App\Models\Student;
 use App\Models\Subject;
@@ -280,4 +281,18 @@ function markCreate(array $graph, Student $student, Criterion $criterion, array 
 function markUpdate(array $graph, array $fields, int $base = 1): array
 {
     return pushEntry('marks', $graph['mark']->id, $base, $fields);
+}
+
+/** A notification the server wrote for a user, unread, at version 1. */
+function notificationFor(User $user, array $overrides = []): Notification
+{
+    return Notification::create(array_merge([
+        'institution_id' => $user->institution_id,
+        'user_id' => $user->id,
+        'kind' => 'sync-conflict',
+        'tone' => 'warning',
+        'title' => 'Mark conflict to settle',
+        'body' => 'Two edits to the same mark disagree.',
+        'unread' => true,
+    ], $overrides));
 }
