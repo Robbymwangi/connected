@@ -8,6 +8,7 @@ use App\Models\SyncMutation;
 use App\Models\User;
 use App\Support\CurrentInstitution;
 use App\Support\SyncLog;
+use App\Sync\ServerNotifications;
 use App\Sync\SyncPull;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
@@ -375,6 +376,12 @@ final class SyncPush
 
             $outcome = PushOutcome::rejected($entry->id, $rejection);
             $this->record($entry, $outcome, null);
+
+            // Only here, on the first decision of this entry: a resend is caught by the replay lookup above
+            // and writes nothing again. Written in this fresh transaction because the entry's own rolled back.
+            if ($rejection->blockedAssessmentId !== null) {
+                (new ServerNotifications)->editBlocked($this->user, $rejection->blockedAssessmentId);
+            }
 
             return $outcome;
         });
