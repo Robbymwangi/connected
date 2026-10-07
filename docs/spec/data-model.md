@@ -113,7 +113,9 @@ something #36 requires.
   computed identically on the device and the server (see Grains and identity),
   so the primary key itself is the uniqueness constraint on that triple.
 - **`conflicts`**: `id`, `institution_id`, `mark_id`, `base_version`, `side_a`,
-  `side_b` (each `{editId, userId, markKind, score, at}`), `proposals`
+  `side_b` (each `{editId, userId, who, markKind, score, at, receivedAt}`; on side A `who`, `at`,
+  and `receivedAt` may be null, on side B only `at` may be; `base_version` is the version side B
+  was edited against), `proposals`
   (ordered array of `{byId, choice, note, at}`), `referral` (nullable),
   `resolution` (nullable `{kind, ...}`), `resolved_at`. The nested fields are
   stored as JSON columns rather than normalised into child tables, matching
@@ -167,13 +169,15 @@ something #36 requires.
   primary key), `institution_id`, `user_id`, `table`, `record_id`, `status`
   (`accepted`, `merged`, `conflict`, `invalid`, `forbidden`), `version` (the
   record's version in the outcome, null for a rejection), `conflict_id` (marks
-  only), `payload_hash` (of table, record id, `baseVersion`, and `fields`),
+  only), `change_seq` (the `sync_changes` row the entry wrote: unique, only on an accepted or
+  merged outcome, null when the entry wrote nothing; how a conflict finds the write that
+  produced a record's current version), `payload_hash` (of table, record id, `baseVersion`, and `fields`),
   `reason` (for `invalid`), `at` (the device's claim, informational),
   `received_at` (server clock). Append-only: no version, no soft delete, not
   synchronisable, never on either verb. The id is a client UUID like every key.
-  Indexed on `(table, record_id, version)`: the lookup that finds the mutation
-  which produced a given version of a record, for a conflict side's `editId`. It
-  is not the index rule 4's history read uses; that read is on `sync_changes`.
+  Indexed on `(table, record_id, version)`, from before `change_seq`: it is no longer
+  how the producer of a version is found (that is `change_seq`), and is a candidate for
+  removal. The index rule 4's history read uses is on `sync_changes`.
 
 ## Grains and identity
 

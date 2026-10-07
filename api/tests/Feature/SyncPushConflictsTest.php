@@ -312,3 +312,30 @@ test('a side naming a user the institution scope hides has no name, and nothing 
 
     expect(conflictsFor($a['mark']->id)[0]['side_a']['who'])->toBeNull();
 });
+
+test('a lone score edit made after the cell became absent is a conflict, not invalid', function () {
+    $g = buildGraph('School A', '-cf-implied-kind');
+    $g['mark']->update(['mark_kind' => 'absent', 'score' => null]);
+    $entry = pushEntry('marks', $g['mark']->id, 1, ['score' => 9]);
+
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
+
+    // The device meant "score 9", edited against a cell that was scored; the cell has since become absent.
+    expect($result['status'])->toBe('conflict');
+    expect($result['conflictId'])->toBeString();
+    $conflict = conflictsFor($g['mark']->id)[0];
+    expect($conflict['side_a'])->toMatchArray(['markKind' => 'absent', 'score' => null]);
+    expect($conflict['side_b'])->toMatchArray(['markKind' => 'score', 'score' => 9]);
+    expect(DB::table('marks')->where('id', $g['mark']->id)->value('mark_kind'))->toBe('absent');
+});
+
+test('a lone score edit over the maximum is still invalid when the cell has since become absent', function () {
+    $g = buildGraph('School A', '-cf-implied-max');
+    $g['mark']->update(['mark_kind' => 'absent', 'score' => null]);
+    $entry = pushEntry('marks', $g['mark']->id, 1, ['score' => 14]);
+
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
+
+    expect($result)->toBe(['id' => $entry['id'], 'status' => 'invalid', 'reason' => 'The score may not be greater than the criterion maximum.']);
+    expect(conflictsFor($g['mark']->id))->toBe([]);
+});

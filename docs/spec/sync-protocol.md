@@ -122,13 +122,20 @@ is a non-negative integer); then rule 1; then the record is looked up within
 the caller's institution, soft-deleted rows included, since a deleted row
 that looked unknown would hide the update-against-delete case; then
 authorization (`forbidden`); then, for a mark, the finalized-assessment check
-(`invalid`, with the `edit-blocked` notification, `workflow.md`). Only then
-rules 2 to 4, and last the validation of the row that would result
-(`invalid`). So an unauthorized stale edit is never answered `conflict`,
-which would leave it retained in the outbox forever. Validation runs on the
-resulting row, not the payload: a patch such as `{score: 14}` cannot be
-checked without the cell's current `markKind` and its criterion. Every read
-the entry depends on happens inside its transaction, after the lock.
+(`invalid`, with the `edit-blocked` notification, `workflow.md`). Then the
+entry's own values are validated, so a stale entry holding an invalid value is
+`invalid` and is never stored as a conflict side. Only then rules 2 to 4, and
+the row that results from applying the entry is validated again (`invalid`).
+So an unauthorized stale edit is never answered `conflict`, which would leave
+it retained in the outbox forever. A patch is validated in the context it was
+written for, and the merged row against the cell as it stands. At the current
+version those are the same cell: `{score: 14}` cannot be checked without the
+cell's `markKind` and its criterion. At a stale base the entry's own values are
+read as the device meant them, so a lone `score` means kind `score`, the cell it
+edited, not whatever kind the cell holds now; a cell since made absent then
+raises the conflict instead of refusing a valid edit, while a score over the
+criterion's maximum is invalid either way. Every read the entry depends on
+happens inside its transaction, after the lock.
 
 1. **Known mutation id** → the stored outcome with `replayed: true`, nothing
    written. This is what makes a lost response safe to resend, including a
@@ -173,8 +180,11 @@ the entry depends on happens inside its transaction, after the lock.
    `baseVersion` must equal the current version minus `baseVersion`, and if it
    does not, for example after a future compaction, the entry is a `conflict`,
    never a `merged`).
-   If the entry's fields don't overlap that set → `merged`:
-   apply, increment, log, same as rule 2. If they overlap and the values on
+   If the entry's fields don't overlap that set, and at least one of them
+   differs from the record's current value → `merged`: apply, increment, log,
+   same as rule 2. If none of them differs and nothing overlaps, there is
+   nothing to merge: it is the no-op below, accepted at the unchanged version.
+   If they overlap and the values on
    both sides are equal, on any table (an `unread` flag set on two of one
    user's devices, a second finalize): if every field the entry touches,
    overlapping or disjoint, already matches the record's current value →
@@ -304,16 +314,62 @@ going would hide it. (Proposed.)
   column in characters, a table name outside the identifier alphabet) are answered
   `invalid`, never left to fail in the database: an entry that causes a 5xx every
   time it is sent stalls every entry behind it in the outbox.
-- Until 3.2b, a stale base on any table is `conflict` with the current row and no
-  `conflictId`, and nothing is merged.
 
-**Open, to be settled in 3.2b and 3.2c.**
-- A further conflicting entry on a cell whose conflict is already open
-  (`side_a` and `side_b` are both required, so "becomes its second side" has no
-  third).
-- The `editId` of side A when the write that produced the current version has
-  no mutation id (a REST write, a server write): a fallback derived from the
-  change-log `seq`.
+**Decided while building rule 4 (3.2b).**
+- The history rule 4 reads is `sync_changes` for the record above the base, indexed on
+  `(institution_id, table, record_id, version)`. It is whole only if it holds exactly one
+  row for each version from the base plus one to the current version: a row count would
+  pass a duplicate that hides a gap. A history that is not whole conflicts, never merges.
+- The entry's own values are validated before any rule-4 branch, which departs from
+  "validation last" in the order of checks: a stale entry holding an invalid value is
+  `invalid`, never stored as a conflict side. They are read in the context the entry means:
+  a lone `score` is kind `score`, so a valid edit made against a cell that has since become
+  absent is a conflict, not refused. The row that results is validated again at merge, against
+  the cell as it stands, and `resulting()` runs only on a merge.
+- The decision is a pure function of what the entry touches and what moved: a delete above
+  the base conflicts outright; then completeness; then a deleted record with no delete above
+  the base is `invalid`; then overlap, through merge groups (a mark's `markKind` and `score`,
+  an assessment's `classId` and `subjectId` each move as one fact), with identity fields
+  excluded because they never move.
+- An entry that touches nothing that moved and whose values already hold is the no-op
+  (`accepted` at the unchanged version, nothing written, no log row), not `merged`: merging
+  would bump the version and move `last_edited_by` for a write that changed no value. The
+  spec's earlier wording said `merged` for that case and is superseded.
+- A mark conflict is written to `conflicts` with two flat sides, `{editId, userId, who,
+  markKind, score, at, receivedAt}`. On side A, `who`, `at`, and `receivedAt` may be null (a user
+  the scope hides; a write that was not a sync mutation; a hole in the log). On side B, `who` and
+  `receivedAt` are always set, the token's user and the server clock, and only `at` may be null,
+  since a device may omit its claim. `base_version`
+  is the version side B was edited against. An auto conflict (both teachers entered the same
+  value) is recorded already resolved, with `resolution` `{kind: "auto"}` and `resolved_at` set
+  at decision time, because finalize refuses while any conflict is unresolved.
+- Side A is the write that produced the record's current version, found by version order and
+  by the change it wrote (`sync_mutations.change_seq`), never by `at`. Where that write was not
+  a sync mutation (a REST write, a server write, data from before the link existed, a hole in
+  the log), its `editId` is a UUIDv5 of `marks:{recordId}:{version}` (not derived from the log's
+  `seq`, which may be missing exactly then), its `userId` is the user the cell credits, and its
+  `at` is null. `who` is looked up through the institution scope, so a user the scope hides has
+  no name.
+- Side B's `receivedAt` is one server-clock reading taken when the conflict is decided: nothing
+  is logged for side B, and the mutation's own row cannot come first because it references the
+  conflict. So "copied from the change log" holds for side A only.
+- The delete case on a mark creates no conflict record and no `conflictId`: no live value
+  remains to choose between, and no pushable table can be deleted from a device. The response is
+  `conflict` with the current row, and the device drops the entry, adopts the current row, and
+  shows a notice, as for any non-mark conflict.
+- A further conflicting entry on a cell whose conflict is already open opens a second two-sided
+  conflict, with side A the producer of the current version, since both sides are required. How
+  a resolution treats a second open record is 3.2c's open question. The `sync-conflict`
+  notification belongs to 3.2c with `edit-blocked`.
+
+**Open, to be settled in 3.2c.**
+- Same values from a different user. At an equal base (rule 2) a mark patch that repeats the
+  cell's values still changes `last_edited_by`, so it bumps the version and takes the credit;
+  at a stale base (rule 4) the same patch is the no-op and withholds both. The outcome
+  therefore depends on `baseVersion`, which can create avoidable stale conflicts. The
+  recommendation is for rule 2 to be a no-op too: set `last_edited_by` only when the cell's
+  own value changes. It is not done in 3.2b because it changes 3.2a's behaviour and the tests
+  built on it.
 - Whether a resolution's mark write checks the mark's version, since someone
   may have edited it after the conflict opened.
 - An entry whose parent's create was rejected.
