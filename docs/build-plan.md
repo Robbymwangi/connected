@@ -216,6 +216,9 @@ school and cannot create a student.
 `POST`/`PUT` endpoints for marks and assessments are removed once `/sync` carries
 their rules and tests (enrolment, score maximum, finalized lock, class, subject, and
 year immutability). Unlock, and the student, teacher, and class writes, stay.
+*Done 2026-10-07:* the endpoints, `MarksController`, and their tests are removed; the
+rules live in the sync handlers and their tests (`SyncPushMarksTest`,
+`SyncPushAssessmentsTest`), and the write policies are unchanged and still used by them.
 
 **2.3 Finalize and unlock**
 `finalized_at` and `finalized_by` set on the assessment; unlock requires a
@@ -272,7 +275,7 @@ dependents.
   the no-op. 3.2c, in seven merge requests: credit moves only with a value; notification
   `unread`; finalize through sync; the `edit-blocked` and `sync-conflict` notifications;
   the docs for the conflict commands; then the commands themselves, propose and refer, then
-  accept and resolve. Then a cleanup merge request removes the REST mark and assessment
+  accept and resolve. Then a cleanup merge request removed the REST mark and assessment
   writes (2.2).
 
 **3.3 Local store**

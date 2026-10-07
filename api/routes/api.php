@@ -5,7 +5,6 @@ use App\Http\Controllers\ClassesController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\LogoutController;
-use App\Http\Controllers\MarksController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\StudentsController;
 use App\Http\Controllers\SubjectsController;
@@ -57,12 +56,9 @@ Route::middleware(['auth:sanctum', EnsureAccountIsActive::class])->group(functio
     Route::get('/subjects', SubjectsController::class)->name('subjects.index');
     Route::get('/students', StudentsController::class)->name('students.index');
     Route::get('/assessments', AssessmentsController::class)->name('assessments.index');
-    Route::post('/marks', [MarksController::class, 'store'])->name('marks.store');
-    Route::put('/marks/{mark}', [MarksController::class, 'update'])->name('marks.update');
+    // Marks and assessments are written over POST /sync alone (3.2); unlock stays here, an online administrator action.
     Route::post('/students', [StudentsController::class, 'store'])->name('students.store');
     Route::put('/students/{student}', [StudentsController::class, 'update'])->name('students.update');
-    Route::post('/assessments', [AssessmentsController::class, 'store'])->name('assessments.store');
-    Route::put('/assessments/{assessment}', [AssessmentsController::class, 'update'])->name('assessments.update');
     Route::post('/assessments/{assessment}/unlock', [AssessmentsController::class, 'unlock'])->name('assessments.unlock');
     Route::post('/classes', [ClassesController::class, 'store'])->name('classes.store');
     Route::put('/classes/{schoolClass}', [ClassesController::class, 'update'])->name('classes.update');

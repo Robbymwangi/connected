@@ -135,13 +135,14 @@ test('seq order is write order within an institution', function () {
     expect($seqs->values()->all())->toBe(['One', 'Two', 'One, revised']);
 });
 
-test('a PUT to a mark appends exactly one change', function () {
+test('a mark patch over POST /sync appends exactly one change', function () {
     $g = buildGraph('School A', '-put');
     $before = logRowsFor('marks', $g['mark']->id)->count();
 
     $this->withToken(tokenFor($g['teacher']))
-        ->putJson('/api/marks/'.$g['mark']->id, ['mark_kind' => 'score', 'score' => 9])
-        ->assertOk();
+        ->postJson('/api/sync', ['entries' => [pushEntry('marks', $g['mark']->id, 1, ['score' => 9])]])
+        ->assertOk()
+        ->assertJsonPath('results.0.status', 'accepted');
 
     $rows = logRowsFor('marks', $g['mark']->id);
     expect($rows)->toHaveCount($before + 1);

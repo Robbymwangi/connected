@@ -329,7 +329,7 @@ going would hide it. (Proposed.)
   at decision time, because finalize refuses while any conflict is unresolved.
 - Side A is the write that produced the record's current version, found by version order and
   by the change it wrote (`sync_mutations.change_seq`), never by `at`. Where that write was not
-  a sync mutation (a REST write, a server write, data from before the link existed, a hole in
+  a sync mutation (a resolution's write, a server write, data from before the link existed, a hole in
   the log), its `editId` is a UUIDv5 of `marks:{recordId}:{version}` (not derived from the log's
   `seq`, which may be missing exactly then), its `userId` is the user the cell credits, and its
   `at` is null. `who` is looked up through the institution scope, so a user the scope hides has
@@ -724,7 +724,7 @@ the id exists elsewhere, is accepted because ids are unguessable UUIDs.
 Marks are unrestricted by *who*, but every reference is institution-scoped:
 the assessment, the student, and the criterion must resolve in the caller's
 institution, the student must be enrolled in the assessment's class and year,
-and the criterion must belong to the assessment's subject, as the REST write
+and the criterion must belong to the assessment's subject, as the retired REST write
 path checked; foreign keys do not check an institution. A notification
 resolves only among the caller's own, so another user's behaves like an unknown
 id. Updating an assessment is scoped like finalizing it (its creator or an
