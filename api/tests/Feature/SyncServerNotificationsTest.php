@@ -1,9 +1,11 @@
 <?php
 
 use App\Models\Subject;
+use App\Models\SubjectModeration;
 use App\Models\TeacherAssignment;
 use App\Models\User;
 use App\Support\CurrentInstitution;
+use App\Sync\ServerNotifications;
 use Illuminate\Support\Facades\DB;
 
 /* 3.2c, D: notifications the server writes while handling a push. `edit-blocked`: a mark edit rejected
@@ -238,4 +240,69 @@ test('a party the institution scope hides is skipped, and nothing leaks to them'
 
     expect(noticesFor($b, 'sync-conflict'))->toHaveCount(1);
     expect(DB::table('notifications')->where('user_id', $other['teacher']->id)->count())->toBe(0);
+});
+
+/* sync-conflict, referred: a party or the rounds bound handed the conflict to the subject's moderators. */
+
+test('a referral notifies the subject\'s moderators who are not parties, once, with its own title', function () {
+    $g = buildGraph('School A', '-sn-referred');
+    $a = makeColleague($g, 'a-sn-referred@example.com');
+    $b = makeColleague($g, 'b-sn-referred@example.com');
+    $moderator = makeModerator($g, 'm-sn-referred@example.com');
+    $conflict = openConflictBetween($g, $a, $b);
+
+    (new ServerNotifications)->referred($conflict, $g['assessment']);
+
+    $notices = noticesFor($moderator, 'sync-conflict');
+    expect($notices)->toHaveCount(1);
+    expect($notices[0])->toMatchArray(['tone' => 'warning', 'title' => 'Conflict referred to you', 'assessment_id' => $g['assessment']->id, 'unread' => true]);
+    expect($notices[0]->body)->toContain('CAT 1')->toContain('Sync');
+    // buildGraph's teacher also moderates the subject, and is not a party here.
+    expect(noticesFor($g['teacher'], 'sync-conflict'))->toHaveCount(1);
+    expect(noticesFor($a, 'sync-conflict'))->toBe([]);
+    expect(noticesFor($b, 'sync-conflict'))->toBe([]);
+});
+
+test('a moderator who is a party is not told of the referral, and nobody who does not moderate the subject is', function () {
+    $g = buildGraph('School A', '-sn-referred-party');
+    $b = makeColleague($g, 'b-sn-referred-party@example.com');
+    $otherSubject = Subject::create(['institution_id' => $g['institution']->id, 'name' => 'Science']);
+    $elsewhere = makeColleague($g, 'elsewhere-sn-referred@example.com');
+    SubjectModeration::create(['institution_id' => $g['institution']->id, 'user_id' => $elsewhere->id, 'subject_id' => $otherSubject->id]);
+    $conflict = openConflictBetween($g, $g['teacher'], $b);
+
+    (new ServerNotifications)->referred($conflict, $g['assessment']);
+
+    expect(DB::table('notifications')->count())->toBe(0);
+});
+
+test('a deactivated moderator and a deleted moderation get none', function () {
+    $g = buildGraph('School A', '-sn-referred-filter');
+    $a = makeColleague($g, 'a-sn-referred-filter@example.com');
+    $b = makeColleague($g, 'b-sn-referred-filter@example.com');
+    $deactivated = makeModerator($g, 'deactivated-sn-referred@example.com');
+    $deactivated->update(['deactivated_at' => now()]);
+    $revoked = makeModerator($g, 'revoked-sn-referred@example.com');
+    SubjectModeration::query()->where('user_id', $revoked->id)->first()->delete();
+    $conflict = openConflictBetween($g, $a, $b);
+
+    (new ServerNotifications)->referred($conflict, $g['assessment']);
+
+    expect(noticesFor($deactivated, 'sync-conflict'))->toBe([]);
+    expect(noticesFor($revoked, 'sync-conflict'))->toBe([]);
+});
+
+test('an unread raised-conflict notice does not hide the referral, and an unread referral is not repeated', function () {
+    $g = buildGraph('School A', '-sn-referred-dedupe');
+    $a = makeColleague($g, 'a-sn-referred-dedupe@example.com');
+    $b = makeColleague($g, 'b-sn-referred-dedupe@example.com');
+    $moderator = makeModerator($g, 'm-sn-referred-dedupe@example.com');
+    notificationFor($moderator, ['assessment_id' => $g['assessment']->id]);
+    $conflict = openConflictBetween($g, $a, $b);
+
+    (new ServerNotifications)->referred($conflict, $g['assessment']);
+    (new ServerNotifications)->referred($conflict, $g['assessment']);
+
+    $titles = collect(noticesFor($moderator, 'sync-conflict'))->pluck('title')->all();
+    expect($titles)->toBe(['Mark conflict to settle', 'Conflict referred to you']);
 });

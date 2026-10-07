@@ -5,6 +5,7 @@ namespace App\Sync;
 use App\Models\Assessment;
 use App\Models\Conflict;
 use App\Models\Notification;
+use App\Models\SubjectModeration;
 use App\Models\TeacherAssignment;
 use App\Models\User;
 use Illuminate\Support\Str;
@@ -15,7 +16,7 @@ use Illuminate\Support\Str;
 
    Recipients are looked up through the institution scope and exclude soft-deleted and deactivated
    users, and an assignment that has been deleted no longer counts. A recipient who already has an
-   unread notice of the same kind for the same assessment gets no second one: without that, editing a
+   unread notice of the same kind and title for the same assessment gets no second one: without that, editing a
    finalized 45-student by 5-criterion grid would write 225 notices to every recipient. The advisory
    lock every push already holds makes that check race-free. Once the notice is read, a later event
    writes a new one.
@@ -73,17 +74,40 @@ final class ServerNotifications
         );
     }
 
+    /* A conflict was referred to the subject's moderators (a party chose to, or the rounds bound was reached). Only
+       moderators who are not parties are told: a party who moderates acts as a party, and already knows. The referral
+       is what obliges a moderator to act (ADR 0002 rule 5), so it has its own title and is not hidden by an unread
+       notice that a conflict was raised. */
+    public function referred(Conflict $conflict, Assessment $assessment): void
+    {
+        $assessment->loadMissing(['schoolClass', 'subject']);
+
+        $parties = array_filter([$conflict->side_a['userId'] ?? null, $conflict->side_b['userId'] ?? null]);
+        $moderators = SubjectModeration::query()->where('subject_id', $assessment->subject_id)->pluck('user_id')->all();
+
+        $this->notify(
+            array_diff($moderators, $parties),
+            $assessment,
+            'sync-conflict',
+            'warning',
+            'Conflict referred to you',
+            "{$this->describe($assessment)}: a conflict between two teachers was referred to you. Open Sync to settle it.",
+        );
+    }
+
     /**
      * @param  array<int, string>  $userIds
      */
     private function notify(array $userIds, Assessment $assessment, string $kind, string $tone, string $title, string $body): void
     {
+        $title = Str::limit($title, self::TITLE_LIMIT);
         $recipients = User::query()->whereIn('id', array_values(array_unique($userIds)))->whereNull('deactivated_at')->get();
 
         foreach ($recipients as $user) {
             $alreadyUnread = Notification::query()
                 ->where('user_id', $user->id)
                 ->where('kind', $kind)
+                ->where('title', $title)
                 ->where('assessment_id', $assessment->id)
                 ->where('unread', true)
                 ->exists();
@@ -98,7 +122,7 @@ final class ServerNotifications
                 'assessment_id' => $assessment->id,
                 'kind' => $kind,
                 'tone' => $tone,
-                'title' => Str::limit($title, self::TITLE_LIMIT),
+                'title' => $title,
                 'body' => $body,
                 'unread' => true,
             ]);

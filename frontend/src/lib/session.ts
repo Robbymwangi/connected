@@ -10,13 +10,9 @@ export type CurrentUser = {
   initials: string
   role: string
   email: string
-  /* The API returns which subjects an account moderates, a list, because
-     moderation is scoped per subject (docs/spec/access-model.md, Roles). This
-     flattens it to whether it moderates any of them at all, which is what the
-     fixture-driven conflict flow (still fixture data until the sync layer
-     lands) has ever checked. The real, per-assessment-subject check is that
-     flow's job once conflicts are real rows, not this mapping's. */
-  canModerate: boolean
+  /* The subjects this account moderates, as the API returns them: moderation is granted one subject at a time
+     (docs/spec/access-model.md, Roles), so a conflict is judged against its own assessment's subject. */
+  moderatedSubjectIds: string[]
 }
 
 export type Session = { token: string; user: CurrentUser }
@@ -33,7 +29,7 @@ export function toCurrentUser(me: MeResponse): CurrentUser {
        account grades unrestricted; is_admin is the one flag worth naming here. */
     role: me.is_admin ? 'Administrator' : 'Teacher',
     email: me.email,
-    canModerate: me.moderated_subject_ids.length > 0,
+    moderatedSubjectIds: me.moderated_subject_ids,
   }
 }
 

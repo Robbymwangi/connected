@@ -45,6 +45,7 @@ final class SyncPush
     /** @var array<string, class-string<PushHandler>> */
     private const HANDLERS = [
         'assessments' => AssessmentPushHandler::class,
+        'conflicts' => ConflictPushHandler::class,
         'marks' => MarkPushHandler::class,
         'notifications' => NotificationPushHandler::class,
     ];
@@ -173,7 +174,10 @@ final class SyncPush
             }
 
             if ($entry->baseVersion < $record->version) {
-                return $this->stale($entry, $handler, $record);
+                // A command is never merged: the device gets the conflict as it stands, and decides again.
+                return $handler->isCommand()
+                    ? $this->conflict($entry, $record, SyncPull::row($record))
+                    : $this->stale($entry, $handler, $record);
             }
         }
 
@@ -183,6 +187,7 @@ final class SyncPush
         $creating = $record === null;
         $model->save();
         $creating = false;
+        $handler->written($entry, $model);
 
         $outcome = PushOutcome::accepted($entry->id, $model->version);
         $this->record($entry, $outcome, $model->version, $this->changeSeqOf($model, $before));

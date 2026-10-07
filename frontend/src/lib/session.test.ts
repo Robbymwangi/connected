@@ -34,16 +34,14 @@ describe('toCurrentUser', () => {
     expect(teacher.role).toBe('Teacher')
   })
 
-  it('flattens moderated_subject_ids to canModerate, true for any at all', () => {
-    const none = toCurrentUser({ id: '1', name: 'A', email: 'a@x.test', is_admin: false, moderated_subject_ids: [] })
+  it('keeps the subjects an account moderates, one by one, never flattened to a yes or no', () => {
     const some = toCurrentUser({
       id: '2',
       name: 'B',
       email: 'b@x.test',
       is_admin: false,
-      moderated_subject_ids: ['subj-1'],
+      moderated_subject_ids: ['subj-1', 'subj-2'],
     })
-    expect(none.canModerate).toBe(false)
-    expect(some.canModerate).toBe(true)
+    expect(some.moderatedSubjectIds).toEqual(['subj-1', 'subj-2'])
   })
 })

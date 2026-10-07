@@ -42,7 +42,7 @@ function AuthenticatedApp({ user, onSignOut }: { user: CurrentUser; onSignOut: (
       : screen === 'classes' ? { screen: 'classes' }
       : { screen },
     )
-  const me: Resolver = { id: user.id, name: user.fullName, canModerate: user.canModerate }
+  const me: Resolver = { id: user.id, name: user.fullName, moderatedSubjects: user.moderatedSubjectIds }
   const store = useSessionStore(me)
 
   return (

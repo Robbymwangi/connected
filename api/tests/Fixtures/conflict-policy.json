@@ -1,0 +1,59 @@
+{
+  "about": "Who may do what to a mark conflict, one case per row of the table in docs/spec/sync-protocol.md (Conflict commands). Read by api/tests/Unit/ConflictPolicyTest.php and frontend/src/lib/conflicts.policy.test.ts so the server and the client cannot drift. sides: the two authors by label. actor: a, b, m (a moderator of the subject who is not a party), p (a party who also moderates the subject), x (anyone else). proposals: the label of each proposer, oldest first. expected: allowed means the actor and state rules let the act through (for resolve, the kind and note checks are the resolve command's own); forbidden and invalid are the two rejections. The client has no forbidden/invalid distinction and compares allowed against not allowed.",
+  "cases": [
+    {"name": "outsider cannot propose", "sides": ["a", "b"], "actor": "x", "proposals": [], "referred": false, "resolved": false, "act": "propose", "expected": "forbidden"},
+    {"name": "outsider cannot accept", "sides": ["a", "b"], "actor": "x", "proposals": ["a"], "referred": false, "resolved": false, "act": "accept", "expected": "forbidden"},
+    {"name": "outsider cannot refer", "sides": ["a", "b"], "actor": "x", "proposals": [], "referred": false, "resolved": false, "act": "refer", "expected": "forbidden"},
+    {"name": "outsider cannot resolve", "sides": ["a", "b"], "actor": "x", "proposals": [], "referred": false, "resolved": false, "act": "resolve", "expected": "forbidden"},
+
+    {"name": "moderator cannot propose", "sides": ["a", "b"], "actor": "m", "proposals": [], "referred": false, "resolved": false, "act": "propose", "expected": "forbidden"},
+    {"name": "moderator cannot accept", "sides": ["a", "b"], "actor": "m", "proposals": ["a"], "referred": false, "resolved": false, "act": "accept", "expected": "forbidden"},
+    {"name": "moderator cannot refer", "sides": ["a", "b"], "actor": "m", "proposals": [], "referred": false, "resolved": false, "act": "refer", "expected": "forbidden"},
+    {"name": "moderator resolves with nothing pending", "sides": ["a", "b"], "actor": "m", "proposals": [], "referred": false, "resolved": false, "act": "resolve", "expected": "allowed"},
+    {"name": "moderator resolves while a proposal is pending", "sides": ["a", "b"], "actor": "m", "proposals": ["a"], "referred": false, "resolved": false, "act": "resolve", "expected": "allowed"},
+    {"name": "moderator resolves a referred conflict", "sides": ["a", "b"], "actor": "m", "proposals": ["a", "b"], "referred": true, "resolved": false, "act": "resolve", "expected": "allowed"},
+
+    {"name": "moderator cannot touch someone else's self-conflict: propose", "sides": ["a", "a"], "actor": "m", "proposals": [], "referred": false, "resolved": false, "act": "propose", "expected": "forbidden"},
+    {"name": "moderator cannot touch someone else's self-conflict: resolve", "sides": ["a", "a"], "actor": "m", "proposals": [], "referred": false, "resolved": false, "act": "resolve", "expected": "forbidden"},
+
+    {"name": "self author cannot propose", "sides": ["a", "a"], "actor": "a", "proposals": [], "referred": false, "resolved": false, "act": "propose", "expected": "invalid"},
+    {"name": "self author cannot accept", "sides": ["a", "a"], "actor": "a", "proposals": [], "referred": false, "resolved": false, "act": "accept", "expected": "invalid"},
+    {"name": "self author cannot refer", "sides": ["a", "a"], "actor": "a", "proposals": [], "referred": false, "resolved": false, "act": "refer", "expected": "invalid"},
+    {"name": "self author resolves", "sides": ["a", "a"], "actor": "a", "proposals": [], "referred": false, "resolved": false, "act": "resolve", "expected": "allowed"},
+
+    {"name": "party, referred: propose", "sides": ["a", "b"], "actor": "a", "proposals": [], "referred": true, "resolved": false, "act": "propose", "expected": "invalid"},
+    {"name": "party, referred: accept", "sides": ["a", "b"], "actor": "b", "proposals": ["a"], "referred": true, "resolved": false, "act": "accept", "expected": "invalid"},
+    {"name": "party, referred: refer", "sides": ["a", "b"], "actor": "a", "proposals": [], "referred": true, "resolved": false, "act": "refer", "expected": "invalid"},
+    {"name": "party cannot resolve, referred", "sides": ["a", "b"], "actor": "a", "proposals": [], "referred": true, "resolved": false, "act": "resolve", "expected": "forbidden"},
+
+    {"name": "party, nothing pending: propose", "sides": ["a", "b"], "actor": "a", "proposals": [], "referred": false, "resolved": false, "act": "propose", "expected": "allowed"},
+    {"name": "party, nothing pending: accept", "sides": ["a", "b"], "actor": "a", "proposals": [], "referred": false, "resolved": false, "act": "accept", "expected": "invalid"},
+    {"name": "party, nothing pending: refer", "sides": ["a", "b"], "actor": "b", "proposals": [], "referred": false, "resolved": false, "act": "refer", "expected": "allowed"},
+    {"name": "party cannot resolve, nothing pending", "sides": ["a", "b"], "actor": "a", "proposals": [], "referred": false, "resolved": false, "act": "resolve", "expected": "forbidden"},
+
+    {"name": "party, own first proposal pending: propose", "sides": ["a", "b"], "actor": "a", "proposals": ["a"], "referred": false, "resolved": false, "act": "propose", "expected": "invalid"},
+    {"name": "party, own first proposal pending: accept", "sides": ["a", "b"], "actor": "a", "proposals": ["a"], "referred": false, "resolved": false, "act": "accept", "expected": "invalid"},
+    {"name": "party, own first proposal pending: refer", "sides": ["a", "b"], "actor": "a", "proposals": ["a"], "referred": false, "resolved": false, "act": "refer", "expected": "allowed"},
+
+    {"name": "party, own counter pending: propose", "sides": ["a", "b"], "actor": "b", "proposals": ["a", "b"], "referred": false, "resolved": false, "act": "propose", "expected": "invalid"},
+    {"name": "party, own counter pending: accept", "sides": ["a", "b"], "actor": "b", "proposals": ["a", "b"], "referred": false, "resolved": false, "act": "accept", "expected": "invalid"},
+    {"name": "party, own counter pending: refer", "sides": ["a", "b"], "actor": "b", "proposals": ["a", "b"], "referred": false, "resolved": false, "act": "refer", "expected": "invalid"},
+
+    {"name": "party, the other's first proposal pending: counter", "sides": ["a", "b"], "actor": "b", "proposals": ["a"], "referred": false, "resolved": false, "act": "propose", "expected": "allowed"},
+    {"name": "party, the other's first proposal pending: accept", "sides": ["a", "b"], "actor": "b", "proposals": ["a"], "referred": false, "resolved": false, "act": "accept", "expected": "allowed"},
+    {"name": "party, the other's first proposal pending: refer", "sides": ["a", "b"], "actor": "b", "proposals": ["a"], "referred": false, "resolved": false, "act": "refer", "expected": "allowed"},
+    {"name": "original proposer, the counter pending: third proposal", "sides": ["a", "b"], "actor": "a", "proposals": ["a", "b"], "referred": false, "resolved": false, "act": "propose", "expected": "invalid"},
+    {"name": "original proposer, the counter pending: accept", "sides": ["a", "b"], "actor": "a", "proposals": ["a", "b"], "referred": false, "resolved": false, "act": "accept", "expected": "allowed"},
+    {"name": "original proposer, the counter pending: refer", "sides": ["a", "b"], "actor": "a", "proposals": ["a", "b"], "referred": false, "resolved": false, "act": "refer", "expected": "allowed"},
+
+    {"name": "a moderator who is a party proposes as a party", "sides": ["p", "b"], "actor": "p", "proposals": [], "referred": false, "resolved": false, "act": "propose", "expected": "allowed"},
+    {"name": "a moderator who is a party cannot resolve", "sides": ["p", "b"], "actor": "p", "proposals": [], "referred": false, "resolved": false, "act": "resolve", "expected": "forbidden"},
+    {"name": "a moderator who is a party may refer", "sides": ["p", "b"], "actor": "p", "proposals": [], "referred": false, "resolved": false, "act": "refer", "expected": "allowed"},
+
+    {"name": "resolved: propose", "sides": ["a", "b"], "actor": "a", "proposals": [], "referred": false, "resolved": true, "act": "propose", "expected": "invalid"},
+    {"name": "resolved: accept", "sides": ["a", "b"], "actor": "b", "proposals": ["a"], "referred": false, "resolved": true, "act": "accept", "expected": "invalid"},
+    {"name": "resolved: refer", "sides": ["a", "b"], "actor": "a", "proposals": [], "referred": false, "resolved": true, "act": "refer", "expected": "invalid"},
+    {"name": "resolved: a moderator resolving", "sides": ["a", "b"], "actor": "m", "proposals": [], "referred": false, "resolved": true, "act": "resolve", "expected": "invalid"},
+    {"name": "resolved: a self author resolving", "sides": ["a", "a"], "actor": "a", "proposals": [], "referred": false, "resolved": true, "act": "resolve", "expected": "invalid"}
+  ]
+}
