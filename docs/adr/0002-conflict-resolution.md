@@ -85,3 +85,33 @@ adopts the current row, and shows a notice. Disjoint edits still merge, and an e
 value is a no-op, on every table. Widening the conflicts table to any record was
 considered and rejected: it would rewrite this ADR's parties, proposals, and
 moderation rules for tables where nothing in the product needs them.
+
+### 2026-10-07: moderation is per subject, a moderator who is a party acts as a party, and a resolution against a mark that has moved is a stale write
+
+Three clarifications for the server that implements this policy (`docs/spec/sync-protocol.md`,
+"Conflict commands").
+
+1. **Moderation is per subject.** `docs/spec/access-model.md` grants it through `subject_moderations`, one
+   subject at a time. The client derives a single `canModerate` flag from "moderates any subject"
+   (`frontend/src/lib/session.ts`), which would let a moderator of Maths settle a Science conflict. The
+   server checks the assessment's own subject, and the client follows in 3.5.
+2. **A moderator who is also a party to the conflict acts only as a party.** Rule 3 says neither party may
+   resolve alone, and rule 5's whole premise is an impartial decision-maker. Such a user may propose,
+   accept, and refer like any party, and may not resolve the conflict outright. This changes the client's
+   `abilityOf` (a global moderator who is a party currently resolves) and `canRefer` (which excludes every
+   moderator, so a moderator who is a party could not even refer it to someone else). If nobody else
+   moderates the subject, an administrator grants the role to someone who is not a party.
+   The same rule 4 reading applies to the counter: after a proposal and a counter, only the original
+   proposer may accept it or refer the conflict, and the author of the counter waits. The client's
+   `canRefer` lets any party refer at that point, so it changes too.
+3. **A resolution against a mark that has moved since the conflict opened is a stale write.** The chosen
+   value is a write made against the mark's version when the conflict was raised, so the ordinary rule 4
+   decides it: applied if nothing it touches moved, skipped if the cell already holds it, and otherwise
+   recorded without touching the mark, with a follow-up conflict raised between the producer of the current
+   version and the chosen value. The resolution is always recorded, so every conflict can close, and
+   finalize, which refuses while any conflict is open, stays satisfiable. Two conflicts on one cell are
+   settled one at a time. If resolving the first moves the mark, the second's resolution is a stale write: the
+   no-op, applied if nothing it touches moved, or a follow-up conflict. If the first chose the value the cell
+   already held, the mark did not move and the second applies directly. Nothing is overwritten silently. No new resolution kind: the four stay `auto`,
+   `self`, `agreed`, and `moderated`.
+
