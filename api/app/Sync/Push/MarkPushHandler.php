@@ -100,7 +100,7 @@ final class MarkPushHandler extends PushHandler
         // Decided before the mark's own version is considered: an accepted write here would
         // silently defeat the lock finalize exists to be (docs/spec/workflow.md).
         if ($this->assessment !== null && in_array($this->assessment->status, self::FINALIZED, true)) {
-            throw SyncRejection::invalid('Marks cannot be changed while the assessment is finalized. Unlock it first.');
+            throw SyncRejection::editBlocked($this->assessment->id);
         }
 
         if ($record === null) {

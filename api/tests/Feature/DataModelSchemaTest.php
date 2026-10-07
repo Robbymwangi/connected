@@ -25,7 +25,7 @@ $tables = [
     'results' => ['id', 'institution_id', 'assessment_id', 'student_id', 'total', 'max', 'level', 'version', 'deleted_at'],
     'comments' => ['id', 'institution_id', 'assessment_id', 'student_id', 'author_id', 'body', 'state', 'version', 'deleted_at'],
     'reports' => ['id', 'institution_id', 'assessment_id', 'student_id', 'generated_at', 's3_key', 'version', 'deleted_at'],
-    'notifications' => ['id', 'institution_id', 'user_id', 'kind', 'tone', 'title', 'body', 'unread', 'version', 'deleted_at'],
+    'notifications' => ['id', 'institution_id', 'user_id', 'assessment_id', 'kind', 'tone', 'title', 'body', 'unread', 'version', 'deleted_at'],
     'unlock_notes' => ['id', 'institution_id', 'assessment_id', 'user_id', 'note', 'created_at'],
 ];
 

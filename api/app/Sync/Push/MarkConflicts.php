@@ -6,6 +6,7 @@ use App\Models\Conflict;
 use App\Models\Mark;
 use App\Models\SyncMutation;
 use App\Models\User;
+use App\Sync\ServerNotifications;
 use Illuminate\Support\Facades\DB;
 use Ramsey\Uuid\Uuid;
 
@@ -46,7 +47,7 @@ final class MarkConflicts
      */
     public function raise(PushEntry $entry, Mark $record, RecordHistory $history, array $incoming, bool $auto): Conflict
     {
-        return Conflict::create([
+        $conflict = Conflict::create([
             'institution_id' => $this->user->institution_id,
             'mark_id' => $record->id,
             'base_version' => $entry->baseVersion,
@@ -57,6 +58,13 @@ final class MarkConflicts
             'resolution' => $auto ? ['kind' => 'auto'] : null,
             'resolved_at' => $auto ? now() : null,
         ]);
+
+        // An auto conflict has nothing to settle, so nobody is told; an open one tells both parties.
+        if (! $auto) {
+            (new ServerNotifications)->conflictRaised($conflict, $record->assessment_id);
+        }
+
+        return $conflict;
     }
 
     /**
