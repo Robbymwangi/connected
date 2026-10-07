@@ -2,6 +2,7 @@
 
 use App\Models\Assessment;
 use App\Models\ClassSubject;
+use App\Models\Conflict;
 use App\Models\Criterion;
 use App\Models\Enrolment;
 use App\Models\Institution;
@@ -294,5 +295,48 @@ function notificationFor(User $user, array $overrides = []): Notification
         'title' => 'Mark conflict to settle',
         'body' => 'Two edits to the same mark disagree.',
         'unread' => true,
+    ], $overrides));
+}
+
+/* Conflict-command helpers (3.2c, F). buildGraph's teacher moderates the graph's subject, so a conflict between
+   that teacher and a colleague exercises the moderator-who-is-a-party path; a plain two-party conflict needs two
+   colleagues, and a non-party moderator comes from makeModerator. */
+
+/** A user who moderates the graph's subject and, unless the test says otherwise, is a party to nothing. */
+function makeModerator(array $graph, string $email): User
+{
+    $user = makeColleague($graph, $email);
+
+    SubjectModeration::create([
+        'institution_id' => $graph['institution']->id,
+        'user_id' => $user->id,
+        'subject_id' => $graph['subject']->id,
+    ]);
+
+    return $user;
+}
+
+/** An open mark conflict on the graph's mark between two users, side A's editId then side B's, as the server raises one. */
+function openConflictBetween(array $graph, User $a, User $b, array $overrides = []): Conflict
+{
+    $side = fn (User $user, int $score) => [
+        'editId' => (string) Str::uuid(),
+        'userId' => $user->id,
+        'who' => $user->name,
+        'markKind' => 'score',
+        'score' => $score,
+        'at' => '2026-10-07T08:00:00Z',
+        'receivedAt' => '2026-10-07T08:00:01.000000Z',
+    ];
+
+    return Conflict::create(array_merge([
+        'institution_id' => $graph['institution']->id,
+        'mark_id' => $graph['mark']->id,
+        'base_version' => 1,
+        'side_a' => $side($a, 6),
+        'side_b' => $side($b, 9),
+        'proposals' => [],
+        'referral' => null,
+        'resolution' => null,
     ], $overrides));
 }

@@ -31,7 +31,7 @@ function fakeStorage(initial: Session | null = null): SessionStorage & { current
 describe('revalidate', () => {
   const cached: Session = {
     token: 'tok',
-    user: { id: 'u-1', firstName: 'M', fullName: 'M', initials: 'M', role: 'Teacher', email: 'old@x.test', canModerate: false },
+    user: { id: 'u-1', firstName: 'M', fullName: 'M', initials: 'M', role: 'Teacher', email: 'old@x.test', moderatedSubjectIds: [] },
   }
 
   it('refreshes with the current /me on success, and writes nothing itself', async () => {
@@ -87,7 +87,7 @@ describe('performSignOut', () => {
   it('clears local storage immediately regardless of whether the API call succeeds', async () => {
     const storage = fakeStorage({
       token: 'tok',
-      user: { id: 'u-1', firstName: 'M', fullName: 'M', initials: 'M', role: 'Teacher', email: 'm@x.test', canModerate: false },
+      user: { id: 'u-1', firstName: 'M', fullName: 'M', initials: 'M', role: 'Teacher', email: 'm@x.test', moderatedSubjectIds: [] },
     })
     const fetchMock = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
 

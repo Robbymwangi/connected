@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useCurrentUser } from '../../app/AuthContext'
 import type { ActiveConflict, Choice, Proposal } from '../../fixtures/conflicts'
 import { rubricFor, type Subject } from '../../fixtures/rubrics'
-import { abilityOf, canRefer, describeReferral, sideOf, type Resolver } from '../../lib/conflicts'
+import { abilityOf, canRefer, describeReferral, isValidNote, sideOf, type Resolver } from '../../lib/conflicts'
 import { formatMark, parseMarkInput, type Mark } from '../../lib/grading'
 import { formatDateTime } from '../../lib/time'
 
@@ -25,8 +25,8 @@ type ConflictActionsProps = {
    never as mine or theirs. */
 export function ConflictActions({ conflict, subject, onResolve, onPropose, onAccept, onRefer, onCancel }: ConflictActionsProps) {
   const currentUser = useCurrentUser()
-  const user: Resolver = { id: currentUser.id, name: currentUser.fullName, canModerate: currentUser.canModerate }
-  const ability = abilityOf(conflict, user)
+  const user: Resolver = { id: currentUser.id, name: currentUser.fullName, moderatedSubjects: currentUser.moderatedSubjectIds }
+  const ability = abilityOf(conflict, user, subject)
   const max = rubricFor(subject).find((c) => c.id === conflict.criterionId)?.max ?? 0
 
   /* A choice is picked first, then confirmed, with a note where the policy needs
@@ -44,7 +44,7 @@ export function ConflictActions({ conflict, subject, onResolve, onPropose, onAcc
 
   const settling = ability.kind === 'resolve'
   const noteRequired = ability.kind === 'resolve' ? ability.noteRequired : true
-  const canConfirm = choice !== null && (!noteRequired || note.trim() !== '')
+  const canConfirm = choice !== null && (!noteRequired || isValidNote(note))
 
   const reset = () => {
     setPicked(null)

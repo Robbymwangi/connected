@@ -11,7 +11,13 @@ import type { Mark } from './grading'
 
 /* Settling a conflict under ADR 0002. Pure: the store applies what these return. */
 
-export type Resolver = { id: string; name: string; canModerate: boolean }
+/* moderatedSubjects: the subjects this user moderates, because moderation is granted one subject at a time
+   (docs/spec/access-model.md); a conflict is judged against its own assessment's subject. */
+export type Resolver = { id: string; name: string; moderatedSubjects: readonly string[] }
+
+export function moderates(user: Resolver, subject: string): boolean {
+  return user.moderatedSubjects.includes(subject)
+}
 
 export function marksEqual(a: Mark, b: Mark): boolean {
   if (a.kind !== b.kind) return false
@@ -36,8 +42,10 @@ export function pendingProposal(conflict: ActiveConflict): Proposal | undefined 
   return conflict.proposals[conflict.proposals.length - 1]
 }
 
-/* What this user may do with this conflict.
-   resolve:  settle it directly (own edits, or a moderator; the latter with a note).
+/* What this user may do with this conflict. A party acts only as a party, even one who also moderates the
+   subject: neither party may resolve alone, and a moderator's whole value is being impartial (ADR 0002,
+   2026-10-07 amendment). The server applies the same table, and conflicts.policy.test.ts holds both to it.
+   resolve:  settle it directly (own edits, or a moderator who is not a party; the latter with a note).
    propose:  put forward a resolution with a note for the other party.
    respond:  a proposal from the other party is waiting: accept it, counter it if a
              round remains, or refer it.
@@ -56,9 +64,10 @@ export function isParty(conflict: ActiveConflict, user: Resolver): boolean {
   return conflict.mine.userId === user.id || conflict.theirs.userId === user.id
 }
 
-export function abilityOf(conflict: ActiveConflict, user: Resolver): Ability {
-  if (user.canModerate && !isSelfConflict(conflict)) return { kind: 'resolve', noteRequired: true }
-  if (!isParty(conflict, user)) return { kind: 'observer' }
+export function abilityOf(conflict: ActiveConflict, user: Resolver, subject: string): Ability {
+  if (!isParty(conflict, user)) {
+    return moderates(user, subject) && !isSelfConflict(conflict) ? { kind: 'resolve', noteRequired: true } : { kind: 'observer' }
+  }
   if (isSelfConflict(conflict)) return { kind: 'resolve', noteRequired: false }
   if (conflict.referral) return { kind: 'referred', referral: conflict.referral }
   const proposal = pendingProposal(conflict)
@@ -67,10 +76,22 @@ export function abilityOf(conflict: ActiveConflict, user: Resolver): Ability {
   return { kind: 'respond', proposal, canCounter: conflict.proposals.length < MAX_PROPOSALS }
 }
 
-/* Whether a party may refer this to a moderator: any time before it is settled or
-   already referred, and never for their own two-device edits. */
+/* Whether a party may refer this to a moderator: any time before it is settled or already referred, and never
+   for their own two-device edits. After a proposal and a counter only the original proposer may, so the author
+   of the counter waits (ADR 0002 rule 4). A party who moderates the subject may refer too: they are a party. */
 export function canRefer(conflict: ActiveConflict, user: Resolver): boolean {
-  return isParty(conflict, user) && !isSelfConflict(conflict) && !user.canModerate && !conflict.referral
+  if (!isParty(conflict, user) || isSelfConflict(conflict) || conflict.referral) return false
+  const waitingOnTheOriginalProposer =
+    conflict.proposals.length >= MAX_PROPOSALS && pendingProposal(conflict)?.byId === user.id
+  return !waitingOnTheOriginalProposer
+}
+
+/* A note is required with a proposal and a moderated resolution: not blank, no NUL, at most 2000 characters.
+   Counted in code points, as the server counts characters, so the two agree on a note full of emoji. */
+export const MAX_NOTE_LENGTH = 2000
+
+export function isValidNote(note: string): boolean {
+  return note.trim() !== '' && !note.includes('\0') && [...note].length <= MAX_NOTE_LENGTH
 }
 
 /* Whether a choice can be applied to this conflict: a side must be one of its two

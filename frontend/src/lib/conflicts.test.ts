@@ -9,13 +9,15 @@ import {
   directResolution,
   isAutoResolvable,
   isSelfConflict,
+  isValidNote,
   marksEqual,
   toHistory,
 } from './conflicts'
 import { ABSENT, EMPTY, score } from './grading'
 
-const me = { id: 'u-1', name: 'John Doe', canModerate: false }
-const hod = { id: 'u-3', name: 'Mr. Kamau', canModerate: true }
+const SUBJECT = 'English'
+const me = { id: 'u-1', name: 'John Doe', moderatedSubjects: [] as string[] }
+const hod = { id: 'u-3', name: 'Mr. Kamau', moderatedSubjects: [SUBJECT] }
 
 const crossTeacher: ActiveConflict = {
   id: 'c',
@@ -58,35 +60,35 @@ describe('marksEqual and isAutoResolvable', () => {
 describe('abilityOf', () => {
   it('lets a teacher settle their own two-device edits directly, no note needed', () => {
     expect(isSelfConflict(ownEdits)).toBe(true)
-    expect(abilityOf(ownEdits, me)).toEqual({ kind: 'resolve', noteRequired: false })
+    expect(abilityOf(ownEdits, me, SUBJECT)).toEqual({ kind: 'resolve', noteRequired: false })
   })
   it('never lets a party settle a cross-teacher conflict alone', () => {
-    expect(abilityOf(crossTeacher, me)).toEqual({ kind: 'propose' })
+    expect(abilityOf(crossTeacher, me, SUBJECT)).toEqual({ kind: 'propose' })
   })
   it('lets a moderator settle it outright, with a note', () => {
-    expect(abilityOf(crossTeacher, hod)).toEqual({ kind: 'resolve', noteRequired: true })
+    expect(abilityOf(crossTeacher, hod, SUBJECT)).toEqual({ kind: 'resolve', noteRequired: true })
   })
   it('asks the other party to respond to a pending proposal, with a counter still open', () => {
-    expect(abilityOf({ ...crossTeacher, proposals: [proposalByHer] }, me)).toEqual({ kind: 'respond', proposal: proposalByHer, canCounter: true })
+    expect(abilityOf({ ...crossTeacher, proposals: [proposalByHer] }, me, SUBJECT)).toEqual({ kind: 'respond', proposal: proposalByHer, canCounter: true })
   })
   it('makes the proposer wait for the other party', () => {
     const mine: Proposal = { ...proposalByHer, byId: 'u-1', by: 'John Doe' }
-    expect(abilityOf({ ...crossTeacher, proposals: [mine] }, me)).toEqual({ kind: 'awaiting', proposal: mine })
+    expect(abilityOf({ ...crossTeacher, proposals: [mine] }, me, SUBJECT)).toEqual({ kind: 'awaiting', proposal: mine })
   })
   it('after one proposal each, the response can only be accept or refer', () => {
     const mine: Proposal = { ...proposalByHer, byId: 'u-1', by: 'John Doe' }
     const twoRounds = { ...crossTeacher, proposals: [mine, proposalByHer] }
-    expect(abilityOf(twoRounds, me)).toEqual({ kind: 'respond', proposal: proposalByHer, canCounter: false })
+    expect(abilityOf(twoRounds, me, SUBJECT)).toEqual({ kind: 'respond', proposal: proposalByHer, canCounter: false })
   })
   it('a referred conflict is out of the parties\' hands but not the moderator\'s', () => {
     const referred = { ...crossTeacher, referral: { reason: 'rounds' as const, at: '2026-08-28T09:00:00' } }
-    expect(abilityOf(referred, me)).toEqual({ kind: 'referred', referral: referred.referral })
-    expect(abilityOf(referred, hod)).toEqual({ kind: 'resolve', noteRequired: true })
+    expect(abilityOf(referred, me, SUBJECT)).toEqual({ kind: 'referred', referral: referred.referral })
+    expect(abilityOf(referred, hod, SUBJECT)).toEqual({ kind: 'resolve', noteRequired: true })
   })
   it('someone who is neither a party nor a moderator can only observe', () => {
-    const other = { id: 'u-9', name: 'Mr. Otieno', canModerate: false }
-    expect(abilityOf(crossTeacher, other)).toEqual({ kind: 'observer' })
-    expect(abilityOf({ ...crossTeacher, proposals: [proposalByHer] }, other)).toEqual({ kind: 'observer' })
+    const other = { id: 'u-9', name: 'Mr. Otieno', moderatedSubjects: [] as string[] }
+    expect(abilityOf(crossTeacher, other, SUBJECT)).toEqual({ kind: 'observer' })
+    expect(abilityOf({ ...crossTeacher, proposals: [proposalByHer] }, other, SUBJECT)).toEqual({ kind: 'observer' })
     expect(canRefer(crossTeacher, other)).toBe(false)
   })
   it('a party may refer any cross-teacher conflict that is not already referred', () => {
@@ -94,6 +96,28 @@ describe('abilityOf', () => {
     expect(canRefer(ownEdits, me)).toBe(false)
     expect(canRefer(crossTeacher, hod)).toBe(false)
     expect(canRefer({ ...crossTeacher, referral: { reason: 'party', byId: 'u-2', by: 'Ms. Akinyi', at: 'x' } }, me)).toBe(false)
+  })
+  it('moderation is per subject: a moderator of another subject only observes', () => {
+    const maths = { id: 'u-3', name: 'Mr. Kamau', moderatedSubjects: ['Maths'] }
+    expect(abilityOf(crossTeacher, maths, SUBJECT)).toEqual({ kind: 'observer' })
+    expect(abilityOf(crossTeacher, maths, 'Maths')).toEqual({ kind: 'resolve', noteRequired: true })
+  })
+  it('a moderator who is also a party acts as a party: proposes, cannot resolve, may refer', () => {
+    const partyAndHod = { id: 'u-1', name: 'John Doe', moderatedSubjects: [SUBJECT] }
+    expect(abilityOf(crossTeacher, partyAndHod, SUBJECT)).toEqual({ kind: 'propose' })
+    expect(canRefer(crossTeacher, partyAndHod)).toBe(true)
+  })
+  it('a moderator of someone else\'s own two-device edits cannot settle them', () => {
+    expect(abilityOf(ownEdits, hod, SUBJECT)).toEqual({ kind: 'observer' })
+  })
+  it('after a proposal and a counter only the original proposer may accept or refer', () => {
+    const mine: Proposal = { ...proposalByHer, byId: 'u-1', by: 'John Doe', choice: { kind: 'side', editId: 'e-m' } }
+    const counter: Proposal = { ...proposalByHer, byId: 'u-2' }
+    const twoRounds = { ...crossTeacher, proposals: [mine, counter] }
+    const her = { id: 'u-2', name: 'Ms. Akinyi', moderatedSubjects: [] as string[] }
+    expect(abilityOf(twoRounds, her, SUBJECT).kind).toBe('awaiting')
+    expect(canRefer(twoRounds, her)).toBe(false)
+    expect(canRefer(twoRounds, me)).toBe(true)
   })
 })
 
@@ -136,5 +160,19 @@ describe('resolutions', () => {
     expect(h.proposals).toEqual([proposalByHer])
     expect('baseVersion' in h).toBe(false)
     expect(h.resolvedAt).toBe('2026-08-28T09:00:00')
+  })
+})
+
+describe('isValidNote', () => {
+  it('needs something other than whitespace, no NUL, and at most 2000 characters', () => {
+    expect(isValidNote('re-marked from the script')).toBe(true)
+    expect(isValidNote('  \t ')).toBe(false)
+    expect(isValidNote('bad\0note')).toBe(false)
+    expect(isValidNote('x'.repeat(2000))).toBe(true)
+    expect(isValidNote('x'.repeat(2001))).toBe(false)
+  })
+  it('counts characters, not UTF-16 units, as the server does', () => {
+    expect(isValidNote('😀'.repeat(2000))).toBe(true)
+    expect(isValidNote('😀'.repeat(2001))).toBe(false)
   })
 })

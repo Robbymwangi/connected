@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { score } from '../lib/grading'
 import { reduce, seed } from './useSessionStore'
 
-const me = { id: 'u-1', name: 'John Doe', canModerate: false }
-const hod = { id: 'u-3', name: 'Mr. Kamau', canModerate: true }
+const me = { id: 'u-1', name: 'John Doe', moderatedSubjects: [] as string[] }
+const hod = { id: 'u-3', name: 'Mr. Kamau', moderatedSubjects: ['English', 'Maths', 'Science'] }
 const at = '2026-08-28T09:00:00'
 
 const open = seed.conflicts[0] // two teachers, no proposal
@@ -46,7 +46,7 @@ describe('choice validation at the store boundary', () => {
     expect(reduce(seed, { type: 'proposeResolution', id: open.id, choice: over, note: 'n', user: me, at })).toBe(seed)
   })
   it('a non-party cannot propose or accept', () => {
-    const other = { id: 'u-9', name: 'Mr. Otieno', canModerate: false }
+    const other = { id: 'u-9', name: 'Mr. Otieno', moderatedSubjects: [] as string[] }
     expect(reduce(seed, { type: 'proposeResolution', id: open.id, choice: theirsOf(open), note: 'n', user: other, at })).toBe(seed)
     expect(reduce(seed, { type: 'acceptProposal', id: proposed.id, user: other, at })).toBe(seed)
   })
@@ -77,13 +77,13 @@ describe('proposeResolution and acceptProposal', () => {
     expect(k.proposals).toHaveLength(2)
     expect(k.proposals[1]).toEqual({ byId: 'u-1', by: 'John Doe', choice: corrected, note: 'split the difference', at })
     /* Ms. Akinyi, now the responder, may not propose again. */
-    const her = { id: 'u-2', name: 'Ms. Akinyi', canModerate: false }
+    const her = { id: 'u-2', name: 'Ms. Akinyi', moderatedSubjects: [] as string[] }
     expect(reduce(countered, { type: 'proposeResolution', id: proposed.id, choice: theirsOf(proposed), note: 'again', user: her, at })).toBe(countered)
   })
   it('referring after two rounds records the reason as rounds; earlier, as the party', () => {
     const corrected = { kind: 'corrected' as const, mark: score(9) }
     const countered = reduce(seed, { type: 'proposeResolution', id: proposed.id, choice: corrected, note: 'n', user: me, at })
-    const her = { id: 'u-2', name: 'Ms. Akinyi', canModerate: false }
+    const her = { id: 'u-2', name: 'Ms. Akinyi', moderatedSubjects: [] as string[] }
     const byRounds = reduce(countered, { type: 'referConflict', id: proposed.id, user: her, at })
     expect(byRounds.conflicts.find((x) => x.id === proposed.id)?.referral).toEqual({ reason: 'rounds', at })
     const byChoice = reduce(seed, { type: 'referConflict', id: open.id, user: me, at })

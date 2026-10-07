@@ -89,6 +89,18 @@ abstract class PushHandler
     /** Whether this user may create (null) or update (the record) here. */
     abstract public function authorize(?Model $record): bool;
 
+    /**
+     * A command is validated against the record's stored state and never merged by rule 4: a base behind the
+     * record is answered with the record itself, and the state checks run only at an equal version.
+     */
+    public function isCommand(): bool
+    {
+        return false;
+    }
+
+    /** Called inside the entry's transaction after the record is saved, for what must happen only once. */
+    public function written(PushEntry $entry, Model $saved): void {}
+
     /** Rules decided before the version rules; throws SyncRejection. */
     public function check(PushEntry $entry, ?Model $record): void {}
 

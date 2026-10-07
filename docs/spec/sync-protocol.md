@@ -469,8 +469,9 @@ credited user) and notifies its parties. A deleted mark is `invalid`. The comman
 conflict's new version, and its `change_seq` names the conflict's log row.
 
 **Notifications.** A referral writes `sync-conflict` ("Conflict referred to you") to the subject's moderators who
-are not parties, since the referral is what obliges them to act. Everything else about notification dedupe is as
-for a raised conflict.
+are not parties, since the referral is what obliges them to act. A notice is deduplicated by kind, title, and
+assessment, so an unread "Mark conflict to settle" notice does not hide a referral, and a second referral on the
+same assessment while the first is unread adds none.
 
 **Replay.** A command resent after the state moved on replays the stored outcome; it is not validated again. A resend
 whose note was edited is a different payload under a used id and is `invalid`.

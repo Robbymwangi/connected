@@ -19,6 +19,7 @@ import {
   chosenMark,
   directResolution,
   isValidChoice,
+  isValidNote,
   MAX_PROPOSALS,
   toHistory,
   type Resolver,
@@ -74,6 +75,11 @@ function gridOf(state: State, assessmentId: string): Grid {
 
 /* The maximum for the criterion a conflict is about; 0 when unknown, which makes
    every corrected score invalid rather than accepting one blindly. */
+/* The subject of the assessment a conflict is on; empty when unknown, which grants no moderation. */
+function subjectOf(state: State, conflict: ActiveConflict): string {
+  return state.assessments.find((x) => x.id === conflict.assessmentId)?.subject ?? ''
+}
+
 function criterionMax(state: State, conflict: ActiveConflict): number {
   const a = state.assessments.find((x) => x.id === conflict.assessmentId)
   return a ? (rubricFor(a.subject).find((c) => c.id === conflict.criterionId)?.max ?? 0) : 0
@@ -111,9 +117,9 @@ export function reduce(state: State, action: Action): State {
     case 'resolveConflict': {
       const conflict = state.conflicts.find((k) => k.id === action.id)
       if (!conflict) return state
-      const ability = abilityOf(conflict, action.user)
+      const ability = abilityOf(conflict, action.user, subjectOf(state, conflict))
       if (ability.kind !== 'resolve') return state
-      if (ability.noteRequired && action.note.trim() === '') return state
+      if (ability.noteRequired && !isValidNote(action.note)) return state
       if (!isValidChoice(conflict, action.choice, criterionMax(state, conflict))) return state
       return settle(state, conflict, directResolution(conflict, action.choice, action.user, action.note), action.at)
     }
@@ -124,9 +130,9 @@ export function reduce(state: State, action: Action): State {
     case 'proposeResolution': {
       const conflict = state.conflicts.find((k) => k.id === action.id)
       if (!conflict) return state
-      const ability = abilityOf(conflict, action.user)
+      const ability = abilityOf(conflict, action.user, subjectOf(state, conflict))
       const may = ability.kind === 'propose' || (ability.kind === 'respond' && ability.canCounter)
-      if (!may || action.note.trim() === '') return state
+      if (!may || !isValidNote(action.note)) return state
       if (!isValidChoice(conflict, action.choice, criterionMax(state, conflict))) return state
       const proposal = { byId: action.user.id, by: action.user.name, choice: action.choice, note: action.note, at: action.at }
       const proposals = [...conflict.proposals, proposal]
@@ -154,7 +160,7 @@ export function reduce(state: State, action: Action): State {
     case 'acceptProposal': {
       const conflict = state.conflicts.find((k) => k.id === action.id)
       if (!conflict) return state
-      const ability = abilityOf(conflict, action.user)
+      const ability = abilityOf(conflict, action.user, subjectOf(state, conflict))
       if (ability.kind !== 'respond') return state
       /* Stored proposals were validated on entry; checked again so the settlement
          path cannot throw on a record that arrived by sync. */

@@ -6,8 +6,8 @@ use App\Models\Conflict;
 use App\Models\Mark;
 use App\Models\SyncMutation;
 use App\Models\User;
+use App\Sync\ServerClock;
 use App\Sync\ServerNotifications;
-use Illuminate\Support\Facades\DB;
 use Ramsey\Uuid\Uuid;
 
 /* The conflicts record for a mark, written when two teachers' edits to one cell meet
@@ -110,9 +110,7 @@ final class MarkConflicts
             'markKind' => $incoming['markKind'],
             'score' => $incoming['score'],
             'at' => $entry->at,
-            'receivedAt' => DB::scalar(<<<'SQL'
-                select to_char(clock_timestamp() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
-                SQL),
+            'receivedAt' => ServerClock::now(),
         ];
     }
 }
