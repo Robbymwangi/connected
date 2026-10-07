@@ -95,6 +95,7 @@ test('authenticated as a user of school A, every model is scoped to A and sees n
         'institution_id' => $a['institution']->id,
         'mark_id' => $a['mark']->id,
         'base_version' => 0,
+        'mark_version' => 1,
         'side_a' => ['editId' => 'e1', 'userId' => $a['teacher']->id, 'markKind' => 'score', 'score' => 8, 'at' => now()->toIso8601String()],
         'side_b' => ['editId' => 'e2', 'userId' => $a['teacher']->id, 'markKind' => 'score', 'score' => 6, 'at' => now()->toIso8601String()],
     ]);
@@ -102,6 +103,7 @@ test('authenticated as a user of school A, every model is scoped to A and sees n
         'institution_id' => $b['institution']->id,
         'mark_id' => $b['mark']->id,
         'base_version' => 0,
+        'mark_version' => 1,
         'side_a' => ['editId' => 'e1', 'userId' => $b['teacher']->id, 'markKind' => 'score', 'score' => 8, 'at' => now()->toIso8601String()],
         'side_b' => ['editId' => 'e2', 'userId' => $b['teacher']->id, 'markKind' => 'score', 'score' => 6, 'at' => now()->toIso8601String()],
     ]);

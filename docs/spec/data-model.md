@@ -118,7 +118,7 @@ something #36 requires.
 - **`conflicts`**: `id`, `institution_id`, `mark_id`, `base_version`, `mark_version` (the mark's
   version when the conflict was raised, which is the version side A produced; recorded on the
   conflict itself because a follow-up conflict, raised by a resolution command, has no mutation
-  of its own to read it from), `side_a`,
+  of its own to read it from; server-only, hidden from the change log and every pull), `side_a`,
   `side_b` (each `{editId, userId, who, markKind, score, at, receivedAt}`; on side A `who`, `at`,
   and `receivedAt` may be null, on side B only `at` may be; `base_version` is the version side B
   was edited against), `proposals`

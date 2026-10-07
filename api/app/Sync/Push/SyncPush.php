@@ -271,7 +271,7 @@ final class SyncPush
     private function collided(PushEntry $entry, PushHandler $handler, Model $record, RecordHistory $history, array $sent): PushOutcome
     {
         if ($handler instanceof MarkPushHandler) {
-            (new MarkConflicts($this->user))->raise($entry, $record, $history, $sent, auto: true);
+            $this->raiseFor($entry, $record, $history, $sent, auto: true);
         }
 
         return $this->unchanged($entry, $record);
@@ -294,8 +294,18 @@ final class SyncPush
     private function openConflict(PushHandler $handler, PushEntry $entry, Model $record, RecordHistory $history, array $sent): ?Conflict
     {
         return $handler instanceof MarkPushHandler
-            ? (new MarkConflicts($this->user))->raise($entry, $record, $history, $sent, auto: false)
+            ? $this->raiseFor($entry, $record, $history, $sent, auto: false)
             : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $sent  the entry's own validated cell
+     */
+    private function raiseFor(PushEntry $entry, Model $record, RecordHistory $history, array $sent, bool $auto): Conflict
+    {
+        $conflicts = new MarkConflicts($this->user);
+
+        return $conflicts->raise($record, $history, $entry->baseVersion, $conflicts->side($entry->id, $this->user->id, $this->user->name, $sent, $entry->at), $auto);
     }
 
     /* The sync_changes row this entry just wrote, or null when it wrote none: a patch that

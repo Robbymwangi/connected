@@ -77,6 +77,30 @@ final class ConflictPolicy
         };
     }
 
+    /* The command a resolution's wire kind stands for: an acceptance of a pending proposal, or a direct resolution.
+       `auto` is written only by the server (both sides held the same mark), so a device that sends it is wrong. */
+    public static function commandFor(mixed $kind): CommandKind|SyncRejection
+    {
+        return match ($kind) {
+            'agreed' => CommandKind::Accept,
+            'self', 'moderated' => CommandKind::Resolve,
+            'auto' => SyncRejection::invalid('auto is written only by the server'),
+            default => SyncRejection::invalid('resolution kind must be agreed, self, or moderated'),
+        };
+    }
+
+    /* A direct resolution's kind must fit who is resolving: self is the author of a conflict between their own
+       edits, moderated is a moderator who is not a party. Reached only after actor() has let the role resolve at all,
+       so a party sending either was already forbidden. */
+    public static function resolutionFits(ConflictRole $role, string $kind): ?SyncRejection
+    {
+        return match (true) {
+            $kind === 'self' && $role !== ConflictRole::SelfAuthor => SyncRejection::invalid('only the author of a conflict between their own edits resolves it as self'),
+            $kind === 'moderated' && $role !== ConflictRole::Moderator => SyncRejection::invalid('only a moderator who is not a party resolves a conflict as moderated'),
+            default => null,
+        };
+    }
+
     /* Computed from the stored proposals, never taken from the device. The bound is a count held in the record,
        so it needs no clock (ADR 0002 rule 4). */
     public static function referralReason(int $proposalCount): string

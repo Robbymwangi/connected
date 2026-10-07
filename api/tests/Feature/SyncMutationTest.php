@@ -81,6 +81,7 @@ test('a conflict id is allowed only on a conflict', function () {
         'institution_id' => $g['institution']->id,
         'mark_id' => $g['mark']->id,
         'base_version' => 1,
+        'mark_version' => 1,
         'side_a' => ['editId' => 'a'],
         'side_b' => ['editId' => 'b'],
     ]);
