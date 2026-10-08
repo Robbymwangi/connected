@@ -70,11 +70,4 @@ export const marksByAssessment: Record<string, Grid> = {
 }
 
 /* A grid with every cell empty, for assessments with no marks yet. */
-export function emptyGrid(studentIds: string[], criterionIds: string[]): Grid {
-  const grid: Grid = {}
-  for (const s of studentIds) {
-    grid[s] = {}
-    for (const c of criterionIds) grid[s][c] = { mark: EMPTY, sync: 'synced' }
-  }
-  return grid
-}
+export { emptyGrid } from '../lib/localMarks'

@@ -7,7 +7,7 @@ import {
   type HistoricalConflict,
   type Resolution,
 } from '../fixtures/conflicts'
-import { emptyGrid, type Grid } from '../fixtures/marks'
+import type { Grid } from '../fixtures/marks'
 import type { Criterion } from '../fixtures/rubrics'
 import {
   abilityOf,
@@ -23,7 +23,7 @@ import {
 } from '../lib/conflicts'
 import { localDatabaseFor } from '../lib/localDatabase'
 import { createLocalAssessmentRecord } from '../lib/localAssessment'
-import { changedGridCells, gridFromMarkRows, mergePendingMarkCells, pendingMarkRecord, type GridCellChange } from '../lib/localMarks'
+import { changedGridCells, emptyGrid, gridFromMarkRows, mergePendingMarkCells, pendingMarkRecord, type GridCellChange } from '../lib/localMarks'
 import { markIdFor } from '../lib/markIdentity'
 import { mapSyncedAssessmentState, type SyncedAssessmentState } from '../lib/syncedAssessmentState'
 import type { SchoolDirectoryState } from './useSchoolDirectory'

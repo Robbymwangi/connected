@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { assessments } from '../fixtures/assessments'
 import { classes } from '../fixtures/classes'
 import { activeConflicts, resolvedConflicts } from '../fixtures/conflicts'
-import { emptyGrid } from '../fixtures/marks'
 import { marksByAssessment } from '../fixtures/marks'
 import { rubricFor } from '../fixtures/rubrics'
 import { subjects } from '../fixtures/rubrics'
 import { rosterFor } from '../fixtures/students'
 import { score } from '../lib/grading'
+import { emptyGrid } from '../lib/localMarks'
 import { reduce, mergeSyncedState } from './useSessionStore'
 
 const seed: Parameters<typeof reduce>[0] = {
