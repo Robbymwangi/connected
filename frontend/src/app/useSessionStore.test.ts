@@ -1,10 +1,23 @@
 import { describe, expect, it } from 'vitest'
+import { assessments } from '../fixtures/assessments'
 import { classes } from '../fixtures/classes'
+import { activeConflicts, resolvedConflicts } from '../fixtures/conflicts'
 import { emptyGrid } from '../fixtures/marks'
+import { marksByAssessment } from '../fixtures/marks'
 import { rubricFor } from '../fixtures/rubrics'
+import { subjects } from '../fixtures/rubrics'
 import { rosterFor } from '../fixtures/students'
 import { score } from '../lib/grading'
-import { reduce, seed, mergeSyncedState } from './useSessionStore'
+import { reduce, mergeSyncedState } from './useSessionStore'
+
+const seed: Parameters<typeof reduce>[0] = {
+  assessments,
+  marks: marksByAssessment,
+  conflicts: activeConflicts,
+  history: resolvedConflicts,
+  criteriaBySubject: Object.fromEntries(subjects.map((subject) => [subject, rubricFor(subject)])),
+  resultRecords: [],
+}
 
 const me = { id: 'u-1', name: 'John Doe', moderatedSubjects: [] as string[] }
 const hod = { id: 'u-3', name: 'Mr. Kamau', moderatedSubjects: ['English', 'Maths', 'Science'] }

@@ -1,16 +1,14 @@
 import { liveQuery } from 'dexie'
 import { useEffect, useReducer, useRef, useState } from 'react'
-import { assessments as seedAssessments, type Assessment } from '../fixtures/assessments'
+import type { Assessment } from '../fixtures/assessments'
 import {
-  activeConflicts,
-  resolvedConflicts,
   type ActiveConflict,
   type Choice,
   type HistoricalConflict,
   type Resolution,
 } from '../fixtures/conflicts'
-import { emptyGrid, marksByAssessment, type Grid } from '../fixtures/marks'
-import { rubricFor, subjects, type Criterion } from '../fixtures/rubrics'
+import { emptyGrid, type Grid } from '../fixtures/marks'
+import type { Criterion } from '../fixtures/rubrics'
 import {
   abilityOf,
   agreedResolution,
@@ -70,15 +68,6 @@ type Action =
   | { type: 'proposeResolution'; id: string; choice: Choice; note: string; user: Resolver; at: string }
   | { type: 'acceptProposal'; id: string; user: Resolver; at: string }
   | { type: 'referConflict'; id: string; user: Resolver; at: string }
-
-export const seed: State = {
-  assessments: seedAssessments,
-  marks: marksByAssessment,
-  conflicts: activeConflicts,
-  history: resolvedConflicts,
-  criteriaBySubject: Object.fromEntries(subjects.map((subject) => [subject, rubricFor(subject)])),
-  resultRecords: [],
-}
 
 function emptyGridFor(state: State, assessmentId: string, directory: SchoolDirectoryState): Grid {
   const a = state.assessments.find((x) => x.id === assessmentId)
