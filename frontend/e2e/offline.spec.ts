@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { E2E_SYNC_CHANGES, E2E_USER, signIn, type E2ESyncChange } from './support'
+import { markIdFor } from '../src/lib/markIdentity'
 
 /* The offline guarantee across the cases that broke the hand-written worker and
    drove the move to Workbox (ADR 0004): first visit, then a reload and a deep link
@@ -225,6 +226,44 @@ test('a newly created assessment survives an offline reload in the local store',
     name: 'Offline CAT 3',
     status: 'scheduled',
   })
+})
+
+test('conflict correction uses the synced criterion maximum', async ({ page }) => {
+  const assessmentId = 'assessment-kiswahili'
+  const studentId = 'student-1'
+  const criterionId = 'criterion-kiswahili'
+  const markId = await markIdFor(assessmentId, studentId, criterionId)
+  const changes: E2ESyncChange[] = [
+    ...E2E_SYNC_CHANGES,
+    { table: 'subjects', recordId: 'subject-kiswahili', version: 1, fields: { name: 'Kiswahili' } },
+    { table: 'class_subjects', recordId: 'link-kiswahili', version: 1, fields: { classId: 'class-1', subjectId: 'subject-kiswahili' } },
+    { table: 'criteria', recordId: criterionId, version: 1, fields: { subjectId: 'subject-kiswahili', name: 'Reading', maxScore: 18 } },
+    { table: 'teacher_assignments', recordId: 'assignment-kiswahili', version: 1, fields: { userId: E2E_USER.id, classId: 'class-1', subjectId: 'subject-kiswahili' } },
+    {
+      table: 'assessments', recordId: assessmentId, version: 1,
+      fields: { classId: 'class-1', subjectId: 'subject-kiswahili', name: 'Kiswahili CAT', term: 'Term 1', year: 2025, date: '2025-05-20', status: 'in-progress' },
+    },
+    {
+      table: 'marks', recordId: markId, version: 2,
+      fields: { assessmentId, studentId, criterionId, markKind: 'score', score: 12, lastEditedBy: E2E_USER.id },
+    },
+    {
+      table: 'conflicts', recordId: 'conflict-kiswahili', version: 1,
+      fields: {
+        markId, baseVersion: 1,
+        sideA: { editId: 'edit-k1', userId: E2E_USER.id, who: E2E_USER.name, markKind: 'score', score: 12, at: '2026-10-08T09:00:00Z' },
+        sideB: { editId: 'edit-k2', userId: E2E_USER.id, who: E2E_USER.name, markKind: 'score', score: 10, at: '2026-10-08T09:01:00Z' },
+        proposals: [], referral: null, resolution: null, resolvedAt: null,
+      },
+    },
+  ]
+
+  await signIn(page, changes)
+  await page.goto('/sync')
+  await page.getByRole('button', { name: 'Enter corrected' }).click()
+  await expect(page.getByLabel('Corrected mark')).toHaveAttribute('placeholder', 'Corrected mark, 0 to 18, or A for absent')
+  await page.getByLabel('Corrected mark').fill('17')
+  await expect(page.getByRole('button', { name: 'Confirm' })).toBeEnabled()
 })
 
 test('finalizing an assessment persists its local command state offline', async ({ page, context }) => {

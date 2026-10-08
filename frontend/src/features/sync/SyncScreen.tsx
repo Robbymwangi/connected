@@ -59,19 +59,26 @@ export function SyncScreen({ store, highlight, onOpenGrid }: SyncScreenProps) {
               </div>
             </div>
           ) : (
-            conflicts.map((c) => (
-              <ActiveConflictCard
-                key={c.id}
-                conflict={c}
-                subject={subjectOf(c.assessmentId)}
-                highlighted={highlighted === c.id}
-                onResolve={(choice, note) => store.resolveConflict(c.id, choice, note)}
-                onPropose={(choice, note) => store.proposeResolution(c.id, choice, note)}
-                onAccept={() => store.acceptProposal(c.id)}
-                onRefer={() => store.referConflict(c.id)}
-                onOpenGrid={() => onOpenGrid(c.assessmentId)}
-              />
-            ))
+            conflicts.map((c) => {
+              const assessment = store.assessments.find((item) => item.id === c.assessmentId)
+              const criterionMax = assessment
+                ? store.criteriaBySubject[assessment.subject]?.find((item) => item.id === c.criterionId)?.max ?? 0
+                : 0
+              return (
+                <ActiveConflictCard
+                  key={c.id}
+                  conflict={c}
+                  subject={subjectOf(c.assessmentId)}
+                  criterionMax={criterionMax}
+                  highlighted={highlighted === c.id}
+                  onResolve={(choice, note) => store.resolveConflict(c.id, choice, note)}
+                  onPropose={(choice, note) => store.proposeResolution(c.id, choice, note)}
+                  onAccept={() => store.acceptProposal(c.id)}
+                  onRefer={() => store.referConflict(c.id)}
+                  onOpenGrid={() => onOpenGrid(c.assessmentId)}
+                />
+              )
+            })
           )}
         </div>
       ) : (
