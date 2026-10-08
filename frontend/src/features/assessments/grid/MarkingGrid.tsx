@@ -272,6 +272,7 @@ export function MarkingGrid({
       <ConflictDialog
         conflict={openConflict}
         subject={assessment.subject}
+        criterionMax={rubric.find((criterion) => criterion.id === openConflict?.criterionId)?.max ?? 0}
         onResolve={(choice, note) => {
           if (!openConflict) return
           onResolveConflict(openConflict.id, choice, note)

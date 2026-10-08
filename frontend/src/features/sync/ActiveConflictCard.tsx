@@ -12,6 +12,7 @@ const FADE_MS = 400
 type ActiveConflictCardProps = {
   conflict: ActiveConflict
   subject: Subject
+  criterionMax: number
   highlighted: boolean
   onResolve: (choice: Choice, note: string) => void
   onPropose: (choice: Choice, note: string) => void
@@ -23,7 +24,7 @@ type ActiveConflictCardProps = {
 /* One unsettled conflict: both sides, and whatever ADR 0002 lets this user do
    about it. Settling fades the card out; proposing leaves it in place with the
    proposal shown. */
-export function ActiveConflictCard({ conflict, subject, highlighted, onResolve, onPropose, onAccept, onRefer, onOpenGrid }: ActiveConflictCardProps) {
+export function ActiveConflictCard({ conflict, subject, criterionMax, highlighted, onResolve, onPropose, onAccept, onRefer, onOpenGrid }: ActiveConflictCardProps) {
   const [leaving, setLeaving] = useState(false)
 
   /* One settlement per card: the timer ref is the guard, so it holds even before
@@ -63,6 +64,7 @@ export function ActiveConflictCard({ conflict, subject, highlighted, onResolve, 
         <ConflictActions
           conflict={conflict}
           subject={subject}
+          criterionMax={criterionMax}
           onResolve={(choice, note) => settle(() => onResolve(choice, note))}
           onPropose={onPropose}
           onAccept={() => settle(onAccept)}
