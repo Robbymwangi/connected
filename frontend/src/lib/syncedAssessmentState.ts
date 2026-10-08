@@ -3,7 +3,8 @@ import type { ActiveConflict, Choice, ConflictSide, HistoricalConflict, Proposal
 import type { Grid, GridCell } from '../fixtures/marks'
 import type { SchoolDirectory } from '../lib/schoolDirectory'
 import type { LocalRecord } from './localDatabase'
-import { ABSENT, EMPTY, score, type Mark } from './grading'
+import type { ResultRecord } from '../fixtures/results'
+import { ABSENT, EMPTY, score, type Mark, type PerformanceLevel } from './grading'
 
 export type SyncedAssessmentState = {
   assessments: Assessment[]
@@ -11,12 +12,14 @@ export type SyncedAssessmentState = {
   conflicts: ActiveConflict[]
   history: HistoricalConflict[]
   criteriaBySubject: SchoolDirectory['criteriaBySubject']
+  resultRecords: ResultRecord[]
 }
 
 type Source = {
   assessments: LocalRecord[]
   marks: LocalRecord[]
   conflicts: LocalRecord[]
+  results: LocalRecord[]
   directory: SchoolDirectory
   userId: string
 }
@@ -141,6 +144,15 @@ export function mapSyncedAssessmentState(source: Source): SyncedAssessmentState 
   const allMarkRows = source.marks
   const markRows = active(source.marks)
   const conflictRows = active(source.conflicts)
+  const resultRecords = active(source.results).flatMap((row): ResultRecord[] => {
+    const studentId = text(row, 'studentId')
+    const assessmentId = text(row, 'assessmentId')
+    const total = integer(row, 'total')
+    const max = integer(row, 'max')
+    const level = text(row, 'level')
+    if (!studentId || !assessmentId || total === null || max === null || max <= 0 || !['EE', 'ME', 'AE', 'BE'].includes(level)) return []
+    return [{ studentId, assessmentId, total, max, level: level as PerformanceLevel }]
+  })
   const gridByAssessment: Record<string, Grid> = {}
   const markRowsByAssessment = new Map<string, LocalRecord[]>()
   const markById = new Map(allMarkRows.map((mark) => [mark.id, mark]))
@@ -265,5 +277,5 @@ export function mapSyncedAssessmentState(source: Source): SyncedAssessmentState 
     }
   }
 
-  return { assessments, marks: gridByAssessment, conflicts: activeConflicts, history, criteriaBySubject }
+  return { assessments, marks: gridByAssessment, conflicts: activeConflicts, history, criteriaBySubject, resultRecords }
 }

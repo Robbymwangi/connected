@@ -43,6 +43,7 @@ type State = {
   conflicts: ActiveConflict[]
   history: HistoricalConflict[]
   criteriaBySubject: Record<string, Criterion[]>
+  resultRecords: SyncedAssessmentState['resultRecords']
 }
 
 const emptyState: State = {
@@ -51,6 +52,7 @@ const emptyState: State = {
   conflicts: [],
   history: [],
   criteriaBySubject: {},
+  resultRecords: [],
 }
 
 type Action =
@@ -71,6 +73,7 @@ export const seed: State = {
   conflicts: activeConflicts,
   history: resolvedConflicts,
   criteriaBySubject: Object.fromEntries(subjects.map((subject) => [subject, rubricFor(subject)])),
+  resultRecords: [],
 }
 
 function emptyGridFor(state: State, assessmentId: string, directory: SchoolDirectoryState): Grid {
@@ -265,14 +268,15 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
 
     const subscription = liveQuery(() => database.transaction(
       'r',
-      [database.assessments, database.marks, database.conflicts],
+      [database.assessments, database.marks, database.conflicts, database.results],
       async () => {
-        const [assessments, marks, conflicts] = await Promise.all([
+        const [assessments, marks, conflicts, results] = await Promise.all([
           database.assessments.toArray(),
           database.marks.toArray(),
           database.conflicts.toArray(),
+          database.results.toArray(),
         ])
-        return mapSyncedAssessmentState({ assessments, marks, conflicts, directory: directory.data, userId: user.id })
+        return mapSyncedAssessmentState({ assessments, marks, conflicts, results, directory: directory.data, userId: user.id })
       },
     )).subscribe({
       next: (remote) => {
@@ -291,6 +295,8 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
     marks: state.marks,
     conflicts: state.conflicts,
     history: state.history,
+    criteriaBySubject: state.criteriaBySubject,
+    resultRecords: state.resultRecords,
 
     addAssessments: (drafts: Omit<Assessment, 'id' | 'version'>[]) => {
       dispatch({ type: 'addAssessments', drafts })

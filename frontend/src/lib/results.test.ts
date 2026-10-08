@@ -22,6 +22,25 @@ describe('resultsForStudent', () => {
     const r = resultsForStudent('s1', '4W', [cat2], { x2: partial }, [{ studentId: 's1', assessmentId: 'x2', total: 30 }])
     expect(r[0]).toMatchObject({ total: 30, level: 'AE', source: 'record' })
   })
+  it('uses the server result maximum and level for a subject outside the fixture rubric', () => {
+    const custom: Assessment = { ...cat2, subject: 'Kiswahili' }
+    const records = [{ studentId: 's1', assessmentId: 'x2', total: 14, max: 18, level: 'ME' as const }]
+    const r = resultsForStudent('s1', '4W', [custom], {}, records, {
+      Kiswahili: [{ id: 'c-k', name: 'Reading', max: 20 }],
+    })
+
+    expect(r[0]).toMatchObject({ total: 14, max: 18, level: 'ME', source: 'record' })
+  })
+  it('uses the current rubric maximum when a complete grid row supersedes a stored result', () => {
+    const custom: Assessment = { ...cat2, subject: 'Kiswahili' }
+    const records = [{ studentId: 's1', assessmentId: 'x2', total: 14, max: 18, level: 'ME' as const }]
+    const grids: Record<string, Grid> = { x2: { s1: { 'c-k': { mark: score(16), sync: 'synced' } } } }
+    const r = resultsForStudent('s1', '4W', [custom], grids, records, {
+      Kiswahili: [{ id: 'c-k', name: 'Reading', max: 20 }],
+    })
+
+    expect(r[0]).toMatchObject({ total: 16, max: 20, level: 'EE', source: 'grid' })
+  })
   it('skips assessments with neither, and other streams', () => {
     expect(resultsForStudent('s1', '4W', [cat1, other], {}, [])).toEqual([])
   })

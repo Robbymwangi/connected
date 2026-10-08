@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { E2E_USER, signIn, type E2ESyncChange } from './support'
+import { E2E_SYNC_CHANGES, E2E_USER, signIn, type E2ESyncChange } from './support'
 
 /* The offline guarantee across the cases that broke the hand-written worker and
    drove the move to Workbox (ADR 0004): first visit, then a reload and a deep link
@@ -74,4 +74,31 @@ test('Classes and assessment selectors read school reference data from the local
   await page.getByLabel('Assessment date').fill('2025-05-12')
   await dialog.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByRole('button', { name: /Grade 4 · Stream 4W/ })).toBeVisible()
+})
+
+test('student profile reads finalized results from the local store', async ({ page }) => {
+  const changes: E2ESyncChange[] = [
+    ...E2E_SYNC_CHANGES,
+    {
+      table: 'assessments', recordId: 'assessment-final', version: 1,
+      fields: {
+        classId: 'class-1', subjectId: 'subject-1', name: 'Final exam', term: 'Term 1',
+        year: 2025, date: '2025-06-20', status: 'finalized',
+      },
+    },
+    {
+      table: 'results', recordId: 'result-1', version: 1,
+      fields: { assessmentId: 'assessment-final', studentId: 'student-1', total: 14, max: 18, level: 'ME' },
+    },
+  ]
+
+  await signIn(page, changes)
+  await page.getByRole('button', { name: 'Open navigation' }).click()
+  await page.getByRole('button', { name: 'Classes', exact: true }).click()
+  await page.getByRole('button', { name: /Stream 4W/ }).click()
+  await page.getByRole('button', { name: /Amina Osei/ }).click()
+
+  await expect(page.getByText('English: Final exam')).toBeVisible()
+  await expect(page.getByText('14/18')).toBeVisible()
+  await expect(page.getByText('ME', { exact: true })).toBeVisible()
 })

@@ -5,6 +5,8 @@ export type ResultRecord = {
   studentId: string
   assessmentId: string
   total: number
+  max?: number
+  level?: 'EE' | 'ME' | 'AE' | 'BE'
 }
 
 /* Hand-written totals for the first eight 4W students, matching the export's

@@ -27,6 +27,7 @@ describe('mapSyncedAssessmentState', () => {
         { id: 'mark-1', version: 1, assessmentId: 'assessment-1', studentId: 'student-1', criterionId: 'criterion-1', markKind: 'absent', score: null, lastEditedBy: 'teacher-1' },
       ],
       conflicts: [],
+      results: [{ id: 'result-1', version: 1, assessmentId: 'assessment-1', studentId: 'student-1', total: 14, max: 18, level: 'ME' }],
     })
 
     expect(state.assessments).toEqual([{
@@ -36,6 +37,7 @@ describe('mapSyncedAssessmentState', () => {
     expect(state.marks['assessment-1']['student-1']['criterion-1']).toEqual({
       mark: { kind: 'absent' }, sync: 'synced', author: 'Teacher One',
     })
+    expect(state.resultRecords).toEqual([{ studentId: 'student-1', assessmentId: 'assessment-1', total: 14, max: 18, level: 'ME' }])
   })
 
   it('orients an active conflict for a party, but keeps author names suitable for moderators', () => {
@@ -56,6 +58,7 @@ describe('mapSyncedAssessmentState', () => {
         sideB: { editId: 'edit-2', userId: 'teacher-2', who: 'Teacher Two', markKind: 'absent', score: null, at: null },
         proposals: [], referral: null, resolution: null, resolvedAt: null,
       }],
+      results: [],
     })
 
     expect(state.conflicts).toHaveLength(1)

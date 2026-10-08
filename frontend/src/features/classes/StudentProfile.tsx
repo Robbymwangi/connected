@@ -3,7 +3,6 @@ import { BackNav } from '../../components/BackNav'
 import { LineChart } from '../../components/charts'
 import { LevelBadge } from '../../components/LevelBadge'
 import type { SchoolClass } from '../../fixtures/classes'
-import { results as records } from '../../fixtures/results'
 import { initials, type Student } from '../../fixtures/students'
 import { resultsForStudent, trendBySubject } from '../../lib/results'
 import { formatLongDate, parseLocalDate } from '../../lib/time'
@@ -21,7 +20,7 @@ type StudentProfileProps = {
    navigation cap allows contextually. Results come from the live grid where a
    complete row exists, otherwise from the records on file. */
 export function StudentProfile({ student, cls, store, onBack, onBackToList }: StudentProfileProps) {
-  const results = resultsForStudent(student.id, cls.stream, store.assessments, store.marks, records)
+  const results = resultsForStudent(student.id, cls.stream, store.assessments, store.marks, store.resultRecords, store.criteriaBySubject)
   const trends = trendBySubject(results)
 
   return (
