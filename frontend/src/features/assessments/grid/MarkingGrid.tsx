@@ -5,11 +5,10 @@ import { LevelBadge } from '../../../components/LevelBadge'
 import { StatusPill } from '../../../components/StatusPill'
 import { Toast, type ToastKind } from '../../../components/Toast'
 import type { Assessment } from '../../../fixtures/assessments'
-import { classes } from '../../../fixtures/classes'
 import type { ActiveConflict, Choice } from '../../../fixtures/conflicts'
 import type { Grid } from '../../../fixtures/marks'
-import { rubricFor } from '../../../fixtures/rubrics'
-import { initials, rosterFor } from '../../../fixtures/students'
+import { initials } from '../../../fixtures/students'
+import type { SchoolDirectoryState } from '../../../app/useSchoolDirectory'
 import { useConnectivity } from '../../../lib/connectivity'
 import { ABSENT, EMPTY, performanceLevel, rowTotal, type Mark } from '../../../lib/grading'
 import { STATUS_META } from '../statusMeta'
@@ -21,6 +20,7 @@ type Focus = { studentId: string; criterionId: string }
 
 type MarkingGridProps = {
   assessment: Assessment
+  directory: SchoolDirectoryState
   /* The marks live in the session store, not here, so edits survive navigation. */
   grid: Grid
   onUpdateGrid: (update: (grid: Grid) => Grid) => void
@@ -36,6 +36,7 @@ type MarkingGridProps = {
 
 export function MarkingGrid({
   assessment,
+  directory,
   grid,
   onUpdateGrid: setGrid,
   conflicts,
@@ -46,10 +47,11 @@ export function MarkingGrid({
   onFinalize,
   onBack,
 }: MarkingGridProps) {
-  const rubric = rubricFor(assessment.subject)
+  const school = directory.status === 'ready' ? directory.data : null
+  const rubric = school?.criteriaBySubject[assessment.subject] ?? []
   const maxTotal = rubric.reduce((sum, c) => sum + c.max, 0)
-  const cls = classes.find((c) => c.stream === assessment.stream)
-  const roster = rosterFor(cls?.id ?? '')
+  const cls = school?.classesForYear(assessment.year).find((item) => item.stream === assessment.stream)
+  const roster = cls ? school?.studentsForYear(assessment.year).filter((student) => student.classId === cls.id) ?? [] : []
   const finalized = assessment.status === 'finalized' || assessment.status === 'reports-generated'
 
   const [editing, setEditing] = useState(false)

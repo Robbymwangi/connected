@@ -18,10 +18,24 @@ export type E2ESyncChange = {
   fields: Record<string, unknown>
 }
 
+export const E2E_SYNC_CHANGES: E2ESyncChange[] = [
+  { table: 'users', recordId: E2E_USER.id, version: 1, fields: { name: 'Jane Teacher', email: E2E_USER.email } },
+  { table: 'classes', recordId: 'class-1', version: 1, fields: { grade: 'Grade 4', stream: '4W', classTeacherId: E2E_USER.id } },
+  { table: 'subjects', recordId: 'subject-1', version: 1, fields: { name: 'English' } },
+  { table: 'criteria', recordId: 'criterion-1', version: 1, fields: { subjectId: 'subject-1', name: 'Comprehension', maxScore: 20 } },
+  { table: 'class_subjects', recordId: 'class-subject-1', version: 1, fields: { classId: 'class-1', subjectId: 'subject-1' } },
+  { table: 'teacher_assignments', recordId: 'assignment-1', version: 1, fields: { userId: E2E_USER.id, classId: 'class-1', subjectId: 'subject-1' } },
+  { table: 'students', recordId: 'student-1', version: 1, fields: { name: 'Amina Osei', gender: 'F', dob: '2016-01-19' } },
+  { table: 'enrolments', recordId: 'enrolment-1', version: 1, fields: { studentId: 'student-1', classId: 'class-1', year: 2025 } },
+  { table: 'assessments', recordId: 'a1', version: 1, fields: {
+    classId: 'class-1', subjectId: 'subject-1', name: 'CAT 1', term: 'Term 2', year: 2025, date: '2025-05-12', status: 'scheduled',
+  } },
+]
+
 /* Fakes login, /me, and the initial sync pull just long enough to sign in and
   populate IndexedDB, then removes the routes. Later reloads and offline
   checks depend on local data or the real network, never on these fakes. */
-export async function signIn(page: Page, syncChanges: E2ESyncChange[] = []) {
+export async function signIn(page: Page, syncChanges: E2ESyncChange[] = E2E_SYNC_CHANGES) {
   await page.route('**/api/login', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 'e2e-token' }) }),
   )

@@ -52,6 +52,7 @@ export function AssessmentsScreen({
     return (
       <MarkingGrid
         assessment={open}
+        directory={directory}
         grid={store.gridFor(open.id)}
         onUpdateGrid={(update) => store.updateGrid(open.id, update)}
         conflicts={conflicts.filter((k) => k.assessmentId === open.id)}
