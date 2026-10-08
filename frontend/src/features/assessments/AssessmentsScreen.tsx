@@ -76,7 +76,7 @@ export function AssessmentsScreen({
      year from the chosen date's calendar year; neither is inferred from the other,
      because no school-calendar rule exists yet to map dates onto terms. The store
      assigns each record its UUID. */
-  const create = (draft: NewAssessment) => {
+  const create = async (draft: NewAssessment) => {
     const created: Omit<Assessment, 'id' | 'version'>[] = draft.classIds.flatMap((classId) => {
       const year = Number(draft.date.slice(0, 4))
       const cls = school?.classesForYear(year).find((c) => c.id === classId)
@@ -94,7 +94,7 @@ export function AssessmentsScreen({
         sync: 'pending',
       }]
     })
-    store.addAssessments(created)
+    await store.addAssessments(created)
     /* Show the year the new records landed in, so they are not filtered out of view. */
     setFilters((f) => ({ ...f, year: Number(draft.date.slice(0, 4)) }))
   }

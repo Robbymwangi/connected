@@ -24,6 +24,7 @@ import {
   type Resolver,
 } from '../lib/conflicts'
 import { localDatabaseFor } from '../lib/localDatabase'
+import { createLocalAssessmentRecord } from '../lib/localAssessment'
 import { mapSyncedAssessmentState, type SyncedAssessmentState } from '../lib/syncedAssessmentState'
 import type { SchoolDirectoryState } from './useSchoolDirectory'
 
@@ -57,7 +58,7 @@ const emptyState: State = {
 
 type Action =
   | { type: 'hydrate'; state: SyncedAssessmentState; dirtyConflictIds: string[] }
-  | { type: 'addAssessments'; drafts: Omit<Assessment, 'id' | 'version'>[] }
+  | { type: 'addAssessments'; drafts: Omit<Assessment, 'id' | 'version'>[]; ids?: string[] }
   | { type: 'finalizeAssessment'; id: string }
   | { type: 'updateGrid'; assessmentId: string; update: (grid: Grid) => Grid; emptyGrid?: Grid }
   /* The three ways a conflict moves under ADR 0002. Each is checked against what
@@ -111,12 +112,15 @@ export function reduce(state: State, action: Action): State {
        made offline cannot wait for a server to number it. Version 0 means the server
        has never acknowledged it (ADR 0001). */
     case 'addAssessments':
+      {
+        const existingIds = new Set(state.assessments.map((assessment) => assessment.id))
+        const additions = action.drafts
+          .map((draft, index) => ({ ...draft, id: action.ids?.[index] ?? crypto.randomUUID(), version: 0 }))
+          .filter((assessment) => !existingIds.has(assessment.id))
       return {
         ...state,
-        assessments: [
-          ...action.drafts.map((d) => ({ ...d, id: crypto.randomUUID(), version: 0 })),
-          ...state.assessments,
-        ],
+          assessments: [...additions, ...state.assessments],
+      }
       }
 
     case 'finalizeAssessment':
@@ -298,10 +302,34 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
     criteriaBySubject: state.criteriaBySubject,
     resultRecords: state.resultRecords,
 
-    addAssessments: (drafts: Omit<Assessment, 'id' | 'version'>[]) => {
-      dispatch({ type: 'addAssessments', drafts })
+    addAssessments: async (drafts: Omit<Assessment, 'id' | 'version'>[]) => {
+      if (!drafts.length) return
+      if (directory.status !== 'ready') throw new Error('School data is unavailable on this device')
+
+      const records = drafts.map((draft) => createLocalAssessmentRecord(draft, crypto.randomUUID(), directory.data))
+      await database.transaction('rw', database.assessments, () => database.assessments.bulkAdd(records))
+      dispatch({ type: 'addAssessments', drafts, ids: records.map((record) => record.id) })
     },
-    finalizeAssessment: (id: string) => {
+    finalizeAssessment: async (id: string) => {
+      const assessment = state.assessments.find((item) => item.id === id)
+      if (!assessment) throw new Error('Assessment is not available on this device')
+      if (assessment.status === 'finalized' || assessment.status === 'reports-generated') return
+
+      const finalizedAt = new Date().toISOString()
+      const saved = await database.transaction('rw', database.assessments, async () => {
+        const current = await database.assessments.get(id)
+        if (!current || current.deletedAt != null) return false
+        if (current.status === 'finalized' || current.status === 'reports-generated') return false
+
+        await database.assessments.update(id, {
+          status: 'finalized',
+          finalizedBy: user.id,
+          finalizedAt,
+          sync: 'pending',
+        })
+        return true
+      })
+      if (!saved) return
       dispatch({ type: 'finalizeAssessment', id })
     },
 
