@@ -42,6 +42,59 @@ test('the marking grid opens offline by URL', async ({ page, context }) => {
   await expect(page.getByRole('heading', { level: 1 })).toContainText('English')
 })
 
+test('a mark edit is saved to Dexie and survives an offline reload', async ({ page, context }) => {
+  await signIn(page)
+  await page.goto('/assessments/a1/grid')
+  await page.getByRole('button', { name: 'Edit' }).click()
+  await page.getByLabel('Mark out of 20').fill('17')
+
+  await page.waitForFunction(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('connected-user-e2e-teacher')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const rows = await new Promise<Array<Record<string, unknown>>>((resolve, reject) => {
+      const request = database.transaction('marks').objectStore('marks').getAll()
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    database.close()
+    return rows.some((row) => row.assessmentId === 'a1' && row.studentId === 'student-1' && row.criterionId === 'criterion-1' && row.score === 17)
+  })
+
+  await context.setOffline(true)
+  await page.reload()
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('English')
+  const studentRow = page.getByRole('row', { name: /Amina Osei/ })
+  await expect(studentRow.getByText('17', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('local', { exact: true })).toBeVisible()
+
+  const saved = await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('connected-user-e2e-teacher')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const rows = await new Promise<Array<Record<string, unknown>>>((resolve, reject) => {
+      const request = database.transaction('marks').objectStore('marks').getAll()
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    database.close()
+    return rows.find((row) => row.assessmentId === 'a1' && row.studentId === 'student-1' && row.criterionId === 'criterion-1')
+  })
+
+  expect(saved).toMatchObject({
+    version: 0,
+    pendingBaseVersion: 0,
+    pendingFields: { assessmentId: 'a1', studentId: 'student-1', criterionId: 'criterion-1', markKind: 'score', score: 17 },
+    markKind: 'score',
+    score: 17,
+    sync: 'pending',
+  })
+})
+
 test('Classes and assessment selectors read school reference data from the local store', async ({ page }) => {
   const changes: E2ESyncChange[] = [
     { table: 'users', recordId: E2E_USER.id, version: 1, fields: { name: 'Jane Teacher', email: E2E_USER.email } },

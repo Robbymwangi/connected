@@ -24,6 +24,8 @@ describe('createLocalAssessmentRecord', () => {
     expect(record).toEqual({
       id: 'assessment-1', version: 0, classId: 'class-1', subjectId: 'subject-1',
       name: 'CAT 1', term: 'Term 1', year: 2025, date: '2025-05-12', status: 'scheduled', sync: 'pending',
+      pendingBaseVersion: 0,
+      pendingFields: { classId: 'class-1', subjectId: 'subject-1', name: 'CAT 1', term: 'Term 1', year: 2025, date: '2025-05-12' },
     })
   })
 

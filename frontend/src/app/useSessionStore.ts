@@ -25,6 +25,8 @@ import {
 } from '../lib/conflicts'
 import { localDatabaseFor } from '../lib/localDatabase'
 import { createLocalAssessmentRecord } from '../lib/localAssessment'
+import { changedGridCells, gridFromMarkRows, pendingMarkRecord, type GridCellChange } from '../lib/localMarks'
+import { markIdFor } from '../lib/markIdentity'
 import { mapSyncedAssessmentState, type SyncedAssessmentState } from '../lib/syncedAssessmentState'
 import type { SchoolDirectoryState } from './useSchoolDirectory'
 
@@ -61,6 +63,7 @@ type Action =
   | { type: 'addAssessments'; drafts: Omit<Assessment, 'id' | 'version'>[]; ids?: string[] }
   | { type: 'finalizeAssessment'; id: string }
   | { type: 'updateGrid'; assessmentId: string; update: (grid: Grid) => Grid; emptyGrid?: Grid }
+  | { type: 'patchGrid'; assessmentId: string; changes: GridCellChange[]; emptyGrid: Grid }
   /* The three ways a conflict moves under ADR 0002. Each is checked against what
      the user may do; an action the user may not take leaves the state as it was. */
   | { type: 'resolveConflict'; id: string; choice: Choice; note: string; user: Resolver; at: string }
@@ -136,6 +139,15 @@ export function reduce(state: State, action: Action): State {
         ...state,
         marks: { ...state.marks, [action.assessmentId]: action.update(gridOf(state, action.assessmentId, action.emptyGrid)) },
       }
+
+    case 'patchGrid': {
+      const grid: Grid = Object.fromEntries(Object.entries(gridOf(state, action.assessmentId, action.emptyGrid)).map(([studentId, row]) => [studentId, { ...row }]))
+      for (const change of action.changes) {
+        grid[change.studentId] ??= {}
+        grid[change.studentId][change.criterionId] = change.cell
+      }
+      return { ...state, marks: { ...state.marks, [action.assessmentId]: grid } }
+    }
 
     /* Direct settlement: the user's own two-device edits, or a moderator. */
     case 'resolveConflict': {
@@ -265,6 +277,7 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
   const [state, dispatch] = useReducer(reduce, emptyState)
   const [hasHydrated, setHasHydrated] = useState(false)
   const dirtyConflictIds = useRef(new Set<string>())
+  const markWriteQueue = useRef(Promise.resolve())
   const ready = hasHydrated || directory.status === 'error'
 
   useEffect(() => {
@@ -321,11 +334,20 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
         if (!current || current.deletedAt != null) return false
         if (current.status === 'finalized' || current.status === 'reports-generated') return false
 
+        const pendingFields = typeof current.pendingFields === 'object' && current.pendingFields !== null && !Array.isArray(current.pendingFields)
+          ? current.pendingFields as Record<string, unknown>
+          : {}
+        const finalization = { finalizedBy: user.id, finalizedAt }
+        const isUncreated = current.version === 0
+
         await database.assessments.update(id, {
           status: 'finalized',
           finalizedBy: user.id,
           finalizedAt,
           sync: 'pending',
+          pendingBaseVersion: Number.isSafeInteger(current.pendingBaseVersion) ? current.pendingBaseVersion : current.version,
+          pendingFields: isUncreated ? pendingFields : { ...pendingFields, status: 'finalized', ...finalization },
+          ...(isUncreated ? { pendingFinalize: finalization } : {}),
         })
         return true
       })
@@ -337,14 +359,49 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
       const assessment = state.assessments.find((item) => item.id === assessmentId)
       return gridOf(state, assessmentId, assessment ? emptyGridFor(state, assessmentId, directory) : {})
     },
-    updateGrid: (assessmentId: string, update: (grid: Grid) => Grid) => {
-      const assessment = state.assessments.find((item) => item.id === assessmentId)
-      dispatch({
-        type: 'updateGrid',
-        assessmentId,
-        update,
-        emptyGrid: assessment ? emptyGridFor(state, assessmentId, directory) : {},
-      })
+    updateGrid: (assessmentId: string, update: (grid: Grid) => Grid): Promise<void> => {
+      const persist = async () => {
+        const assessment = state.assessments.find((item) => item.id === assessmentId)
+        if (!assessment || directory.status !== 'ready') throw new Error('Assessment grid is unavailable on this device')
+
+        const emptyGrid = emptyGridFor(state, assessmentId, directory)
+        const storedRows = await database.marks.where('assessmentId').equals(assessmentId).toArray()
+        const teachers = new Map(directory.data.teachers.map((teacher) => [teacher.id, teacher.name]))
+        const currentGrid = gridFromMarkRows(storedRows, emptyGrid, teachers)
+        const changes = changedGridCells(currentGrid, update(currentGrid))
+        if (changes.length === 0) return
+
+        const identifiedChanges = await Promise.all(changes.map(async (change) => ({
+          ...change,
+          id: await markIdFor(assessmentId, change.studentId, change.criterionId),
+        })))
+
+        const savedCells = await database.transaction('rw', database.marks, async () => {
+          const saved: GridCellChange[] = []
+          for (const change of identifiedChanges) {
+            const current = await database.marks.get(change.id)
+            const record = pendingMarkRecord(current, { ...change, assessmentId }, change.id, user.name)
+            await database.marks.put(record)
+            saved.push({
+              studentId: change.studentId,
+              criterionId: change.criterionId,
+              cell: {
+                ...change.cell,
+                sync: 'local',
+                baseVersion: record.pendingBaseVersion as number,
+                author: user.name,
+              },
+            })
+          }
+          return saved
+        })
+
+        dispatch({ type: 'patchGrid', assessmentId, changes: savedCells, emptyGrid })
+      }
+
+      const operation = markWriteQueue.current.then(persist, persist)
+      markWriteQueue.current = operation.then(() => undefined, () => undefined)
+      return operation
     },
 
     resolveConflict: (id: string, choice: Choice, note = '') => {
