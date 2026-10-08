@@ -1,8 +1,9 @@
 import { Bell, X } from 'lucide-react'
 import { useState, type RefObject } from 'react'
+import { useCurrentUser } from '../app/AuthContext'
 import { Popover } from '../components/Popover'
 import type { StatusTone } from '../components/StatusPill'
-import { notifications as seed } from '../fixtures/notifications'
+import { useNotifications } from '../lib/useNotifications'
 
 const DOT_CLASSES: Record<StatusTone, string> = {
   success: 'bg-success',
@@ -20,11 +21,17 @@ type NotificationsPopupProps = {
 }
 
 export function NotificationsPopup({ open, onClose, triggerRef }: NotificationsPopupProps) {
-  const [items, setItems] = useState(seed)
+  const user = useCurrentUser()
+  const notifications = useNotifications(user.id)
+  const [locallyRead, setLocallyRead] = useState<ReadonlySet<string>>(() => new Set())
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set())
+  const items = notifications.items
+    .filter((item) => !dismissed.has(item.id))
+    .map((item) => locallyRead.has(item.id) ? { ...item, unread: false } : item)
   const unreadCount = items.filter((n) => n.unread).length
 
-  const markAllRead = () => setItems((prev) => prev.map((n) => ({ ...n, unread: false })))
-  const dismiss = (id: string) => setItems((prev) => prev.filter((n) => n.id !== id))
+  const markAllRead = () => setLocallyRead((previous) => new Set([...previous, ...items.map((item) => item.id)]))
+  const dismiss = (id: string) => setDismissed((previous) => new Set([...previous, id]))
 
   return (
     <Popover
@@ -55,7 +62,11 @@ export function NotificationsPopup({ open, onClose, triggerRef }: NotificationsP
       </div>
 
       <div className="max-h-72 divide-y divide-border/40 overflow-y-auto">
-        {items.map((n) => (
+        {notifications.status === 'loading' ? (
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground" role="status">Loading notifications…</p>
+        ) : notifications.status === 'error' ? (
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground" role="alert">Notifications are unavailable on this device.</p>
+        ) : items.map((n) => (
           <div
             key={n.id}
             className={`group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/40 ${
@@ -79,7 +90,6 @@ export function NotificationsPopup({ open, onClose, triggerRef }: NotificationsP
                 {n.title}
               </p>
               <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{n.body}</p>
-              <p className="mt-1 text-[10px] font-medium text-muted-foreground/70">{n.time}</p>
             </div>
             <button
               type="button"
@@ -91,7 +101,7 @@ export function NotificationsPopup({ open, onClose, triggerRef }: NotificationsP
             </button>
           </div>
         ))}
-        {items.length === 0 && (
+        {notifications.status === 'ready' && items.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-2 py-10">
             <div className="flex size-10 items-center justify-center rounded-full bg-muted/50 text-muted-foreground">
               <Bell className="size-5" />
