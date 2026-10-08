@@ -102,3 +102,27 @@ test('student profile reads finalized results from the local store', async ({ pa
   await expect(page.getByText('14/18')).toBeVisible()
   await expect(page.getByText('ME', { exact: true })).toBeVisible()
 })
+
+test('notification popup reads only the signed-in user rows from the local store', async ({ page }) => {
+  const changes: E2ESyncChange[] = [
+    ...E2E_SYNC_CHANGES,
+    {
+      table: 'notifications', recordId: 'notification-own', version: 1,
+      fields: { userId: E2E_USER.id, kind: 'edit-blocked', tone: 'danger', title: 'Edit not applied', body: 'CAT 1 was finalized.', unread: true },
+    },
+    {
+      table: 'notifications', recordId: 'notification-other', version: 1,
+      fields: { userId: 'another-user', kind: 'sync-conflict', tone: 'warning', title: 'Private notice', body: 'Do not show.', unread: true },
+    },
+  ]
+
+  await signIn(page, changes)
+  await page.getByRole('button', { name: 'Notifications' }).click()
+  await expect(page.getByText('Edit not applied')).toBeVisible()
+  await expect(page.getByText('CAT 1 was finalized.')).toBeVisible()
+  await expect(page.getByText('Private notice')).toHaveCount(0)
+  await expect(page.getByText('Do not show.')).toHaveCount(0)
+  await expect(page.getByText('just now')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Mark all read' }).click()
+  await expect(page.getByRole('button', { name: 'Mark all read' })).toHaveCount(0)
+})
