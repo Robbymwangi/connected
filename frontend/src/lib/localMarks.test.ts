@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Grid } from '../fixtures/marks'
 import { ABSENT, EMPTY, score } from './grading'
-import { changedGridCells, gridFromMarkRows, pendingMarkRecord } from './localMarks'
+import { changedGridCells, gridFromMarkRows, mergePendingMarkCells, pendingMarkRecord } from './localMarks'
 
 describe('local mark persistence helpers', () => {
   it('rebuilds displayed cells with server base versions and local authors', () => {
@@ -22,6 +22,15 @@ describe('local mark persistence helpers', () => {
     expect(changedGridCells(before, after).map(({ criterionId, cell }) => [criterionId, cell.mark])).toEqual([
       ['score', ABSENT],
     ])
+  })
+
+  it('keeps a persisted local value while retaining the displayed base version', () => {
+    const displayed: Grid = { student: { criterion: { mark: score(7), sync: 'synced', baseVersion: 2 } } }
+    const persisted: Grid = { student: { criterion: { mark: score(9), sync: 'local', baseVersion: 2 } } }
+
+    expect(mergePendingMarkCells(displayed, persisted)).toEqual({
+      student: { criterion: { mark: score(9), sync: 'local', baseVersion: 2 } },
+    })
   })
 
   it('keeps the earliest base and unions edited fields while refreshing unrelated server fields', () => {

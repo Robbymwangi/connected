@@ -52,6 +52,18 @@ export function gridFromMarkRows(rows: LocalRecord[], fallback: Grid, names: Rea
   return grid
 }
 
+export function mergePendingMarkCells(displayed: Grid, persisted: Grid): Grid {
+  const grid: Grid = Object.fromEntries(Object.entries(displayed).map(([studentId, row]) => [studentId, { ...row }]))
+  for (const [studentId, row] of Object.entries(persisted)) {
+    for (const [criterionId, cell] of Object.entries(row)) {
+      if (cell.sync !== 'local') continue
+      grid[studentId] ??= {}
+      grid[studentId][criterionId] = cell
+    }
+  }
+  return grid
+}
+
 function sameMark(left: Mark | undefined, right: Mark | undefined): boolean {
   if (!left || !right || left.kind !== right.kind) return left === right
   return left.kind !== 'score' || (right.kind === 'score' && left.value === right.value)

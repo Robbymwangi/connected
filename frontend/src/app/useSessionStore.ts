@@ -25,7 +25,7 @@ import {
 } from '../lib/conflicts'
 import { localDatabaseFor } from '../lib/localDatabase'
 import { createLocalAssessmentRecord } from '../lib/localAssessment'
-import { changedGridCells, gridFromMarkRows, pendingMarkRecord, type GridCellChange } from '../lib/localMarks'
+import { changedGridCells, gridFromMarkRows, mergePendingMarkCells, pendingMarkRecord, type GridCellChange } from '../lib/localMarks'
 import { markIdFor } from '../lib/markIdentity'
 import { mapSyncedAssessmentState, type SyncedAssessmentState } from '../lib/syncedAssessmentState'
 import type { SchoolDirectoryState } from './useSchoolDirectory'
@@ -275,10 +275,16 @@ export function mergeSyncedState(remote: State, current: State, dirtyConflictIds
 export function useSessionStore(user: Resolver, directory: SchoolDirectoryState) {
   const database = localDatabaseFor(user.id)
   const [state, dispatch] = useReducer(reduce, emptyState)
+  const stateRef = useRef(state)
   const [hasHydrated, setHasHydrated] = useState(false)
   const dirtyConflictIds = useRef(new Set<string>())
   const markWriteQueue = useRef(Promise.resolve())
   const ready = hasHydrated || directory.status === 'error'
+
+  const commit = (action: Action) => {
+    stateRef.current = reduce(stateRef.current, action)
+    dispatch(action)
+  }
 
   useEffect(() => {
     if (directory.status !== 'ready') return
@@ -297,7 +303,7 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
       },
     )).subscribe({
       next: (remote) => {
-        dispatch({ type: 'hydrate', state: remote, dirtyConflictIds: [...dirtyConflictIds.current] })
+        commit({ type: 'hydrate', state: remote, dirtyConflictIds: [...dirtyConflictIds.current] })
         setHasHydrated(true)
       },
       error: () => setHasHydrated(true),
@@ -321,7 +327,7 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
 
       const records = drafts.map((draft) => createLocalAssessmentRecord(draft, crypto.randomUUID(), directory.data))
       await database.transaction('rw', database.assessments, () => database.assessments.bulkAdd(records))
-      dispatch({ type: 'addAssessments', drafts, ids: records.map((record) => record.id) })
+      commit({ type: 'addAssessments', drafts, ids: records.map((record) => record.id) })
     },
     finalizeAssessment: async (id: string) => {
       const assessment = state.assessments.find((item) => item.id === id)
@@ -352,7 +358,7 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
         return true
       })
       if (!saved) return
-      dispatch({ type: 'finalizeAssessment', id })
+      commit({ type: 'finalizeAssessment', id })
     },
 
     gridFor: (assessmentId: string): Grid => {
@@ -361,13 +367,15 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
     },
     updateGrid: (assessmentId: string, update: (grid: Grid) => Grid): Promise<void> => {
       const persist = async () => {
-        const assessment = state.assessments.find((item) => item.id === assessmentId)
+        const currentState = stateRef.current
+        const assessment = currentState.assessments.find((item) => item.id === assessmentId)
         if (!assessment || directory.status !== 'ready') throw new Error('Assessment grid is unavailable on this device')
 
-        const emptyGrid = emptyGridFor(state, assessmentId, directory)
+        const emptyGrid = emptyGridFor(currentState, assessmentId, directory)
+        const displayedGrid = gridOf(currentState, assessmentId, emptyGrid)
         const storedRows = await database.marks.where('assessmentId').equals(assessmentId).toArray()
         const teachers = new Map(directory.data.teachers.map((teacher) => [teacher.id, teacher.name]))
-        const currentGrid = gridFromMarkRows(storedRows, emptyGrid, teachers)
+        const currentGrid = mergePendingMarkCells(displayedGrid, gridFromMarkRows(storedRows, emptyGrid, teachers))
         const changes = changedGridCells(currentGrid, update(currentGrid))
         if (changes.length === 0) return
 
@@ -396,7 +404,7 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
           return saved
         })
 
-        dispatch({ type: 'patchGrid', assessmentId, changes: savedCells, emptyGrid })
+        commit({ type: 'patchGrid', assessmentId, changes: savedCells, emptyGrid })
       }
 
       const operation = markWriteQueue.current.then(persist, persist)
@@ -406,19 +414,19 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
 
     resolveConflict: (id: string, choice: Choice, note = '') => {
       dirtyConflictIds.current.add(id)
-      dispatch({ type: 'resolveConflict', id, choice, note, user, at: new Date().toISOString() })
+      commit({ type: 'resolveConflict', id, choice, note, user, at: new Date().toISOString() })
     },
     proposeResolution: (id: string, choice: Choice, note: string) => {
       dirtyConflictIds.current.add(id)
-      dispatch({ type: 'proposeResolution', id, choice, note, user, at: new Date().toISOString() })
+      commit({ type: 'proposeResolution', id, choice, note, user, at: new Date().toISOString() })
     },
     acceptProposal: (id: string) => {
       dirtyConflictIds.current.add(id)
-      dispatch({ type: 'acceptProposal', id, user, at: new Date().toISOString() })
+      commit({ type: 'acceptProposal', id, user, at: new Date().toISOString() })
     },
     referConflict: (id: string) => {
       dirtyConflictIds.current.add(id)
-      dispatch({ type: 'referConflict', id, user, at: new Date().toISOString() })
+      commit({ type: 'referConflict', id, user, at: new Date().toISOString() })
     },
   }
 }
