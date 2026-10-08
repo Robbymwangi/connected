@@ -11,19 +11,32 @@ export const E2E_USER = {
   moderated_subject_ids: [] as string[],
 }
 
-/* Fakes /api/login and /api/me just long enough to sign in and populate the
-   cached session (lib/sessionStorage.ts, IndexedDB), then removes both
-   routes again. Whatever a test does after this call (a reload, a fresh
-   tab, going offline) depends on the cached session or the real network,
-   never on this fake quietly still answering underneath it. */
-export async function signIn(page: Page) {
+export type E2ESyncChange = {
+  table: string
+  recordId: string
+  version: number
+  fields: Record<string, unknown>
+}
+
+/* Fakes login, /me, and the initial sync pull just long enough to sign in and
+  populate IndexedDB, then removes the routes. Later reloads and offline
+  checks depend on local data or the real network, never on these fakes. */
+export async function signIn(page: Page, syncChanges: E2ESyncChange[] = []) {
   await page.route('**/api/login', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 'e2e-token' }) }),
   )
   await page.route('**/api/me', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(E2E_USER) }),
   )
+  await page.route('**/api/sync**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ changes: syncChanges, cursor: 1, more: false }),
+    }),
+  )
 
+  const syncResponse = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/sync')
   await page.goto('/')
   await page.getByLabel('Email').fill(E2E_USER.email)
   await page.getByLabel('Password').fill('whatever')
@@ -35,7 +48,10 @@ export async function signIn(page: Page) {
      finished. The sidebar is not a safe signal either; it starts collapsed
      off-screen (aria-hidden, inert) until opened. */
   await expect(page.getByRole('heading', { level: 1, name: /morning|afternoon|evening/i })).toBeVisible()
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null)
+  await syncResponse
 
   await page.unroute('**/api/login')
   await page.unroute('**/api/me')
+  await page.unroute('**/api/sync**')
 }

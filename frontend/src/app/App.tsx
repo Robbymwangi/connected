@@ -17,7 +17,7 @@ export default function App() {
   const auth = useAuthSession()
 
   /* Loading is the brief window while the cached session is read back
-     (IndexedDB, lib/sessionStorage.ts); it resolves before there is
+      (Dexie, lib/sessionStorage.ts); it resolves before there is
      anything meaningful to show either way. */
   if (auth.status === 'loading') return null
 
@@ -32,7 +32,7 @@ export default function App() {
    ever called once a user exists to call them with: App itself branches on
    auth.status before either hook runs, and that branch must not change how
    many hooks the same component instance calls across renders. */
-function AuthenticatedApp({ user, onSignOut }: { user: CurrentUser; onSignOut: () => void }) {
+function AuthenticatedApp({ user, onSignOut }: { user: CurrentUser; onSignOut: () => Promise<void> }) {
   /* The URL is the source of truth for where the user is (ADR 0005). */
   const [location, setLocation] = useLocation()
   const navigate = (screen: NavId) =>
