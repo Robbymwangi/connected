@@ -45,7 +45,8 @@ function AuthenticatedApp({ user, onSignOut }: { user: CurrentUser; onSignOut: (
       : { screen },
     )
   const me: Resolver = { id: user.id, name: user.fullName, moderatedSubjects: user.moderatedSubjectIds }
-  const store = useSessionStore(me)
+  const store = useSessionStore(me, directory)
+  if (!store.ready) return null
 
   return (
     <AuthProvider value={{ user, signOut: onSignOut }}>

@@ -57,7 +57,7 @@ type ConflictSidesProps = {
 export function ConflictSides({ mine, theirs, mineEmphasis, theirsEmphasis, children }: ConflictSidesProps) {
   return (
     <div className={`grid gap-2 px-4 py-3 ${children ? 'grid-cols-3' : 'grid-cols-2'}`}>
-      <ValueBlock label="You" mark={mine.mark} at={mine.at} emphasis={mineEmphasis} />
+      <ValueBlock label={mine.who} mark={mine.mark} at={mine.at} emphasis={mineEmphasis} />
       <ValueBlock label={theirs.who} mark={theirs.mark} at={theirs.at} emphasis={theirsEmphasis} />
       {children}
     </div>

@@ -1,6 +1,6 @@
-import { useReducer } from 'react'
+import { liveQuery } from 'dexie'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import { assessments as seedAssessments, type Assessment } from '../fixtures/assessments'
-import { classes } from '../fixtures/classes'
 import {
   activeConflicts,
   resolvedConflicts,
@@ -10,8 +10,7 @@ import {
   type Resolution,
 } from '../fixtures/conflicts'
 import { emptyGrid, marksByAssessment, type Grid } from '../fixtures/marks'
-import { rubricFor } from '../fixtures/rubrics'
-import { rosterFor } from '../fixtures/students'
+import { rubricFor, subjects, type Criterion } from '../fixtures/rubrics'
 import {
   abilityOf,
   agreedResolution,
@@ -24,6 +23,9 @@ import {
   toHistory,
   type Resolver,
 } from '../lib/conflicts'
+import { localDatabaseFor } from '../lib/localDatabase'
+import { mapSyncedAssessmentState, type SyncedAssessmentState } from '../lib/syncedAssessmentState'
+import type { SchoolDirectoryState } from './useSchoolDirectory'
 
 /* Everything the screens mutate, held in one place for the life of the session so
    a change made on one screen is still there after navigating away and back. It is
@@ -40,12 +42,22 @@ type State = {
   marks: Record<string, Grid>
   conflicts: ActiveConflict[]
   history: HistoricalConflict[]
+  criteriaBySubject: Record<string, Criterion[]>
+}
+
+const emptyState: State = {
+  assessments: [],
+  marks: {},
+  conflicts: [],
+  history: [],
+  criteriaBySubject: {},
 }
 
 type Action =
+  | { type: 'hydrate'; state: SyncedAssessmentState; dirtyConflictIds: string[] }
   | { type: 'addAssessments'; drafts: Omit<Assessment, 'id' | 'version'>[] }
   | { type: 'finalizeAssessment'; id: string }
-  | { type: 'updateGrid'; assessmentId: string; update: (grid: Grid) => Grid }
+  | { type: 'updateGrid'; assessmentId: string; update: (grid: Grid) => Grid; emptyGrid?: Grid }
   /* The three ways a conflict moves under ADR 0002. Each is checked against what
      the user may do; an action the user may not take leaves the state as it was. */
   | { type: 'resolveConflict'; id: string; choice: Choice; note: string; user: Resolver; at: string }
@@ -58,19 +70,21 @@ export const seed: State = {
   marks: marksByAssessment,
   conflicts: activeConflicts,
   history: resolvedConflicts,
+  criteriaBySubject: Object.fromEntries(subjects.map((subject) => [subject, rubricFor(subject)])),
 }
 
-function emptyGridFor(state: State, assessmentId: string): Grid {
+function emptyGridFor(state: State, assessmentId: string, directory: SchoolDirectoryState): Grid {
   const a = state.assessments.find((x) => x.id === assessmentId)
-  const cls = a && classes.find((c) => c.stream === a.stream)
-  return emptyGrid(
-    rosterFor(cls?.id ?? '').map((s) => s.id),
-    a ? rubricFor(a.subject).map((c) => c.id) : [],
-  )
+  if (!a || directory.status !== 'ready') return {}
+  const cls = directory.data.classesForYear(a.year).find((item) => item.stream === a.stream)
+  if (!cls) return {}
+  const students = directory.data.studentsForYear(a.year).filter((student) => student.classId === cls.id)
+  const criteria = directory.data.criteriaBySubject[a.subject] ?? []
+  return emptyGrid(students.map((student) => student.id), criteria.map((criterion) => criterion.id))
 }
 
-function gridOf(state: State, assessmentId: string): Grid {
-  return state.marks[assessmentId] ?? emptyGridFor(state, assessmentId)
+function gridOf(state: State, assessmentId: string, fallback: Grid = {}): Grid {
+  return state.marks[assessmentId] ?? fallback
 }
 
 /* The maximum for the criterion a conflict is about; 0 when unknown, which makes
@@ -82,11 +96,14 @@ function subjectOf(state: State, conflict: ActiveConflict): string {
 
 function criterionMax(state: State, conflict: ActiveConflict): number {
   const a = state.assessments.find((x) => x.id === conflict.assessmentId)
-  return a ? (rubricFor(a.subject).find((c) => c.id === conflict.criterionId)?.max ?? 0) : 0
+  return a ? (state.criteriaBySubject[a.subject]?.find((c) => c.id === conflict.criterionId)?.max ?? 0) : 0
 }
 
 export function reduce(state: State, action: Action): State {
   switch (action.type) {
+    case 'hydrate':
+      return mergeSyncedState(action.state, state, new Set(action.dirtyConflictIds))
+
     /* Primary keys are client-generated UUIDs, assigned here at creation; a record
        made offline cannot wait for a server to number it. Version 0 means the server
        has never acknowledged it (ADR 0001). */
@@ -110,7 +127,7 @@ export function reduce(state: State, action: Action): State {
     case 'updateGrid':
       return {
         ...state,
-        marks: { ...state.marks, [action.assessmentId]: action.update(gridOf(state, action.assessmentId)) },
+        marks: { ...state.marks, [action.assessmentId]: action.update(gridOf(state, action.assessmentId, action.emptyGrid)) },
       }
 
     /* Direct settlement: the user's own two-device edits, or a moderator. */
@@ -204,31 +221,114 @@ function settle(state: State, conflict: ActiveConflict, resolution: Resolution, 
    rather than read from Context here, since the caller (App.tsx) already
    has it directly and every dispatch below needs the exact same Resolver
    ConflictActions used to decide what the UI showed. */
-export function useSessionStore(user: Resolver) {
-  const [state, dispatch] = useReducer(reduce, seed)
+export function mergeSyncedState(remote: State, current: State, dirtyConflictIds: ReadonlySet<string>): State {
+  const preservedAssessments = current.assessments.filter((assessment) =>
+    assessment.version === 0 || assessment.sync === 'pending',
+  )
+  const preservedAssessmentIds = new Set(preservedAssessments.map((assessment) => assessment.id))
+  const assessments = [
+    ...preservedAssessments,
+    ...remote.assessments.filter((assessment) => !preservedAssessmentIds.has(assessment.id)),
+  ]
+  const marks = { ...remote.marks }
+
+  for (const [assessmentId, localGrid] of Object.entries(current.marks)) {
+    for (const [studentId, localRow] of Object.entries(localGrid)) {
+      for (const [criterionId, cell] of Object.entries(localRow)) {
+        if (cell.sync !== 'local') continue
+        marks[assessmentId] ??= {}
+        marks[assessmentId][studentId] ??= {}
+        marks[assessmentId][studentId][criterionId] = cell
+      }
+    }
+  }
+
+  const conflicts = [
+    ...remote.conflicts.filter((conflict) => !dirtyConflictIds.has(conflict.id)),
+    ...current.conflicts.filter((conflict) => dirtyConflictIds.has(conflict.id)),
+  ]
+  const historyById = new Map(remote.history.map((conflict) => [conflict.id, conflict]))
+  for (const conflict of current.history) historyById.set(conflict.id, conflict)
+
+  return { ...remote, assessments, marks, conflicts, history: [...historyById.values()] }
+}
+
+export function useSessionStore(user: Resolver, directory: SchoolDirectoryState) {
+  const database = localDatabaseFor(user.id)
+  const [state, dispatch] = useReducer(reduce, emptyState)
+  const [hasHydrated, setHasHydrated] = useState(false)
+  const dirtyConflictIds = useRef(new Set<string>())
+  const ready = hasHydrated || directory.status === 'error'
+
+  useEffect(() => {
+    if (directory.status !== 'ready') return
+
+    const subscription = liveQuery(() => database.transaction(
+      'r',
+      [database.assessments, database.marks, database.conflicts],
+      async () => {
+        const [assessments, marks, conflicts] = await Promise.all([
+          database.assessments.toArray(),
+          database.marks.toArray(),
+          database.conflicts.toArray(),
+        ])
+        return mapSyncedAssessmentState({ assessments, marks, conflicts, directory: directory.data, userId: user.id })
+      },
+    )).subscribe({
+      next: (remote) => {
+        dispatch({ type: 'hydrate', state: remote, dirtyConflictIds: [...dirtyConflictIds.current] })
+        setHasHydrated(true)
+      },
+      error: () => setHasHydrated(true),
+    })
+
+    return () => subscription.unsubscribe()
+  }, [database, directory, user.id])
 
   return {
+    ready,
     assessments: state.assessments,
     marks: state.marks,
     conflicts: state.conflicts,
     history: state.history,
 
-    addAssessments: (drafts: Omit<Assessment, 'id' | 'version'>[]) =>
-      dispatch({ type: 'addAssessments', drafts }),
-    finalizeAssessment: (id: string) => dispatch({ type: 'finalizeAssessment', id }),
+    addAssessments: (drafts: Omit<Assessment, 'id' | 'version'>[]) => {
+      dispatch({ type: 'addAssessments', drafts })
+    },
+    finalizeAssessment: (id: string) => {
+      dispatch({ type: 'finalizeAssessment', id })
+    },
 
-    gridFor: (assessmentId: string): Grid => gridOf(state, assessmentId),
-    updateGrid: (assessmentId: string, update: (grid: Grid) => Grid) =>
-      dispatch({ type: 'updateGrid', assessmentId, update }),
+    gridFor: (assessmentId: string): Grid => {
+      const assessment = state.assessments.find((item) => item.id === assessmentId)
+      return gridOf(state, assessmentId, assessment ? emptyGridFor(state, assessmentId, directory) : {})
+    },
+    updateGrid: (assessmentId: string, update: (grid: Grid) => Grid) => {
+      const assessment = state.assessments.find((item) => item.id === assessmentId)
+      dispatch({
+        type: 'updateGrid',
+        assessmentId,
+        update,
+        emptyGrid: assessment ? emptyGridFor(state, assessmentId, directory) : {},
+      })
+    },
 
-    resolveConflict: (id: string, choice: Choice, note = '') =>
-      dispatch({ type: 'resolveConflict', id, choice, note, user, at: new Date().toISOString() }),
-    proposeResolution: (id: string, choice: Choice, note: string) =>
-      dispatch({ type: 'proposeResolution', id, choice, note, user, at: new Date().toISOString() }),
-    acceptProposal: (id: string) =>
-      dispatch({ type: 'acceptProposal', id, user, at: new Date().toISOString() }),
-    referConflict: (id: string) =>
-      dispatch({ type: 'referConflict', id, user, at: new Date().toISOString() }),
+    resolveConflict: (id: string, choice: Choice, note = '') => {
+      dirtyConflictIds.current.add(id)
+      dispatch({ type: 'resolveConflict', id, choice, note, user, at: new Date().toISOString() })
+    },
+    proposeResolution: (id: string, choice: Choice, note: string) => {
+      dirtyConflictIds.current.add(id)
+      dispatch({ type: 'proposeResolution', id, choice, note, user, at: new Date().toISOString() })
+    },
+    acceptProposal: (id: string) => {
+      dirtyConflictIds.current.add(id)
+      dispatch({ type: 'acceptProposal', id, user, at: new Date().toISOString() })
+    },
+    referConflict: (id: string) => {
+      dirtyConflictIds.current.add(id)
+      dispatch({ type: 'referConflict', id, user, at: new Date().toISOString() })
+    },
   }
 }
 

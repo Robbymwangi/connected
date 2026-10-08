@@ -19,6 +19,7 @@ export type SchoolDirectorySource = {
 export type SchoolDirectory = {
   years: number[]
   subjects: string[]
+  subjectNameById: Record<string, string>
   criteriaBySubject: Record<string, Criterion[]>
   teachers: Teacher[]
   classesForYear: (year: number) => SchoolClass[]
@@ -152,5 +153,13 @@ export function mapSchoolDirectory(source: SchoolDirectorySource): SchoolDirecto
     return result.sort((a, b) => a.name.localeCompare(b.name))
   }
 
-  return { years, subjects: names, criteriaBySubject, teachers, classesForYear, studentsForYear }
+  return {
+    years,
+    subjects: names,
+    subjectNameById: Object.fromEntries(subjectNameById),
+    criteriaBySubject,
+    teachers,
+    classesForYear,
+    studentsForYear,
+  }
 }
