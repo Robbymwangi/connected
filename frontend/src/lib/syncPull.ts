@@ -29,6 +29,7 @@ export type SyncPullResult = {
 }
 
 export const syncCursorKey = (userId: string) => `syncCursor:${userId}`
+const activePulls = new WeakMap<LocalDatabase, Promise<SyncPullResult>>()
 
 function isSyncTable(value: unknown): value is SyncTableName {
   return typeof value === 'string' && SYNC_TABLES.some((table) => table === value)
@@ -101,13 +102,12 @@ async function applyPage(database: LocalDatabase, page: SyncPage, userId: string
   return applied
 }
 
-export async function pullSync(
+async function performPull(
   token: string,
   userId: string,
   fetchImpl: FetchImpl = fetch,
-  database?: LocalDatabase,
+  store: LocalDatabase,
 ): Promise<SyncPullResult> {
-  const store = database ?? localDatabaseFor(userId)
   const storedCursor = await store.metadata.get(syncCursorKey(userId))
   let cursor = storedCursor?.value
   if (cursor !== undefined && typeof cursor !== 'number' && typeof cursor !== 'string') {
@@ -143,4 +143,23 @@ export async function pullSync(
   }
 
   return { pages, changesApplied, cursor: cursor as number }
+}
+
+export function pullSync(
+  token: string,
+  userId: string,
+  fetchImpl: FetchImpl = fetch,
+  database?: LocalDatabase,
+): Promise<SyncPullResult> {
+  const store = database ?? localDatabaseFor(userId)
+  const active = activePulls.get(store)
+  if (active) return active
+
+  const pull = performPull(token, userId, fetchImpl, store)
+  activePulls.set(store, pull)
+  const clearActivePull = () => {
+    if (activePulls.get(store) === pull) activePulls.delete(store)
+  }
+  void pull.then(clearActivePull, clearActivePull)
+  return pull
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FetchImpl } from '../api/client'
-import { createIndexedDbSessionStorage } from '../lib/sessionStorage'
+import { pullSync } from '../lib/syncPull'
+import { createDexieSessionStorage } from '../lib/sessionStorage'
 import type { CurrentUser, Session, SessionStorage } from '../lib/session'
 import { performSignIn, performSignOut, revalidate, signInErrorMessage } from './authSession'
 
@@ -12,15 +13,19 @@ export type AuthState =
       error: string | null
       signIn: (email: string, password: string) => Promise<void>
     }
-  | { status: 'signedIn'; user: CurrentUser; signOut: () => void }
+  | { status: 'signedIn'; user: CurrentUser; signOut: () => Promise<void> }
 
-/* One stable instance for the app's real usage; each of its operations opens
-   its own short-lived IndexedDB connection, so there is no per-instance state
-   worth recreating on every render. Tests pass their own fake storage to
+/* One stable adapter for the app's real usage; Dexie manages its database
+  connection, so there is no per-instance state worth recreating on every
+  render. Tests pass their own fake storage to
    authSession.ts's functions directly instead of going through this hook,
    the same way lib/connectivity.ts's useConnectivity hook is untested in
    Vitest and its framework-free logic (lib/health.ts) is. */
-const defaultStorage = createIndexedDbSessionStorage()
+const defaultStorage = createDexieSessionStorage()
+
+function pullForSession(session: Session, fetchImpl: FetchImpl): void {
+  void pullSync(session.token, session.user.id, fetchImpl).catch(() => {})
+}
 
 /* The thin React wrapper around app/authSession.ts (build plan 1.7, #45).
    Boot is two steps, not one: the cached session is shown the instant it
@@ -50,6 +55,7 @@ export function useAuthSession(
       setSession(cached)
       currentToken.current = cached?.token ?? null
       if (!cached) return
+      pullForSession(cached, fetchImpl)
 
       void revalidate(cached, fetchImpl).then((verdict) => {
         if (cancelled || currentToken.current !== cached.token) return
@@ -58,6 +64,7 @@ export function useAuthSession(
           const next: Session = { token: cached.token, user: verdict.user }
           setSession(next)
           void storage.save(next)
+          if (next.user.id !== cached.user.id) pullForSession(next, fetchImpl)
         } else if (verdict.kind === 'signOut') {
           currentToken.current = null
           setSession(null)
@@ -83,6 +90,7 @@ export function useAuthSession(
       const next = await performSignIn(email, password, storage, fetchImpl)
       currentToken.current = next.token
       setSession(next)
+      pullForSession(next, fetchImpl)
     } catch (e) {
       setError(signInErrorMessage(e))
     } finally {
@@ -90,11 +98,11 @@ export function useAuthSession(
     }
   }
 
-  function signOut(): void {
+  async function signOut(): Promise<void> {
     const token = session?.token
     currentToken.current = null
+    await performSignOut(token, storage, fetchImpl)
     setSession(null)
-    void performSignOut(token, storage, fetchImpl)
   }
 
   if (session === undefined) return { status: 'loading' }

@@ -139,6 +139,24 @@ describe('pullSync', () => {
     ])
   })
 
+  it('shares one in-flight pull for a database', async () => {
+    const store = createDatabase()
+    let finishResponse!: (response: Response) => void
+    const pendingResponse = new Promise<Response>((resolve) => { finishResponse = resolve })
+    const fetchMock = vi.fn(() => pendingResponse)
+
+    const first = pullSync('token', 'user-1', fetchMock as unknown as typeof fetch, store.database)
+    const second = pullSync('token', 'user-1', fetchMock as unknown as typeof fetch, store.database)
+    finishResponse?.(json({ changes: [], cursor: 19, more: false }))
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { pages: 1, changesApplied: 0, cursor: 19 },
+      { pages: 1, changesApplied: 0, cursor: 19 },
+    ])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(store.transaction).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects a numeric continuation cursor during bootstrap', async () => {
     const store = createDatabase()
     const fetchMock = vi.fn().mockResolvedValue(
