@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { Grid } from '../fixtures/marks'
 import { ABSENT, EMPTY, score } from './grading'
-import { changedGridCells, gridFromMarkRows, mergePendingMarkCells, pendingMarkRecord } from './localMarks'
+import { changedGridCells, emptyGrid, gridFromMarkRows, mergePendingMarkCells, pendingMarkRecord } from './localMarks'
 
 describe('local mark persistence helpers', () => {
+  it('creates empty rows for the requested students and criteria', () => {
+    expect(emptyGrid(['s1'], ['c1', 'c2'])).toEqual({
+      s1: { c1: { mark: EMPTY, sync: 'synced' }, c2: { mark: EMPTY, sync: 'synced' } },
+    })
+  })
+
   it('rebuilds displayed cells with server base versions and local authors', () => {
     const grid: Grid = { student: { criterion: { mark: EMPTY, sync: 'synced' } } }
 

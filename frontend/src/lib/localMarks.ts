@@ -8,6 +8,17 @@ export type GridCellChange = {
   cell: GridCell
 }
 
+export function emptyGrid(studentIds: string[], criterionIds: string[]): Grid {
+  const grid: Grid = {}
+  for (const studentId of studentIds) {
+    grid[studentId] = {}
+    for (const criterionId of criterionIds) {
+      grid[studentId][criterionId] = { mark: EMPTY, sync: 'synced' }
+    }
+  }
+  return grid
+}
+
 function integer(value: unknown): number | null {
   return Number.isSafeInteger(value) ? value as number : null
 }

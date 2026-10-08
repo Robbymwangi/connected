@@ -100,6 +100,7 @@ test('Classes and assessment selectors read school reference data from the local
     { table: 'users', recordId: E2E_USER.id, version: 1, fields: { name: 'Jane Teacher', email: E2E_USER.email } },
     { table: 'classes', recordId: 'class-1', version: 1, fields: { grade: 'Grade 4', stream: '4W', classTeacherId: E2E_USER.id } },
     { table: 'subjects', recordId: 'subject-1', version: 1, fields: { name: 'English' } },
+    { table: 'subjects', recordId: 'subject-2', version: 1, fields: { name: 'Kiswahili' } },
     { table: 'criteria', recordId: 'criterion-1', version: 1, fields: { subjectId: 'subject-1', name: 'Comprehension', maxScore: 20 } },
     { table: 'class_subjects', recordId: 'class-subject-1', version: 1, fields: { classId: 'class-1', subjectId: 'subject-1' } },
     { table: 'teacher_assignments', recordId: 'assignment-1', version: 1, fields: { userId: E2E_USER.id, classId: 'class-1', subjectId: 'subject-1' } },
@@ -118,6 +119,9 @@ test('Classes and assessment selectors read school reference data from the local
 
   await page.getByRole('button', { name: 'Open navigation' }).click()
   await page.getByRole('button', { name: 'Assessments', exact: true }).click()
+  await page.getByRole('button', { name: 'Subject' }).click()
+  await expect(page.getByRole('option', { name: 'Kiswahili' })).toBeVisible()
+  await page.getByRole('button', { name: 'Subject' }).click()
   await page.getByRole('button', { name: 'New' }).click()
   const dialog = page.getByRole('dialog', { name: 'New Assessment' })
   await page.getByRole('button', { name: /English/ }).click()

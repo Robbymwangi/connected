@@ -1,6 +1,5 @@
 import { FilterDropdown } from '../../components/FilterDropdown'
 import { TERMS as SCHOOL_TERMS, type Assessment } from '../../fixtures/assessments'
-import { subjects } from '../../fixtures/rubrics'
 import {
   ALL_SUBJECTS,
   ALL_TERMS,
@@ -16,11 +15,11 @@ const YEARS = ['2025', '2024'] as const
 /* Derived from the same list the create dialog offers, so every term a record can
    carry is one the queue can filter for. */
 const TERMS = [ALL_TERMS, ...SCHOOL_TERMS] as const
-const SUBJECTS = [ALL_SUBJECTS, ...subjects] as const
 const STATUSES = Object.keys(STATUS_GROUPS) as StatusGroup[]
 
 type QueueListProps = {
   assessments: Assessment[]
+  subjects: string[]
   filters: QueueFilters
   onFiltersChange: (update: (f: QueueFilters) => QueueFilters) => void
   onOpenGrid: (id: string) => void
@@ -28,8 +27,9 @@ type QueueListProps = {
 }
 
 /* Filters live in the screen so the header can report how many rows they left. */
-export function QueueList({ assessments, filters, onFiltersChange: setFilters, onOpenGrid, onOpenReport }: QueueListProps) {
+export function QueueList({ assessments, subjects, filters, onFiltersChange: setFilters, onOpenGrid, onOpenReport }: QueueListProps) {
   const rows = sortQueue(filterAssessments(assessments, filters))
+  const subjectOptions = [ALL_SUBJECTS, ...subjects] as const
 
   return (
     <>
@@ -54,8 +54,8 @@ export function QueueList({ assessments, filters, onFiltersChange: setFilters, o
         />
         <FilterDropdown
           label="Subject"
-          value={filters.subject as (typeof SUBJECTS)[number]}
-          options={SUBJECTS}
+          value={filters.subject as (typeof subjectOptions)[number]}
+          options={subjectOptions}
           onChange={(subject) => setFilters((f) => ({ ...f, subject }))}
         />
       </div>
