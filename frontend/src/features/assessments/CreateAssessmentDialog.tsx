@@ -2,8 +2,8 @@ import { Check } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Modal } from '../../components/Modal'
 import { TERMS } from '../../fixtures/assessments'
-import { classes } from '../../fixtures/classes'
-import { rubricFor, subjects, type Subject } from '../../fixtures/rubrics'
+import type { SchoolClass } from '../../fixtures/classes'
+import type { Criterion, Subject } from '../../fixtures/rubrics'
 
 export type NewAssessment = {
   subject: Subject
@@ -26,13 +26,16 @@ const STEPS = 4
 
 type CreateAssessmentDialogProps = {
   open: boolean
+  classes: SchoolClass[]
+  subjects: string[]
+  criteriaBySubject: Record<string, Criterion[]>
   onClose: () => void
   onCreate: (assessment: NewAssessment) => void
 }
 
 /* Four steps: subject, name and date, streams, confirmation. Each step must be
    complete before the next; the export let name and date through empty. */
-export function CreateAssessmentDialog({ open, onClose, onCreate }: CreateAssessmentDialogProps) {
+export function CreateAssessmentDialog({ open, classes, subjects, criteriaBySubject, onClose, onCreate }: CreateAssessmentDialogProps) {
   const [step, setStep] = useState(0)
   const [draft, setDraft] = useState<Draft>(EMPTY)
 
@@ -132,7 +135,7 @@ export function CreateAssessmentDialog({ open, onClose, onCreate }: CreateAssess
               <span>
                 {s}
                 <span className="ml-2 text-xs text-muted-foreground">
-                  {rubricFor(s).map((c) => c.name).join(', ')}
+                  {(criteriaBySubject[s] ?? []).map((c) => c.name).join(', ')}
                 </span>
               </span>
             </button>

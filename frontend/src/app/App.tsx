@@ -10,6 +10,7 @@ import { AppShell } from '../layout/AppShell'
 import type { NavId } from '../layout/navigation'
 import { AuthProvider } from './AuthProvider'
 import { useAuthSession } from './useAuthSession'
+import { useSchoolDirectory } from './useSchoolDirectory'
 import { useLocation } from './useLocation'
 import { useSessionStore } from './useSessionStore'
 
@@ -35,6 +36,7 @@ export default function App() {
 function AuthenticatedApp({ user, onSignOut }: { user: CurrentUser; onSignOut: () => Promise<void> }) {
   /* The URL is the source of truth for where the user is (ADR 0005). */
   const [location, setLocation] = useLocation()
+  const directory = useSchoolDirectory(user.id)
   const navigate = (screen: NavId) =>
     setLocation(
       screen === 'assessments' ? { screen: 'assessments' }
@@ -59,6 +61,7 @@ function AuthenticatedApp({ user, onSignOut }: { user: CurrentUser; onSignOut: (
         {location.screen === 'assessments' && (
           <AssessmentsScreen
             store={store}
+            directory={directory}
             assessmentId={location.assessmentId}
             view={location.view}
             creating={location.creating}
@@ -71,6 +74,7 @@ function AuthenticatedApp({ user, onSignOut }: { user: CurrentUser; onSignOut: (
         {location.screen === 'classes' && (
           <ClassesScreen
             store={store}
+            directory={directory}
             classId={location.classId}
             studentId={location.studentId}
             teacherId={location.teacherId}

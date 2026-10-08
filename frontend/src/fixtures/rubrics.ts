@@ -6,9 +6,11 @@ export type Criterion = {
 }
 
 export const subjects = ['English', 'Maths', 'Science'] as const
-export type Subject = (typeof subjects)[number]
+export type Subject = string
 
-const RUBRICS: Record<Subject, Criterion[]> = {
+type FixtureSubject = (typeof subjects)[number]
+
+const RUBRICS: Record<FixtureSubject, Criterion[]> = {
   English: [
     { id: 'c1', name: 'Comprehension', max: 20 },
     { id: 'c2', name: 'Written Expr.', max: 15 },
@@ -31,5 +33,5 @@ const RUBRICS: Record<Subject, Criterion[]> = {
 }
 
 export function rubricFor(subject: Subject): Criterion[] {
-  return RUBRICS[subject]
+  return RUBRICS[subject as FixtureSubject] ?? []
 }

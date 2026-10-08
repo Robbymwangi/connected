@@ -1,10 +1,9 @@
 import { Search } from 'lucide-react'
 import { useState } from 'react'
 import type { SessionStore } from '../../app/useSessionStore'
+import type { SchoolDirectoryState } from '../../app/useSchoolDirectory'
 import { FilterDropdown } from '../../components/FilterDropdown'
-import { classes, grades } from '../../fixtures/classes'
-import { initials, students } from '../../fixtures/students'
-import { teachers } from '../../fixtures/teachers'
+import { initials } from '../../fixtures/students'
 import { searchClasses } from '../../lib/classSearch'
 import { ClassCard } from './ClassCard'
 import { StreamDetail } from './StreamDetail'
@@ -12,12 +11,12 @@ import { StudentProfile } from './StudentProfile'
 import { TeacherCard } from './TeacherCard'
 import { TeacherDetail } from './TeacherDetail'
 
-const YEARS = ['2025', '2024'] as const
 const TABS = ['classes', 'teachers'] as const
 type Tab = (typeof TABS)[number]
 
 type ClassesScreenProps = {
   store: SessionStore
+  directory: SchoolDirectoryState
   classId?: string
   studentId?: string
   teacherId?: string
@@ -30,11 +29,30 @@ type ClassesScreenProps = {
 }
 
 export function ClassesScreen(props: ClassesScreenProps) {
-  const { store, classId, studentId, teacherId, onOpenClass, onOpenStudent, onOpenTeacher, onBackToList, onOpenGrid, onOpenReport } = props
+  const { store, directory, classId, studentId, teacherId, onOpenClass, onOpenStudent, onOpenTeacher, onBackToList, onOpenGrid, onOpenReport } = props
   const [tab, setTab] = useState<Tab>('classes')
-  const [year, setYear] = useState<(typeof YEARS)[number]>('2025')
+  const [selectedYear, setSelectedYear] = useState<number | null>(null)
   const [query, setQuery] = useState('')
 
+  if (directory.status !== 'ready') {
+    return (
+      <div className="px-5 pt-6 pb-12 lg:px-8">
+        <h1 className="text-2xl leading-tight font-bold text-foreground">Classes</h1>
+        <p className="mt-3 text-sm text-muted-foreground" role={directory.status === 'error' ? 'alert' : 'status'}>
+          {directory.status === 'loading' ? 'Loading school data…' : 'School data is unavailable on this device.'}
+        </p>
+      </div>
+    )
+  }
+
+  const data = directory.data
+  const years = data.years.length ? data.years : [new Date().getFullYear()]
+  const year = selectedYear !== null && years.includes(selectedYear) ? selectedYear : years[0]
+  const yearOptions = years.map(String)
+  const classes = data.classesForYear(year)
+  const students = data.studentsForYear(year)
+  const teachers = data.teachers
+  const grades = [...new Set(classes.map((c) => c.grade))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
   const cls = classId ? classes.find((c) => c.id === classId) : undefined
   const student = cls && studentId ? students.find((s) => s.id === studentId && s.classId === cls.id) : undefined
   const teacher = teacherId ? teachers.find((t) => t.id === teacherId) : undefined
@@ -47,6 +65,8 @@ export function ClassesScreen(props: ClassesScreenProps) {
       <StreamDetail
         cls={cls}
         year={Number(year)}
+        students={students}
+        teachers={teachers}
         store={store}
         onBack={onBackToList}
         onOpenStudent={(sid) => onOpenStudent(cls.id, sid)}
@@ -57,7 +77,7 @@ export function ClassesScreen(props: ClassesScreenProps) {
     )
   }
   if (teacher) {
-    return <TeacherDetail teacher={teacher} onBack={onBackToList} onOpenClass={onOpenClass} />
+    return <TeacherDetail teacher={teacher} classes={classes} onBack={onBackToList} onOpenClass={onOpenClass} />
   }
 
   const found = searchClasses(query, classes, teachers, students)
@@ -73,7 +93,13 @@ export function ClassesScreen(props: ClassesScreenProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <FilterDropdown label="Year" value={year} options={YEARS} onChange={setYear} />
+          <FilterDropdown
+            label="Year"
+            value={String(year)}
+            options={yearOptions}
+            disabled={data.years.length === 0}
+            onChange={(value) => setSelectedYear(Number(value))}
+          />
           <div className="flex items-center gap-1 rounded-xl border border-border bg-muted/60 p-1" role="group" aria-label="Show">
             {TABS.map((t) => (
               <button
@@ -130,7 +156,7 @@ export function ClassesScreen(props: ClassesScreenProps) {
       )}
 
       {tab === 'classes' &&
-        (year === '2024' ? (
+        (year === 2024 && data.years.includes(2024) ? (
           <p className="py-16 text-center text-sm text-muted-foreground">No class data available for 2024 yet.</p>
         ) : (
           grades.map((grade) => {

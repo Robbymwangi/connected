@@ -2,14 +2,17 @@ import { ChevronRight } from 'lucide-react'
 import type { SessionStore } from '../../app/useSessionStore'
 import { BackNav } from '../../components/BackNav'
 import type { SchoolClass } from '../../fixtures/classes'
-import { initials, rosterFor } from '../../fixtures/students'
-import { teachersOfStream } from '../../fixtures/teachers'
+import type { Student } from '../../fixtures/students'
+import { initials } from '../../fixtures/students'
+import type { Teacher } from '../../fixtures/teachers'
 import { AssessmentRow } from '../assessments/AssessmentRow'
 import { Panel } from './Panel'
 
 type StreamDetailProps = {
   cls: SchoolClass
   year: number
+  students: Student[]
+  teachers: Teacher[]
   store: SessionStore
   onBack: () => void
   onOpenStudent: (studentId: string) => void
@@ -18,10 +21,10 @@ type StreamDetailProps = {
   onOpenReport: (assessmentId: string) => void
 }
 
-export function StreamDetail({ cls, year, store, onBack, onOpenStudent, onOpenTeacher, onOpenGrid, onOpenReport }: StreamDetailProps) {
-  const roster = rosterFor(cls.id)
+export function StreamDetail({ cls, year, students, teachers: schoolTeachers, store, onBack, onOpenStudent, onOpenTeacher, onOpenGrid, onOpenReport }: StreamDetailProps) {
+  const roster = students.filter((student) => student.classId === cls.id)
   const assessments = store.assessments.filter((a) => a.stream === cls.stream && a.year === year)
-  const teachers = teachersOfStream(cls.stream)
+  const teachers = schoolTeachers.filter((teacher) => cls.stream in teacher.subjectsByStream)
 
   return (
     <div className="px-5 pt-6 pb-12 lg:px-8">

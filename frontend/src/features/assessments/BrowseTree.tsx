@@ -4,11 +4,13 @@ import { BackNav } from '../../components/BackNav'
 import type { Crumb } from '../../components/Breadcrumb'
 import { CompletionBar } from '../../components/CompletionBar'
 import type { Assessment } from '../../fixtures/assessments'
-import { classes, grades } from '../../fixtures/classes'
+import type { SchoolClass } from '../../fixtures/classes'
 import { AssessmentRow } from './AssessmentRow'
 
 type BrowseTreeProps = {
   assessments: Assessment[]
+  classes: SchoolClass[]
+  grades: string[]
   onOpenGrid: (id: string) => void
   onOpenReport: (id: string) => void
 }
@@ -16,7 +18,7 @@ type BrowseTreeProps = {
 /* Grade, then stream, then that stream's assessments. This is a scoped filter with
    a breadcrumb, inside the Assessments level; the grid beneath is the second and
    last navigation level. */
-export function BrowseTree({ assessments, onOpenGrid, onOpenReport }: BrowseTreeProps) {
+export function BrowseTree({ assessments, classes, grades, onOpenGrid, onOpenReport }: BrowseTreeProps) {
   const [grade, setGrade] = useState<string | null>(null)
   const [stream, setStream] = useState<string | null>(null)
 
