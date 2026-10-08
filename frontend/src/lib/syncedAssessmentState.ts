@@ -192,11 +192,14 @@ export function mapSyncedAssessmentState(source: Source): SyncedAssessmentState 
       const mark = markFromFields(markRow)
       if (!mark || !studentIds.has(studentId) || !criterionIds.has(criterionId)) continue
       const markVersion = integer(markRow, 'version') ?? 1
+      const pendingBaseVersion = integer(markRow, 'pendingBaseVersion')
+      const pendingFields = typeof markRow.pendingFields === 'object' && markRow.pendingFields !== null && !Array.isArray(markRow.pendingFields)
       const authorId = text(markRow, 'lastEditedBy')
       const cell: GridCell = {
         mark,
-        sync: markVersion === 0 ? 'local' : 'synced',
-        ...(names.has(authorId) ? { author: names.get(authorId) } : {}),
+        sync: markVersion === 0 || markRow.sync === 'pending' || pendingFields ? 'local' : 'synced',
+        baseVersion: pendingBaseVersion ?? markVersion,
+        ...(text(markRow, 'localAuthor') ? { author: text(markRow, 'localAuthor') } : names.has(authorId) ? { author: names.get(authorId) } : {}),
       }
       grid[studentId][criterionId] = cell
     }

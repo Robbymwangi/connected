@@ -23,7 +23,7 @@ type MarkingGridProps = {
   directory: SchoolDirectoryState
   /* The marks live in the session store, not here, so edits survive navigation. */
   grid: Grid
-  onUpdateGrid: (update: (grid: Grid) => Grid) => void
+  onUpdateGrid: (update: (grid: Grid) => Grid) => Promise<void>
   /* Conflicts for this assessment only, and the three ways to move one (ADR 0002). */
   conflicts: ActiveConflict[]
   onResolveConflict: (id: string, choice: Choice, note: string) => void
@@ -78,8 +78,12 @@ export function MarkingGrid({
 
   const canEdit = editing && !finalized
 
+  const persistGrid = (update: (grid: Grid) => Grid) => {
+    void setGrid(update).catch(() => showToast('saveError', 5000))
+  }
+
   const setMark = (studentId: string, criterionId: string, mark: Mark, extra?: Partial<Grid[string][string]>) =>
-    setGrid((g) => ({
+    persistGrid((g) => ({
       ...g,
       [studentId]: {
         ...g[studentId],
@@ -88,7 +92,7 @@ export function MarkingGrid({
     }))
 
   const setRow = (studentId: string, mark: Mark) =>
-    setGrid((g) => ({
+    persistGrid((g) => ({
       ...g,
       [studentId]: Object.fromEntries(
         rubric.map((c) => [c.id, { ...g[studentId][c.id], mark, sync: 'local' as const }]),

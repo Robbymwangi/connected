@@ -10,6 +10,7 @@ export type CellSync = 'synced' | 'local'
 export type GridCell = {
   mark: Mark
   sync: CellSync
+  baseVersion?: number
   author?: string
 }
 

@@ -29,5 +29,14 @@ export function createLocalAssessmentRecord(
     date: draft.date,
     status: 'scheduled',
     sync: 'pending',
+    pendingBaseVersion: 0,
+    pendingFields: {
+      classId: schoolClass.id,
+      subjectId,
+      name: draft.name,
+      term: draft.term,
+      year: draft.year,
+      date: draft.date,
+    },
   }
 }

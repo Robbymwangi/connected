@@ -118,6 +118,35 @@ describe('pullSync', () => {
     expect(store.metadata.get(syncCursorKey('user-1'))?.value).toBe(22)
   })
 
+  it('preserves a pending mark patch while merging newer server fields and version', async () => {
+    const store = createDatabase()
+    store.metadata.set(syncCursorKey('user-1'), { key: syncCursorKey('user-1'), value: 22 })
+    store.rows.set('marks', new Map([['m1', {
+      id: 'm1', version: 2, assessmentId: 'a1', studentId: 's1', criterionId: 'c1',
+      markKind: 'score', score: 9, pendingBaseVersion: 2,
+      pendingFields: { markKind: 'score', score: 9 }, sync: 'pending',
+    }]]))
+    const fetchMock = vi.fn().mockResolvedValue(
+      json({
+        changes: [{ table: 'marks', recordId: 'm1', version: 3, fields: { score: 6, lastEditedBy: 'teacher-2' } }],
+        cursor: 23,
+        more: false,
+      }),
+    )
+
+    const result = await pullSync('token', 'user-1', fetchMock as unknown as typeof fetch, store.database)
+
+    expect(result).toEqual({ pages: 1, changesApplied: 1, cursor: 23 })
+    expect(store.rows.get('marks')?.get('m1')).toMatchObject({
+      version: 3,
+      score: 9,
+      lastEditedBy: 'teacher-2',
+      pendingBaseVersion: 2,
+      pendingFields: { markKind: 'score', score: 9 },
+      sync: 'pending',
+    })
+  })
+
   it('accepts numeric cursors across incremental log pages', async () => {
     const store = createDatabase()
     store.metadata.set(syncCursorKey('user-1'), { key: syncCursorKey('user-1'), value: 18 })

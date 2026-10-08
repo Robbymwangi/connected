@@ -35,7 +35,7 @@ describe('mapSyncedAssessmentState', () => {
       date: '2026-05-12', version: 2, entered: 1, total: 1, status: 'complete', sync: 'synced',
     }])
     expect(state.marks['assessment-1']['student-1']['criterion-1']).toEqual({
-      mark: { kind: 'absent' }, sync: 'synced', author: 'Teacher One',
+      mark: { kind: 'absent' }, sync: 'synced', baseVersion: 1, author: 'Teacher One',
     })
     expect(state.resultRecords).toEqual([{ studentId: 'student-1', assessmentId: 'assessment-1', total: 14, max: 18, level: 'ME' }])
   })

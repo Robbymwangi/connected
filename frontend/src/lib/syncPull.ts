@@ -86,11 +86,32 @@ async function applyPage(database: LocalDatabase, page: SyncPage, userId: string
       const current = await table.get(change.recordId)
       if (current && current.version >= change.version) continue
 
+      const pendingFields = current?.pendingFields
+      const hasPendingFields = typeof pendingFields === 'object' && pendingFields !== null && !Array.isArray(pendingFields) && Object.keys(pendingFields).length > 0
+      const pendingFinalize = typeof current?.pendingFinalize === 'object' && current.pendingFinalize !== null && !Array.isArray(current.pendingFinalize)
+        ? current.pendingFinalize as Record<string, unknown>
+        : null
+      const localFields = {
+        ...(hasPendingFields ? pendingFields as Record<string, unknown> : {}),
+        ...(pendingFinalize ? { status: 'finalized', ...pendingFinalize } : {}),
+      }
+      const hasLocalFields = Object.keys(localFields).length > 0
+      const pendingBaseVersion = Number.isSafeInteger(current?.pendingBaseVersion)
+        ? current?.pendingBaseVersion as number
+        : current?.version ?? 0
+
       const record: LocalRecord = {
         ...(current ?? {}),
         ...change.fields,
+        ...localFields,
         id: change.recordId,
         version: change.version,
+        ...(hasLocalFields ? {
+          pendingBaseVersion,
+          pendingFields: hasPendingFields ? pendingFields : {},
+          ...(pendingFinalize ? { pendingFinalize } : {}),
+          sync: 'pending',
+        } : {}),
       }
       await table.put(record)
       applied++
