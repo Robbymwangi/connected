@@ -30,7 +30,7 @@ type CreateAssessmentDialogProps = {
   subjects: string[]
   criteriaBySubject: Record<string, Criterion[]>
   onClose: () => void
-  onCreate: (assessment: NewAssessment) => void
+  onCreate: (assessment: NewAssessment) => void | Promise<void>
 }
 
 /* Four steps: subject, name and date, streams, confirmation. Each step must be
@@ -38,10 +38,14 @@ type CreateAssessmentDialogProps = {
 export function CreateAssessmentDialog({ open, classes, subjects, criteriaBySubject, onClose, onCreate }: CreateAssessmentDialogProps) {
   const [step, setStep] = useState(0)
   const [draft, setDraft] = useState<Draft>(EMPTY)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const reset = () => {
     setStep(0)
     setDraft(EMPTY)
+    setSaving(false)
+    setSaveError(null)
   }
   const close = () => {
     onClose()
@@ -60,16 +64,24 @@ export function CreateAssessmentDialog({ open, classes, subjects, criteriaBySubj
     ? classes.filter((c) => c.subjects.includes(draft.subject as string))
     : []
 
-  const create = () => {
+  const create = async () => {
     if (!draft.subject) return
-    onCreate({
-      subject: draft.subject,
-      name: draft.name.trim(),
-      term: draft.term,
-      date: draft.date,
-      classIds: draft.classIds,
-    })
-    setStep(3)
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await onCreate({
+        subject: draft.subject,
+        name: draft.name.trim(),
+        term: draft.term,
+        date: draft.date,
+        classIds: draft.classIds,
+      })
+      setStep(3)
+    } catch {
+      setSaveError('Could not save this assessment on this device.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const inputClass =
@@ -111,8 +123,8 @@ export function CreateAssessmentDialog({ open, classes, subjects, criteriaBySubj
             </PrimaryButton>
           )}
           {step === 2 && (
-            <PrimaryButton onClick={create} disabled={!canContinue}>
-              Create
+            <PrimaryButton onClick={create} disabled={!canContinue || saving}>
+              {saving ? 'Saving...' : 'Create'}
             </PrimaryButton>
           )}
           {step === 3 && <PrimaryButton onClick={close}>Done</PrimaryButton>}
@@ -176,6 +188,7 @@ export function CreateAssessmentDialog({ open, classes, subjects, criteriaBySubj
       {step === 2 && (
         <div className="flex flex-col gap-3">
           <p className="mb-1 text-sm font-semibold text-foreground">Select streams</p>
+          {saveError && <p className="text-sm text-danger" role="alert">{saveError}</p>}
           {eligibleClasses.map((c) => {
             const selected = draft.classIds.includes(c.id)
             return (

@@ -30,7 +30,7 @@ type MarkingGridProps = {
   onProposeResolution: (id: string, choice: Choice, note: string) => void
   onAcceptProposal: (id: string) => void
   onReferConflict: (id: string) => void
-  onFinalize: (assessmentId: string) => void
+  onFinalize: (assessmentId: string) => Promise<void>
   onBack: () => void
 }
 
@@ -118,8 +118,8 @@ export function MarkingGrid({
     conflicts.find((k) => k.studentId === studentId && k.criterionId === criterionId)
   const openConflict = conflicts.find((k) => k.id === openConflictId) ?? null
 
-  const finalize = () => {
-    onFinalize(assessment.id)
+  const finalize = async () => {
+    await onFinalize(assessment.id)
     setEditing(false)
     setFinalizeOpen(false)
   }

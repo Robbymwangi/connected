@@ -64,7 +64,7 @@ test('Classes and assessment selectors read school reference data from the local
   await expect(page.getByText(/class teacher Jane Teacher/)).toBeVisible()
 
   await page.getByRole('button', { name: 'Open navigation' }).click()
-  await page.getByRole('button', { name: 'Assessments' }).click()
+  await page.getByRole('button', { name: 'Assessments', exact: true }).click()
   await page.getByRole('button', { name: 'New' }).click()
   const dialog = page.getByRole('dialog', { name: 'New Assessment' })
   await page.getByRole('button', { name: /English/ }).click()
@@ -125,4 +125,92 @@ test('notification popup reads only the signed-in user rows from the local store
   await expect(page.getByText('just now')).toHaveCount(0)
   await page.getByRole('button', { name: 'Mark all read' }).click()
   await expect(page.getByRole('button', { name: 'Mark all read' })).toHaveCount(0)
+})
+
+test('a newly created assessment survives an offline reload in the local store', async ({ page, context }) => {
+  await signIn(page)
+  await page.getByRole('button', { name: 'Open navigation' }).click()
+  await page.getByRole('button', { name: 'Assessments', exact: true }).click()
+  await page.getByRole('button', { name: 'New' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'New Assessment' })
+  await dialog.getByRole('button', { name: /English/ }).click()
+  await dialog.getByRole('button', { name: 'Continue' }).click()
+  await dialog.getByLabel('Assessment name').fill('Offline CAT 3')
+  await dialog.getByLabel('Assessment date').fill('2025-09-10')
+  await dialog.getByRole('button', { name: 'Continue' }).click()
+  await dialog.getByRole('button', { name: /Grade 4 · Stream 4W/ }).click()
+  await dialog.getByRole('button', { name: 'Create' }).click()
+  await expect(dialog.getByText('Assessment created')).toBeVisible()
+
+  await context.setOffline(true)
+  await page.reload()
+
+  const saved = await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('connected-user-e2e-teacher')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const assessments = await new Promise<unknown[]>((resolve, reject) => {
+      const request = database.transaction('assessments').objectStore('assessments').getAll()
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    database.close()
+    return assessments.find((assessment) => typeof assessment === 'object' && assessment !== null && 'name' in assessment && assessment.name === 'Offline CAT 3')
+  })
+
+  expect(saved).toMatchObject({
+    version: 0,
+    classId: 'class-1',
+    subjectId: 'subject-1',
+    name: 'Offline CAT 3',
+    status: 'scheduled',
+  })
+})
+
+test('finalizing an assessment persists its local command state offline', async ({ page, context }) => {
+  const changes: E2ESyncChange[] = [
+    ...E2E_SYNC_CHANGES,
+    {
+      table: 'marks', recordId: 'mark-1', version: 1,
+      fields: {
+        assessmentId: 'a1', studentId: 'student-1', criterionId: 'criterion-1',
+        markKind: 'score', score: 16, lastEditedBy: E2E_USER.id,
+      },
+    },
+  ]
+
+  await signIn(page, changes)
+  await page.goto('/assessments/a1/grid')
+  await page.getByRole('button', { name: 'Finalize' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Finalize assessment?' })
+  await dialog.getByRole('button', { name: 'Finalize' }).click()
+  await expect(page.getByText('Finalized', { exact: true })).toBeVisible()
+
+  await context.setOffline(true)
+  await page.reload()
+  await expect(page.getByText('Finalized', { exact: true })).toBeVisible()
+
+  const saved = await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('connected-user-e2e-teacher')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const assessment = await new Promise<unknown>((resolve, reject) => {
+      const request = database.transaction('assessments').objectStore('assessments').get('a1')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    database.close()
+    return assessment
+  })
+
+  expect(saved).toMatchObject({
+    status: 'finalized',
+    finalizedBy: E2E_USER.id,
+    sync: 'pending',
+  })
 })

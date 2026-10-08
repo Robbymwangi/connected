@@ -65,4 +65,20 @@ describe('mapSyncedAssessmentState', () => {
     expect(state.conflicts[0].mine).toMatchObject({ userId: 'teacher-2', who: 'Teacher Two', mark: { kind: 'absent' } })
     expect(state.conflicts[0].theirs).toMatchObject({ userId: 'teacher-1', who: 'Teacher One', mark: { kind: 'score', value: 12 } })
   })
+
+  it('keeps an unacknowledged local finalize pending on a later snapshot', () => {
+    const state = mapSyncedAssessmentState({
+      userId: 'teacher-1',
+      directory,
+      assessments: [{
+        id: 'assessment-1', version: 2, classId: 'class-1', subjectId: 'subject-1', name: 'CAT 1',
+        term: 'Term 1', year: 2026, date: '2026-05-12', status: 'finalized', sync: 'pending',
+      }],
+      marks: [],
+      conflicts: [],
+      results: [],
+    })
+
+    expect(state.assessments[0]).toMatchObject({ status: 'finalized', sync: 'pending', version: 2 })
+  })
 })

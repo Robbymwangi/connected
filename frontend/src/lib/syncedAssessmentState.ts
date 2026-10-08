@@ -210,7 +210,7 @@ export function mapSyncedAssessmentState(source: Source): SyncedAssessmentState 
       : 'complete'
 
     const hasConflict = conflictRows.some((conflict) => text(conflict, 'markId') && (markRowsByAssessment.get(id) ?? []).some((mark) => mark.id === conflict.markId))
-    const sync: SyncState = hasConflict ? 'conflict' : version === 0 ? 'pending' : 'synced'
+    const sync: SyncState = hasConflict ? 'conflict' : version === 0 || row.sync === 'pending' ? 'pending' : 'synced'
 
     assessments.push({
       id,
