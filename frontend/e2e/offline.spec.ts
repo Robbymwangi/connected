@@ -44,6 +44,9 @@ test('the marking grid opens offline by URL', async ({ page, context }) => {
 })
 
 test('a mark edit is saved to Dexie and survives an offline reload', async ({ page, context }) => {
+  /* The API is unreachable here, so the sync runner stays idle and the entry is still
+     queued when it is read back; with a reachable API it would be sent at once. */
+  await page.route('**/api/health', (route) => route.abort())
   await signIn(page)
   await page.goto('/assessments/a1/grid')
   await page.getByRole('button', { name: 'Edit' }).click()
