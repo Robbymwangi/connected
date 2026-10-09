@@ -338,6 +338,55 @@ describe('a conflict', () => {
     await assertDisplayFlags(database)
   })
 
+  describe('whose row is older than what a pull landed while the push was out', () => {
+    const pulledAhead = () => mark({
+      version: 9, score: 9, lastEditedBy: 'u3',
+      serverShadow: { score: 12 }, serverShadowAt: { score: 9 },
+    })
+    const older = (extra: object = {}) => (id: string) => ({
+      id, status: 'conflict', current: current({ score: 6, lastEditedBy: 'u2' }, 'marks', 'm1', 7), ...extra,
+    })
+
+    it('leaves the record and its newer shadow alone when the entry is retained', async () => {
+      const database = createDatabase()
+      await database.marks.put(pulledAhead())
+      await database.outbox.add(markEdit({ state: 'sent' }))
+
+      await pushSync('token', 'u1', asFetch(server((e) => e.map((item) => older({ conflictId: 'c-1' })(item.id)))), database)
+
+      expect((await database.outbox.toArray())[0]).toMatchObject({ state: 'conflict', conflictId: 'c-1' })
+      expect(await database.marks.get('m1')).toMatchObject({
+        version: 9, score: 9, lastEditedBy: 'u3', serverShadow: { score: 12 }, serverShadowAt: { score: 9 },
+      })
+      await assertDisplayFlags(database)
+    })
+
+    it('does not roll unprotected fields back when the entry is dropped, and adopts the newer server value for its own fields', async () => {
+      const database = createDatabase()
+      await database.marks.put(pulledAhead())
+      await database.outbox.add(markEdit({ state: 'sent' }))
+
+      await pushSync('token', 'u1', asFetch(server((e) => e.map((item) => older()(item.id)))), database)
+
+      expect(await database.outbox.count()).toBe(0)
+      const record = await database.marks.get('m1')
+      expect(record).toMatchObject({ version: 9, score: 12, lastEditedBy: 'u3' })
+      for (const key of ['serverShadow', 'serverShadowAt', 'sync']) expect(record).not.toHaveProperty(key)
+      expect(((await database.metadata.get(syncNoticesKey))?.value as unknown[])).toHaveLength(1)
+      await assertDisplayFlags(database)
+    })
+
+    it('still applies a row at the same version as the record', async () => {
+      const database = createDatabase()
+      await database.marks.put(mark({ version: 7 }))
+      await database.outbox.add(markEdit({ state: 'sent' }))
+
+      await pushSync('token', 'u1', asFetch(server((e) => e.map((item) => older({ conflictId: 'c-1' })(item.id)))), database)
+
+      expect(await database.marks.get('m1')).toMatchObject({ version: 7, lastEditedBy: 'u2', serverShadow: { score: 6 } })
+    })
+  })
+
   it('answers a replayed conflict whose row is gone with a notice and no adoption', async () => {
     const database = createDatabase()
     await database.marks.put(mark())
@@ -351,6 +400,11 @@ describe('a conflict', () => {
     expect(await database.outbox.count()).toBe(0)
     const notices = (await database.metadata.get(syncNoticesKey))?.value as Array<Record<string, unknown>>
     expect(notices[0]).toMatchObject({ id: sent.id, current: null })
+    /* Nothing to adopt, but the dropped entry's value must not stay behind unflagged. */
+    const record = await database.marks.get('m1')
+    expect(record).toMatchObject({ version: 6, score: 8 })
+    expect(record).not.toHaveProperty('sync')
+    await assertDisplayFlags(database)
   })
 
   it('does not repeat a notice for the same mutation', async () => {

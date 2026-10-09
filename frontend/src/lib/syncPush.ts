@@ -272,11 +272,20 @@ async function settle(database: LocalDatabase, entry: OutboxEntry, result: PushR
   } else if (result.status === 'conflict' && result.conflictId) {
     await database.outbox.update(entry.seq as number, { state: 'conflict', conflictId: result.conflictId })
     const protectedAll = new Set(siblings.flatMap((other) => Object.keys(other.fields)))
-    if (record && result.current) record = applyServerRow(record, result.current, protectedAll)
+    if (record && result.current && result.current.version >= record.version) {
+      record = applyServerRow(record, result.current, protectedAll)
+    }
   } else if (result.status === 'conflict') {
     await database.outbox.delete(entry.seq as number)
     await rebase(entry.baseVersion)
-    if (result.current) record = applyServerRow(record, result.current, coveredLater)
+    /* A pull may have landed a newer version while the push was out. An older row
+       must not roll the record back; the entry's own fields then take the server value
+       the pull shadowed, as they do when an entry is refused. */
+    if (result.current && (!record || result.current.version >= record.version)) {
+      record = applyServerRow(record, result.current, coveredLater)
+    } else if (record) {
+      record = revertedRecord(record, entry, coveredLater)
+    }
     notices.push({
       id: entry.id, table: entry.table, recordId: entry.recordId, kind: 'conflict',
       sent: entry.fields, current: result.current?.fields ?? null, at: entry.at,
