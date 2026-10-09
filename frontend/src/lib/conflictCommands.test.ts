@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { assertDisplayFlags } from './displayFlags.testing'
-import { commandFields, effectiveVersion, enqueueConflictCommand, overlayConflictRow, reportRequest, requestConflictCommand, type ConflictCommand } from './conflictCommands'
+import { commandFields, effectiveVersion, enqueueConflictCommand, overlayConflictRow, reportRequest, requestConflictCommand, restoreUnlessQueued, type ConflictCommand } from './conflictCommands'
 import type { ActiveConflict } from '../fixtures/conflicts'
 import { LocalDatabase, type LocalRecord } from './localDatabase'
 import type { OutboxEntry } from './outbox'
@@ -369,5 +369,37 @@ describe('reportRequest', () => {
     await settled()
 
     expect(failed).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('restoreUnlessQueued', () => {
+  const settled = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+  it('leaves a card to fade away when its command was queued, since the conflict then leaves the list', async () => {
+    const restore = vi.fn()
+
+    restoreUnlessQueued(Promise.resolve(true), restore)
+    await settled()
+
+    expect(restore).not.toHaveBeenCalled()
+  })
+
+  it('brings a card back when nothing was queued, because the conflict stays in the list', async () => {
+    const restore = vi.fn()
+
+    restoreUnlessQueued(Promise.resolve(false), restore)
+    await settled()
+
+    expect(restore).toHaveBeenCalledTimes(1)
+  })
+
+  it('brings a card back when the write failed, and leaves the rejection handled', async () => {
+    const restore = vi.fn()
+
+    restoreUnlessQueued(Promise.reject(new Error('quota')), restore)
+    await settled()
+
+    expect(restore).toHaveBeenCalledTimes(1)
   })
 })

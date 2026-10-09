@@ -129,6 +129,13 @@ export function reportRequest(request: Promise<boolean>, report: { queued?: () =
   void request.then((queued) => { if (queued) report.queued?.() }, () => report.failed())
 }
 
+/* A card that fades out as it settles must come back if the settling did not happen:
+   the conflict is still in the list, and a faded card is invisible and cannot be used.
+   Queued means the conflict will leave the list on its own. */
+export function restoreUnlessQueued(request: Promise<boolean>, restore: () => void): void {
+  void request.then((queued) => { if (!queued) restore() }, () => restore())
+}
+
 type Actor = { id: string; name: string }
 type Applied = { row: LocalRecord; local: boolean; version: number }
 
