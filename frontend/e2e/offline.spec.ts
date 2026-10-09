@@ -71,28 +71,36 @@ test('a mark edit is saved to Dexie and survives an offline reload', async ({ pa
   await expect(studentRow.getByText('17', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('local', { exact: true })).toBeVisible()
 
-  const saved = await page.evaluate(async () => {
+  const { saved, outbox } = await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open('connected-user-e2e-teacher')
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error)
     })
-    const rows = await new Promise<Array<Record<string, unknown>>>((resolve, reject) => {
-      const request = database.transaction('marks').objectStore('marks').getAll()
+    const all = (store: string) => new Promise<Array<Record<string, unknown>>>((resolve, reject) => {
+      const request = database.transaction(store).objectStore(store).getAll()
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error)
     })
+    const rows = await all('marks')
+    const entries = await all('outbox')
     database.close()
-    return rows.find((row) => row.assessmentId === 'a1' && row.studentId === 'student-1' && row.criterionId === 'criterion-1')
+    return {
+      saved: rows.find((row) => row.assessmentId === 'a1' && row.studentId === 'student-1' && row.criterionId === 'criterion-1'),
+      outbox: entries,
+    }
   })
 
-  expect(saved).toMatchObject({
-    version: 0,
-    pendingBaseVersion: 0,
-    pendingFields: { assessmentId: 'a1', studentId: 'student-1', criterionId: 'criterion-1', markKind: 'score', score: 17 },
-    markKind: 'score',
-    score: 17,
-    sync: 'pending',
+  expect(saved).toMatchObject({ version: 0, markKind: 'score', score: 17, sync: 'pending' })
+  expect(saved).not.toHaveProperty('pendingFields')
+  expect(outbox).toHaveLength(1)
+  expect(outbox[0]).toMatchObject({
+    table: 'marks',
+    recordId: saved?.id,
+    kind: 'patch',
+    baseVersion: 0,
+    state: 'queued',
+    fields: { assessmentId: 'a1', studentId: 'student-1', criterionId: 'criterion-1', markKind: 'score', score: 17 },
   })
 })
 

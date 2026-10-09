@@ -4,11 +4,14 @@ import type { SchoolDirectory } from './schoolDirectory'
 
 export type AssessmentDraft = Omit<Assessment, 'id' | 'version'>
 
+/* The row the screens show, and the fields of the create the outbox will send. The
+   create fields exclude `status`: it is server-owned on a create, and `finalized`
+   travels only as a finalize entry. */
 export function createLocalAssessmentRecord(
   draft: AssessmentDraft,
   id: string,
   directory: SchoolDirectory,
-): LocalRecord {
+): { record: LocalRecord; createFields: Record<string, unknown> } {
   const schoolClass = directory.classesForYear(draft.year).find((item) =>
     item.stream === draft.stream && item.subjects.includes(draft.subject),
   )
@@ -18,25 +21,17 @@ export function createLocalAssessmentRecord(
     throw new Error('Assessment class or subject is not available in the local directory')
   }
 
-  return {
-    id,
-    version: 0,
+  const createFields = {
     classId: schoolClass.id,
     subjectId,
     name: draft.name,
     term: draft.term,
     year: draft.year,
     date: draft.date,
-    status: 'scheduled',
-    sync: 'pending',
-    pendingBaseVersion: 0,
-    pendingFields: {
-      classId: schoolClass.id,
-      subjectId,
-      name: draft.name,
-      term: draft.term,
-      year: draft.year,
-      date: draft.date,
-    },
+  }
+
+  return {
+    record: { id, version: 0, ...createFields, status: 'scheduled', sync: 'pending' },
+    createFields,
   }
 }

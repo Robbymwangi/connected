@@ -1,45 +1,43 @@
-import { describe, expect, it, vi } from 'vitest'
-import type { LocalDatabase, LocalRecord, SyncTableName } from './localDatabase'
+import 'fake-indexeddb/auto'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { assertDisplayFlags } from './displayFlags.testing'
+import { LocalDatabase, type LocalRecord, type SyncTableName } from './localDatabase'
+import type { OutboxEntry } from './outbox'
 import { pullSync, syncCursorKey } from './syncPull'
 
-type FakeDatabase = {
+type Store = {
   database: LocalDatabase
-  rows: Map<SyncTableName, Map<string, LocalRecord>>
-  metadata: Map<string, { key: string; value: unknown }>
-  transaction: ReturnType<typeof vi.fn>
+  transaction: ReturnType<typeof vi.spyOn>
+  seed: (table: SyncTableName, record: LocalRecord) => Promise<void>
+  row: (table: SyncTableName, id: string) => Promise<LocalRecord | undefined>
+  setCursor: (userId: string, value: number) => Promise<void>
+  cursor: (userId: string) => Promise<unknown>
 }
 
-function createDatabase(): FakeDatabase {
-  const rows = new Map<SyncTableName, Map<string, LocalRecord>>()
-  const metadata = new Map<string, { key: string; value: unknown }>()
-  const transaction = vi.fn(async (_mode: string, _tables: unknown, run: () => Promise<void>) => run())
-  const database = {
-    table(name: SyncTableName) {
-      let records = rows.get(name)
-      if (!records) {
-        records = new Map()
-        rows.set(name, records)
-      }
+const stores: LocalDatabase[] = []
 
-      return {
-        get: vi.fn(async (id: string) => records?.get(id)),
-        put: vi.fn(async (record: LocalRecord) => {
-          records?.set(record.id, record)
-          return record.id
-        }),
-      }
-    },
-    metadata: {
-      get: vi.fn(async (key: string) => metadata.get(key)),
-      put: vi.fn(async (record: { key: string; value: unknown }) => {
-        metadata.set(record.key, record)
-        return record.key
-      }),
-    },
-    transaction,
-  } as unknown as LocalDatabase
+afterEach(async () => {
+  for (const database of stores.splice(0)) {
+    database.close()
+    await database.delete()
+  }
+})
 
-  return { database, rows, metadata, transaction }
+function createDatabase(): Store {
+  const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
+  stores.push(database)
+  return {
+    database,
+    transaction: vi.spyOn(database, 'transaction'),
+    seed: async (table, record) => { await database.table(table).put(record) },
+    row: (table, id) => database.table(table).get(id),
+    setCursor: async (userId, value) => { await database.metadata.put({ key: syncCursorKey(userId), value }) },
+    cursor: async (userId) => (await database.metadata.get(syncCursorKey(userId)))?.value,
+  }
+}
+
+function entry(partial: Partial<OutboxEntry> & Pick<OutboxEntry, 'table' | 'recordId' | 'fields'>): OutboxEntry {
+  return { id: crypto.randomUUID(), kind: 'patch', baseVersion: 1, at: '2026-10-09T08:00:00.000Z', state: 'queued', ...partial }
 }
 
 function json(body: unknown): Response {
@@ -77,21 +75,21 @@ describe('pullSync', () => {
       '/api/sync?limit=500&since=continuation-token',
     ])
     expect(store.transaction).toHaveBeenCalledTimes(2)
-    expect(store.rows.get('students')?.get('s1')).toEqual({
+    expect(await store.row('students', 's1')).toEqual({
       id: 's1',
       version: 2,
       name: 'Amina W.',
       gender: 'female',
     })
-    expect(store.rows.get('assessments')?.get('a1')).toMatchObject({ id: 'a1', version: 1 })
-    expect(store.metadata.get(syncCursorKey('user-1'))?.value).toBe(42)
-    expect(store.metadata.has(syncCursorKey('user-2'))).toBe(false)
+    expect(await store.row('assessments', 'a1')).toMatchObject({ id: 'a1', version: 1 })
+    expect(await store.cursor('user-1')).toBe(42)
+    expect(await store.cursor('user-2')).toBeUndefined()
   })
 
   it('resumes from the account cursor, skips stale versions, and preserves soft-deleted rows', async () => {
     const store = createDatabase()
-    store.metadata.set(syncCursorKey('user-1'), { key: syncCursorKey('user-1'), value: 18 })
-    store.rows.set('marks', new Map([['m1', { id: 'm1', version: 2, score: 7, markKind: 'score' }]]))
+    await store.setCursor('user-1', 18)
+    await store.seed('marks', { id: 'm1', version: 2, score: 7, markKind: 'score' })
     const fetchMock = vi.fn().mockResolvedValue(
       json({
         changes: [
@@ -108,48 +106,115 @@ describe('pullSync', () => {
 
     expect(String(fetchMock.mock.calls[0][0])).toBe('/api/sync?limit=500&since=18')
     expect(result).toEqual({ pages: 1, changesApplied: 1, cursor: 22 })
-    expect(store.rows.get('marks')?.get('m1')).toEqual({
+    expect(await store.row('marks', 'm1')).toEqual({
       id: 'm1',
       version: 3,
       score: null,
       markKind: 'absent',
       deletedAt: '2026-10-07T10:00:00Z',
     })
-    expect(store.metadata.get(syncCursorKey('user-1'))?.value).toBe(22)
+    expect(await store.cursor('user-1')).toBe(22)
   })
 
-  it('preserves a pending mark patch while merging newer server fields and version', async () => {
-    const store = createDatabase()
-    store.metadata.set(syncCursorKey('user-1'), { key: syncCursorKey('user-1'), value: 22 })
-    store.rows.set('marks', new Map([['m1', {
-      id: 'm1', version: 2, assessmentId: 'a1', studentId: 's1', criterionId: 'c1',
-      markKind: 'score', score: 9, pendingBaseVersion: 2,
-      pendingFields: { markKind: 'score', score: 9 }, sync: 'pending',
-    }]]))
-    const fetchMock = vi.fn().mockResolvedValue(
-      json({
-        changes: [{ table: 'marks', recordId: 'm1', version: 3, fields: { score: 6, lastEditedBy: 'teacher-2' } }],
-        cursor: 23,
-        more: false,
-      }),
-    )
+  describe('fields the outbox protects', () => {
+    const pull = (store: Store, changes: unknown[], cursor = 23) => {
+      const fetchMock = vi.fn().mockResolvedValue(json({ changes, cursor, more: false }))
+      return pullSync('token', 'user-1', fetchMock as unknown as typeof fetch, store.database)
+    }
+    const markRow = { id: 'm1', version: 2, assessmentId: 'a1', studentId: 's1', criterionId: 'c1', markKind: 'score', score: 9, sync: 'pending', localAuthor: 'Me' }
+    const mark = (fields: Record<string, unknown>, version = 3) => ({ table: 'marks', recordId: 'm1', version, fields })
 
-    const result = await pullSync('token', 'user-1', fetchMock as unknown as typeof fetch, store.database)
+    it('keeps the local value of a protected field, lands the server value in the shadow, and advances the version', async () => {
+      const store = createDatabase()
+      await store.setCursor('user-1', 22)
+      await store.seed('marks', { ...markRow, serverShadow: { score: 8 } })
+      await store.database.outbox.add(entry({ table: 'marks', recordId: 'm1', baseVersion: 2, fields: { markKind: 'score', score: 9 } }))
 
-    expect(result).toEqual({ pages: 1, changesApplied: 1, cursor: 23 })
-    expect(store.rows.get('marks')?.get('m1')).toMatchObject({
-      version: 3,
-      score: 9,
-      lastEditedBy: 'teacher-2',
-      pendingBaseVersion: 2,
-      pendingFields: { markKind: 'score', score: 9 },
-      sync: 'pending',
+      await pull(store, [mark({ score: 6, lastEditedBy: 'teacher-2' })])
+
+      expect(await store.row('marks', 'm1')).toMatchObject({
+        version: 3, score: 9, lastEditedBy: 'teacher-2', sync: 'pending', localAuthor: 'Me', serverShadow: { score: 6 },
+      })
+      await assertDisplayFlags(store.database)
+    })
+
+    it('protects the fields of a finalize entry and of a sent or conflicted entry', async () => {
+      const store = createDatabase()
+      await store.seed('assessments', { id: 'a1', version: 2, status: 'finalized', name: 'Mine', sync: 'pending' })
+      await store.database.outbox.bulkAdd([
+        entry({ table: 'assessments', recordId: 'a1', kind: 'finalize', baseVersion: 2, state: 'sent', fields: { status: 'finalized', finalizedBy: 'u1', finalizedAt: 'now' } }),
+        entry({ table: 'assessments', recordId: 'a1', baseVersion: null, state: 'conflict', fields: { name: 'Mine' } }),
+      ])
+
+      await pull(store, [{ table: 'assessments', recordId: 'a1', version: 3, fields: { status: 'scheduled', name: 'Theirs', term: 'Term 2' } }])
+
+      expect(await store.row('assessments', 'a1')).toMatchObject({
+        version: 3, status: 'finalized', name: 'Mine', term: 'Term 2',
+        serverShadow: { status: 'scheduled', name: 'Theirs' },
+      })
+    })
+
+    it('writes an unprotected field through and clears its stale shadow key', async () => {
+      const store = createDatabase()
+      await store.seed('marks', { ...markRow, serverShadow: { score: 8, lastEditedBy: 'old' } })
+      await store.database.outbox.add(entry({ table: 'marks', recordId: 'm1', baseVersion: 2, fields: { score: 9 } }))
+
+      await pull(store, [mark({ lastEditedBy: 'teacher-2' })])
+
+      const record = await store.row('marks', 'm1')
+      expect(record).toMatchObject({ lastEditedBy: 'teacher-2', serverShadow: { score: 8 } })
+      expect(record?.serverShadow).not.toHaveProperty('lastEditedBy')
+    })
+
+    it('drops the shadow when nothing is protected any more', async () => {
+      const store = createDatabase()
+      await store.seed('marks', { id: 'm1', version: 2, score: 9, serverShadow: { score: 8 } })
+
+      await pull(store, [mark({ score: 6 })])
+
+      const record = await store.row('marks', 'm1')
+      expect(record).toMatchObject({ version: 3, score: 6 })
+      expect(record).not.toHaveProperty('serverShadow')
+    })
+
+    it('is not protected by acknowledged, failed, or command entries', async () => {
+      const store = createDatabase()
+      await store.seed('marks', { id: 'm1', version: 2, score: 9 })
+      await store.database.outbox.bulkAdd([
+        entry({ table: 'marks', recordId: 'm1', state: 'failed', fields: { score: 9 } }),
+        entry({ table: 'marks', recordId: 'm1', state: 'acked', kind: 'command', fields: { score: 9 } }),
+      ])
+
+      await pull(store, [mark({ score: 6 })])
+
+      expect(await store.row('marks', 'm1')).toMatchObject({ version: 3, score: 6 })
+    })
+
+    it('applies a delete over a protected field', async () => {
+      const store = createDatabase()
+      await store.seed('marks', { ...markRow })
+      await store.database.outbox.add(entry({ table: 'marks', recordId: 'm1', baseVersion: 2, fields: { score: 9, deletedAt: null } }))
+
+      await pull(store, [mark({ deletedAt: '2026-10-09T09:00:00Z' })])
+
+      expect(await store.row('marks', 'm1')).toMatchObject({ version: 3, deletedAt: '2026-10-09T09:00:00Z' })
+    })
+
+    it('does not move a record it skips as stale', async () => {
+      const store = createDatabase()
+      await store.seed('marks', { ...markRow, version: 4, serverShadow: { score: 8 } })
+      await store.database.outbox.add(entry({ table: 'marks', recordId: 'm1', baseVersion: 4, fields: { score: 9 } }))
+
+      const result = await pull(store, [mark({ score: 6 }, 3)])
+
+      expect(result.changesApplied).toBe(0)
+      expect(await store.row('marks', 'm1')).toMatchObject({ version: 4, score: 9, serverShadow: { score: 8 } })
     })
   })
 
   it('accepts numeric cursors across incremental log pages', async () => {
     const store = createDatabase()
-    store.metadata.set(syncCursorKey('user-1'), { key: syncCursorKey('user-1'), value: 18 })
+    await store.setCursor('user-1', 18)
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -200,7 +265,7 @@ describe('pullSync', () => {
 
   it('rejects an opaque continuation cursor during an incremental pull', async () => {
     const store = createDatabase()
-    store.metadata.set(syncCursorKey('user-1'), { key: syncCursorKey('user-1'), value: 18 })
+    await store.setCursor('user-1', 18)
     const fetchMock = vi.fn().mockResolvedValue(
       json({ changes: [], cursor: 'continuation-token', more: true }),
     )
@@ -225,6 +290,6 @@ describe('pullSync', () => {
       'Invalid GET /sync change',
     )
     expect(store.transaction).not.toHaveBeenCalled()
-    expect(store.metadata.has(syncCursorKey('user-1'))).toBe(false)
+    expect(await store.cursor('user-1')).toBeUndefined()
   })
 })

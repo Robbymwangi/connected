@@ -87,8 +87,12 @@ instruction was to avoid two stores that disagree about a value; it is kept by d
   a plain accept. The record therefore gains a `serverShadow` of the server's value for
   protected fields, which is adopted when the entry is settled. This is built with the
   writers, not here.
-- Display state (pending, conflicted, failed counts) is a query over the outbox, not a
-  flag scattered across records.
+- The Sync screen's counts (pending, conflicted, failed) are a query over the outbox. A
+  record's own `sync: 'pending'` is a display flag that is true exactly when the outbox
+  holds an open patch or finalize entry for it, written only in the transaction that
+  writes the entry and checked by a test helper after every writer, migration, and pull.
+  The grid reads the flag, not the outbox, so a later state change on an entry does not
+  re-run the screen's query.
 - One more table and one more transaction participant in every local write. Writes are
   small, so the cost is low.
 - Tests need an IndexedDB implementation under Node. `fake-indexeddb`, a dev dependency,

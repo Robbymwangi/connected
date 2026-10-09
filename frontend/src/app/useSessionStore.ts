@@ -23,7 +23,8 @@ import {
 } from '../lib/conflicts'
 import { localDatabaseFor } from '../lib/localDatabase'
 import { createLocalAssessmentRecord } from '../lib/localAssessment'
-import { changedGridCells, emptyGrid, gridFromMarkRows, mergePendingMarkCells, pendingMarkRecord, type GridCellChange } from '../lib/localMarks'
+import { changedGridCells, emptyGrid, gridFromMarkRows, mergePendingMarkCells, type GridCellChange } from '../lib/localMarks'
+import { createAssessments, finalizeAssessmentRecord, writeMarkCells } from '../lib/localWrites'
 import { markIdFor } from '../lib/markIdentity'
 import { mapSyncedAssessmentState, type SyncedAssessmentState } from '../lib/syncedAssessmentState'
 import type { SchoolDirectoryState } from './useSchoolDirectory'
@@ -314,38 +315,16 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
       if (!drafts.length) return
       if (directory.status !== 'ready') throw new Error('School data is unavailable on this device')
 
-      const records = drafts.map((draft) => createLocalAssessmentRecord(draft, crypto.randomUUID(), directory.data))
-      await database.transaction('rw', database.assessments, () => database.assessments.bulkAdd(records))
-      commit({ type: 'addAssessments', drafts, ids: records.map((record) => record.id) })
+      const items = drafts.map((draft) => createLocalAssessmentRecord(draft, crypto.randomUUID(), directory.data))
+      await createAssessments(database, items, new Date().toISOString())
+      commit({ type: 'addAssessments', drafts, ids: items.map((item) => item.record.id) })
     },
     finalizeAssessment: async (id: string) => {
       const assessment = state.assessments.find((item) => item.id === id)
       if (!assessment) throw new Error('Assessment is not available on this device')
       if (assessment.status === 'finalized' || assessment.status === 'reports-generated') return
 
-      const finalizedAt = new Date().toISOString()
-      const saved = await database.transaction('rw', database.assessments, async () => {
-        const current = await database.assessments.get(id)
-        if (!current || current.deletedAt != null) return false
-        if (current.status === 'finalized' || current.status === 'reports-generated') return false
-
-        const pendingFields = typeof current.pendingFields === 'object' && current.pendingFields !== null && !Array.isArray(current.pendingFields)
-          ? current.pendingFields as Record<string, unknown>
-          : {}
-        const finalization = { finalizedBy: user.id, finalizedAt }
-        const isUncreated = current.version === 0
-
-        await database.assessments.update(id, {
-          status: 'finalized',
-          finalizedBy: user.id,
-          finalizedAt,
-          sync: 'pending',
-          pendingBaseVersion: Number.isSafeInteger(current.pendingBaseVersion) ? current.pendingBaseVersion : current.version,
-          pendingFields: isUncreated ? pendingFields : { ...pendingFields, status: 'finalized', ...finalization },
-          ...(isUncreated ? { pendingFinalize: finalization } : {}),
-        })
-        return true
-      })
+      const saved = await finalizeAssessmentRecord(database, id, user.id, new Date().toISOString())
       if (!saved) return
       commit({ type: 'finalizeAssessment', id })
     },
@@ -373,25 +352,7 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
           id: await markIdFor(assessmentId, change.studentId, change.criterionId),
         })))
 
-        const savedCells = await database.transaction('rw', database.marks, async () => {
-          const saved: GridCellChange[] = []
-          for (const change of identifiedChanges) {
-            const current = await database.marks.get(change.id)
-            const record = pendingMarkRecord(current, { ...change, assessmentId }, change.id, user.name)
-            await database.marks.put(record)
-            saved.push({
-              studentId: change.studentId,
-              criterionId: change.criterionId,
-              cell: {
-                ...change.cell,
-                sync: 'local',
-                baseVersion: record.pendingBaseVersion as number,
-                author: user.name,
-              },
-            })
-          }
-          return saved
-        })
+        const savedCells = await writeMarkCells(database, assessmentId, identifiedChanges, user.name, new Date().toISOString())
 
         commit({ type: 'patchGrid', assessmentId, changes: savedCells, emptyGrid })
       }

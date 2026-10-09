@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
+import { migrateMarkers } from './markers'
 import type { OutboxEntry } from './outbox'
 import type { Session } from './session'
 
@@ -81,11 +82,23 @@ export class LocalDatabase extends Dexie {
       sessions: '&key',
     })
 
-    /* The outbox of unsettled local writes (build-plan 3.4). Existing pending
-       markers on records are moved into it by a later upgrade, together with the
-       writers that stop producing them. */
+    /* The outbox of unsettled local writes (build-plan 3.4). */
     this.version(2).stores({
       outbox: '++seq, &id, [table+recordId], state',
+    })
+
+    /* Pending markers on records move into the outbox (ADR 0011, decision 7). This
+       ships with the writers that stop producing them. The upgrade awaits only
+       Dexie operations: anything else would let the transaction auto-commit. */
+    this.version(3).stores({}).upgrade(async (transaction) => {
+      const { entries, records } = migrateMarkers({
+        assessments: await transaction.table('assessments').toArray(),
+        marks: await transaction.table('marks').toArray(),
+      }, new Date().toISOString())
+
+      await transaction.table('outbox').bulkAdd(entries)
+      await transaction.table('assessments').bulkPut(records.assessments)
+      await transaction.table('marks').bulkPut(records.marks)
     })
   }
 }
