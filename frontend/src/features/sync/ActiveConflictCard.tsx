@@ -2,21 +2,21 @@ import { Grid3x3 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import type { ActiveConflict, Choice } from '../../fixtures/conflicts'
-import type { Subject } from '../../fixtures/rubrics'
+import { restoreUnlessQueued } from '../../lib/conflictCommands'
 import { ConflictActions } from './ConflictActions'
 import { ConflictHeader } from './ConflictHeader'
 import { ConflictSides } from './ConflictSides'
+import { WaitingToSync } from './WaitingToSync'
 
 const FADE_MS = 400
 
 type ActiveConflictCardProps = {
   conflict: ActiveConflict
-  subject: Subject
   criterionMax: number
   highlighted: boolean
-  onResolve: (choice: Choice, note: string) => void
+  onResolve: (choice: Choice, note: string) => Promise<boolean>
   onPropose: (choice: Choice, note: string) => void
-  onAccept: () => void
+  onAccept: () => Promise<boolean>
   onRefer: () => void
   onOpenGrid: () => void
 }
@@ -24,18 +24,20 @@ type ActiveConflictCardProps = {
 /* One unsettled conflict: both sides, and whatever ADR 0002 lets this user do
    about it. Settling fades the card out; proposing leaves it in place with the
    proposal shown. */
-export function ActiveConflictCard({ conflict, subject, criterionMax, highlighted, onResolve, onPropose, onAccept, onRefer, onOpenGrid }: ActiveConflictCardProps) {
+export function ActiveConflictCard({ conflict, criterionMax, highlighted, onResolve, onPropose, onAccept, onRefer, onOpenGrid }: ActiveConflictCardProps) {
   const [leaving, setLeaving] = useState(false)
 
   /* One settlement per card: the timer ref is the guard, so it holds even before
      React re-renders with leaving set. The decision is applied after the fade, or
-     at once if the card unmounts first; it is never dropped. */
+     at once if the card unmounts first; it is never dropped. If it was not queued (the
+     conflict moved on, or the write failed) the conflict is still listed, so the card
+     comes back instead of staying faded and unusable. */
   const pending = useRef<{ timer: ReturnType<typeof setTimeout>; apply: () => void } | null>(null)
-  const settle = (apply: () => void) => {
+  const settle = (apply: () => Promise<boolean>) => {
     if (pending.current) return
     const run = () => {
       pending.current = null
-      apply()
+      restoreUnlessQueued(apply(), () => setLeaving(false))
     }
     pending.current = { timer: setTimeout(run, FADE_MS), apply: run }
     setLeaving(true)
@@ -60,10 +62,11 @@ export function ActiveConflictCard({ conflict, subject, criterionMax, highlighte
 
       <ConflictSides mine={conflict.mine} theirs={conflict.theirs} mineEmphasis="contested" theirsEmphasis="contested" />
 
+      {conflict.local && <div className="px-4 pt-2"><WaitingToSync /></div>}
+
       <div inert={leaving}>
         <ConflictActions
           conflict={conflict}
-          subject={subject}
           criterionMax={criterionMax}
           onResolve={(choice, note) => settle(() => onResolve(choice, note))}
           onPropose={onPropose}

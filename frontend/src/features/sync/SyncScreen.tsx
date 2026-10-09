@@ -31,8 +31,6 @@ export function SyncScreen({ store, highlight, onOpenGrid }: SyncScreenProps) {
 
   const { conflicts, history } = store
   const count = conflicts.length
-  const subjectOf = (assessmentId: string) =>
-    store.assessments.find((a) => a.id === assessmentId)?.subject ?? 'English'
 
   return (
     <div className="px-5 pt-6 pb-12 lg:px-8">
@@ -68,7 +66,6 @@ export function SyncScreen({ store, highlight, onOpenGrid }: SyncScreenProps) {
                 <ActiveConflictCard
                   key={c.id}
                   conflict={c}
-                  subject={subjectOf(c.assessmentId)}
                   criterionMax={criterionMax}
                   highlighted={highlighted === c.id}
                   onResolve={(choice, note) => store.resolveConflict(c.id, choice, note)}

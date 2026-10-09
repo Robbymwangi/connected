@@ -6,6 +6,7 @@ import { StatusPill } from '../../../components/StatusPill'
 import { Toast, type ToastKind } from '../../../components/Toast'
 import type { Assessment } from '../../../fixtures/assessments'
 import type { ActiveConflict, Choice } from '../../../fixtures/conflicts'
+import { reportRequest } from '../../../lib/conflictCommands'
 import type { Grid } from '../../../fixtures/marks'
 import { initials } from '../../../fixtures/students'
 import type { SchoolDirectoryState } from '../../../app/useSchoolDirectory'
@@ -26,10 +27,10 @@ type MarkingGridProps = {
   onUpdateGrid: (update: (grid: Grid) => Grid) => Promise<void>
   /* Conflicts for this assessment only, and the three ways to move one (ADR 0002). */
   conflicts: ActiveConflict[]
-  onResolveConflict: (id: string, choice: Choice, note: string) => void
-  onProposeResolution: (id: string, choice: Choice, note: string) => void
-  onAcceptProposal: (id: string) => void
-  onReferConflict: (id: string) => void
+  onResolveConflict: (id: string, choice: Choice, note: string) => Promise<boolean>
+  onProposeResolution: (id: string, choice: Choice, note: string) => Promise<boolean>
+  onAcceptProposal: (id: string) => Promise<boolean>
+  onReferConflict: (id: string) => Promise<boolean>
   onFinalize: (assessmentId: string) => Promise<void>
   onBack: () => void
 }
@@ -121,6 +122,11 @@ export function MarkingGrid({
   const conflictAt = (studentId: string, criterionId: string) =>
     conflicts.find((k) => k.studentId === studentId && k.criterionId === criterionId)
   const openConflict = conflicts.find((k) => k.id === openConflictId) ?? null
+  /* A queued resolution is announced; a proposal or a referral is quiet. A write that
+     fails is always said. A conflict that moved on while the dialog was open says nothing,
+     since the grid redraws with what is now true. */
+  const reportConflictRequest = (request: Promise<boolean>, announce: boolean) =>
+    reportRequest(request, { queued: announce ? () => showToast('resolved', 5000) : undefined, failed: () => showToast('saveError', 5000) })
 
   const finalize = async () => {
     await onFinalize(assessment.id)
@@ -271,20 +277,19 @@ export function MarkingGrid({
 
       <ConflictDialog
         conflict={openConflict}
-        subject={assessment.subject}
         criterionMax={rubric.find((criterion) => criterion.id === openConflict?.criterionId)?.max ?? 0}
         onResolve={(choice, note) => {
-          if (!openConflict) return
-          onResolveConflict(openConflict.id, choice, note)
-          showToast('resolved', 5000)
+          if (openConflict) reportConflictRequest(onResolveConflict(openConflict.id, choice, note), true)
         }}
-        onPropose={(choice, note) => openConflict && onProposeResolution(openConflict.id, choice, note)}
+        onPropose={(choice, note) => {
+          if (openConflict) reportConflictRequest(onProposeResolution(openConflict.id, choice, note), false)
+        }}
         onAccept={() => {
-          if (!openConflict) return
-          onAcceptProposal(openConflict.id)
-          showToast('resolved', 5000)
+          if (openConflict) reportConflictRequest(onAcceptProposal(openConflict.id), true)
         }}
-        onRefer={() => openConflict && onReferConflict(openConflict.id)}
+        onRefer={() => {
+          if (openConflict) reportConflictRequest(onReferConflict(openConflict.id), false)
+        }}
         onClose={() => setOpenConflictId(null)}
       />
       <FinalizeDialog open={finalizeOpen} onClose={() => setFinalizeOpen(false)} onConfirm={finalize} />

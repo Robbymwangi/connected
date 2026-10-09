@@ -9,7 +9,7 @@ import { score } from './grading'
    The client has no forbidden/invalid distinction: it only shows or hides a control, so it compares allowed with
    not allowed. A conflict that is already resolved is not an active conflict, so those cases need no client check. */
 
-const SUBJECT = 'Maths'
+const SUBJECT = 'subject-maths'
 
 type Case = (typeof cases.cases)[number]
 
@@ -38,7 +38,9 @@ function conflictOf(c: Case): ActiveConflict {
   return {
     id: 'c',
     assessmentId: 'a1',
+    subjectId: SUBJECT,
     baseVersion: 1,
+    conflictVersion: 1,
     studentId: 's1',
     criterionId: 'c1',
     student: 'S',
@@ -54,7 +56,7 @@ function conflictOf(c: Case): ActiveConflict {
 function clientAllows(c: Case): boolean {
   const conflict = conflictOf(c)
   const user = userOf(c.actor)
-  const ability = abilityOf(conflict, user, SUBJECT)
+  const ability = abilityOf(conflict, user, conflict.subjectId)
   switch (c.act) {
     case 'propose':
       return ability.kind === 'propose' || (ability.kind === 'respond' && ability.canCounter)

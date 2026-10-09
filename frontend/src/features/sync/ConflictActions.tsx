@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import { useCurrentUser } from '../../app/AuthContext'
 import type { ActiveConflict, Choice, Proposal } from '../../fixtures/conflicts'
-import type { Subject } from '../../fixtures/rubrics'
 import { abilityOf, canRefer, describeReferral, isValidNote, sideOf, type Resolver } from '../../lib/conflicts'
 import { formatMark, parseMarkInput, type Mark } from '../../lib/grading'
 import { formatDateTime } from '../../lib/time'
 
 type ConflictActionsProps = {
   conflict: ActiveConflict
-  subject: Subject
   criterionMax: number
   /* Settles the conflict now (own edits, or a moderator). */
   onResolve: (choice: Choice, note: string) => void
@@ -24,10 +22,10 @@ type ConflictActionsProps = {
 /* The one place the resolution policy (ADR 0002) is turned into controls. Used by
    the Sync card and the marking grid's dialog. Sides are named by value and author,
    never as mine or theirs. */
-export function ConflictActions({ conflict, subject, criterionMax, onResolve, onPropose, onAccept, onRefer, onCancel }: ConflictActionsProps) {
+export function ConflictActions({ conflict, criterionMax, onResolve, onPropose, onAccept, onRefer, onCancel }: ConflictActionsProps) {
   const currentUser = useCurrentUser()
   const user: Resolver = { id: currentUser.id, name: currentUser.fullName, moderatedSubjects: currentUser.moderatedSubjectIds }
-  const ability = abilityOf(conflict, user, subject)
+  const ability = abilityOf(conflict, user, conflict.subjectId)
   const max = criterionMax
 
   /* A choice is picked first, then confirmed, with a note where the policy needs

@@ -5,6 +5,7 @@ import { describeReferral, sideOf } from '../../lib/conflicts'
 import { ProposalThread } from './ConflictActions'
 import { ConflictHeader } from './ConflictHeader'
 import { ConflictSides, ValueBlock } from './ConflictSides'
+import { WaitingToSync } from './WaitingToSync'
 
 type HistoricalConflictCardProps = {
   conflict: HistoricalConflict
@@ -37,7 +38,11 @@ export function HistoricalConflictCard({ conflict }: HistoricalConflictCardProps
       <ConflictHeader student={conflict.student} criterion={conflict.criterion} assessment={conflict.assessment}>
         <div className="shrink-0 text-right">
           <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">{verdict}</p>
-          <p className="mt-0.5 text-[10px] text-muted-foreground/70">{formatDateTime(conflict.resolvedAt)}</p>
+          {conflict.local ? (
+            <p className="mt-0.5"><WaitingToSync /></p>
+          ) : (
+            <p className="mt-0.5 text-[10px] text-muted-foreground/70">{formatDateTime(conflict.resolvedAt)}</p>
+          )}
         </div>
       </ConflictHeader>
 

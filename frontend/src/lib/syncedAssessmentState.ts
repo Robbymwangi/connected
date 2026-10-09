@@ -2,8 +2,11 @@ import type { Assessment, LifecycleStatus, SyncState } from '../fixtures/assessm
 import type { ActiveConflict, Choice, ConflictSide, HistoricalConflict, Proposal, Referral, Resolution } from '../fixtures/conflicts'
 import type { Grid, GridCell } from '../fixtures/marks'
 import type { SchoolDirectory } from '../lib/schoolDirectory'
+import { overlayConflictRow } from './conflictCommands'
 import type { LocalRecord } from './localDatabase'
+import type { OutboxEntry } from './outbox'
 import type { ResultRecord } from '../fixtures/results'
+import { sideOf } from './conflicts'
 import { ABSENT, EMPTY, score, type Mark, type PerformanceLevel } from './grading'
 
 export type SyncedAssessmentState = {
@@ -22,6 +25,11 @@ type Source = {
   results: LocalRecord[]
   directory: SchoolDirectory
   userId: string
+  /* The signed-in teacher's display name, for the commands of theirs that are shown. */
+  userName?: string
+  /* The conflict commands this device has queued, sent, or had answered but not yet
+     pulled; they are shown on top of the conflict rows. */
+  commands?: OutboxEntry[]
 }
 
 function text(record: Record<string, unknown>, key: string): string {
@@ -144,6 +152,13 @@ export function mapSyncedAssessmentState(source: Source): SyncedAssessmentState 
   const allMarkRows = source.marks
   const markRows = active(source.marks)
   const conflictRows = active(source.conflicts)
+  const actor = { id: source.userId, name: source.userName ?? names.get(source.userId) ?? 'You' }
+  const commandsByConflict = new Map<string, OutboxEntry[]>()
+  for (const command of source.commands ?? []) {
+    if (command.kind !== 'command' || command.table !== 'conflicts') continue
+    commandsByConflict.set(command.recordId, [...(commandsByConflict.get(command.recordId) ?? []), command])
+  }
+  const overlaid = new Map(conflictRows.map((row) => [row.id, overlayConflictRow(row, commandsByConflict.get(row.id) ?? [], actor)]))
   const resultRecords = active(source.results).flatMap((row): ResultRecord[] => {
     const studentId = text(row, 'studentId')
     const assessmentId = text(row, 'assessmentId')
@@ -165,6 +180,7 @@ export function mapSyncedAssessmentState(source: Source): SyncedAssessmentState 
   }
 
   const assessments: Assessment[] = []
+  const subjectIdByAssessment = new Map<string, string>()
   for (const row of assessmentRows) {
     const id = row.id
     const version = integer(row, 'version')
@@ -210,9 +226,14 @@ export function mapSyncedAssessmentState(source: Source): SyncedAssessmentState 
       : entered < total ? 'in-progress'
       : 'complete'
 
-    const hasConflict = conflictRows.some((conflict) => text(conflict, 'markId') && (markRowsByAssessment.get(id) ?? []).some((mark) => mark.id === conflict.markId))
+    const hasConflict = conflictRows.some((conflict) => {
+      const shown = overlaid.get(conflict.id)?.row ?? conflict
+      return shown.resolution == null && shown.resolvedAt == null && text(conflict, 'markId') &&
+        (markRowsByAssessment.get(id) ?? []).some((mark) => mark.id === conflict.markId)
+    })
     const sync: SyncState = hasConflict ? 'conflict' : version === 0 || row.sync === 'pending' ? 'pending' : 'synced'
 
+    subjectIdByAssessment.set(id, subjectId)
     assessments.push({
       id,
       subject,
@@ -243,7 +264,9 @@ export function mapSyncedAssessmentState(source: Source): SyncedAssessmentState 
 
   const activeConflicts: ActiveConflict[] = []
   const history: HistoricalConflict[] = []
-  for (const row of conflictRows) {
+  for (const stored of conflictRows) {
+    const applied = overlaid.get(stored.id)
+    const row = applied?.row ?? stored
     const markId = text(row, 'markId')
     const linkedMark = markById.get(markId)
     const assessmentId = text(linkedMark ?? {}, 'assessmentId')
@@ -260,6 +283,7 @@ export function mapSyncedAssessmentState(source: Source): SyncedAssessmentState 
     const common = {
       id: row.id,
       assessmentId,
+      subjectId: subjectIdByAssessment.get(assessmentId) ?? '',
       studentId,
       criterionId,
       student: studentName(assessment, studentId),
@@ -269,12 +293,29 @@ export function mapSyncedAssessmentState(source: Source): SyncedAssessmentState 
       theirs,
       proposals: proposalsFromWire(row.proposals),
       ...(referralFromWire(row.referral) ? { referral: referralFromWire(row.referral) } : {}),
+      ...(applied?.local ? { local: true as const } : {}),
     }
     const resolution = resolutionFromWire(row.resolution)
     if (row.resolution == null) {
-      activeConflicts.push({ ...common, baseVersion })
+      activeConflicts.push({ ...common, baseVersion, conflictVersion: applied?.version ?? integer(row, 'version') ?? 0 })
     } else if (resolution && typeof row.resolvedAt === 'string') {
       history.push({ ...common, resolution, resolvedAt: row.resolvedAt })
+      if (applied?.local && resolution.kind !== 'auto') {
+        /* This device has resolved it and the server has not said so yet: the cell
+           already holds the chosen mark, as a local value, until the pull brings the
+           server's own. */
+        const choice = resolution.choice
+        const by = resolution.kind === 'agreed' ? resolution.acceptedBy : resolution.by
+        const chosen = choice.kind === 'corrected'
+          ? { mark: choice.mark, author: by }
+          : (() => { const picked = sideOf({ ...common, resolution, resolvedAt: row.resolvedAt as string }, choice.editId); return picked ? { mark: picked.mark, author: picked.who } : null })()
+        const grid = gridByAssessment[assessmentId]
+        if (chosen && grid?.[studentId]?.[criterionId]) {
+          grid[studentId][criterionId] = {
+            mark: chosen.mark, sync: 'local', author: chosen.author, baseVersion: integer(linkedMark ?? {}, 'version') ?? 0,
+          }
+        }
+      }
     }
   }
 

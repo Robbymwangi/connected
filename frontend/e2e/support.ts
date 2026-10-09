@@ -35,12 +35,12 @@ export const E2E_SYNC_CHANGES: E2ESyncChange[] = [
 /* Fakes login, /me, and the initial sync pull just long enough to sign in and
   populate IndexedDB, then removes the routes. Later reloads and offline
   checks depend on local data or the real network, never on these fakes. */
-export async function signIn(page: Page, syncChanges: E2ESyncChange[] = E2E_SYNC_CHANGES) {
+export async function signIn(page: Page, syncChanges: E2ESyncChange[] = E2E_SYNC_CHANGES, user: typeof E2E_USER = E2E_USER) {
   await page.route('**/api/login', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 'e2e-token' }) }),
   )
   await page.route('**/api/me', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(E2E_USER) }),
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(user) }),
   )
   await page.route('**/api/sync**', (route) =>
     route.fulfill({
@@ -111,9 +111,12 @@ export type RecordedEntry = {
    assert on the order of the rounds and that a resend is byte-identical. Install it
    after going offline-to-online is wanted, not before: while offline, edits must
    queue, and a reachable health route would send them. */
-export async function fakeSyncServer(page: Page) {
+export async function fakeSyncServer(page: Page, options: { versions?: Record<string, number> } = {}) {
   const bodies: string[] = []
-  const versions = new Map<string, number>()
+  const versions = new Map<string, number>(Object.entries(options.versions ?? {}))
+  /* What a pull is told after a conflict command is accepted: the conflict at its new
+     version, so the device's copy catches up as it would from the real change log. */
+  const served: E2ESyncChange[] = []
   const control = { dropNextResponse: false }
 
   await page.route('**/api/health', (route) =>
@@ -122,7 +125,7 @@ export async function fakeSyncServer(page: Page) {
   await page.route('**/api/sync**', async (route) => {
     const request = route.request()
     if (request.method() !== 'POST') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ changes: [], cursor: 2, more: false }) })
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ changes: served, cursor: 2, more: false }) })
       return
     }
 
@@ -138,6 +141,11 @@ export async function fakeSyncServer(page: Page) {
     const results = entries.map((entry) => {
       const version = (versions.get(entry.recordId) ?? 0) + 1
       versions.set(entry.recordId, version)
+      if (entry.table === 'conflicts') {
+        const kept = served.filter((change) => change.recordId !== entry.recordId)
+        served.length = 0
+        served.push(...kept, { table: 'conflicts', recordId: entry.recordId, version, fields: {} })
+      }
       return { id: entry.id, status: 'accepted', version }
     })
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ results }) })
