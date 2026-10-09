@@ -184,9 +184,12 @@ export function createSyncRunner(deps: RunnerDeps) {
       trigger('reachable')
       return
     }
-    /* No point retrying into a dead link; the reachable edge restarts the work. */
-    if (inBackoff && backoffTimer !== null) {
+    /* No point retrying into a dead link; the reachable edge restarts the work, and
+       what was asked for is still in pending. Whichever timer was counting down to a
+       retry, there is no deadline to show any more. */
+    if (deps.status.get().phase === 'backoff') {
       backoffTimer = stop(backoffTimer)
+      followUpTimer = stop(followUpTimer)
       setStatus({ nextAttemptAt: null })
     }
   }
@@ -259,14 +262,27 @@ export function createSyncRunner(deps: RunnerDeps) {
       } while (pending.size > 0 && cycles < MAX_CYCLES)
 
       inBackoff = false
-      if (ranAny) await deps.recordSuccess().catch(() => undefined)
-      setStatus(idle)
+      if (lockDenied && !ranAny && deps.status.get().phase === 'backoff') {
+        /* A retry wake that another tab held the lock against. This tab never learned
+           how that pass ended, so the failure it last saw stands, with a deadline for
+           the next look, instead of a claim that nothing is wrong. */
+        setStatus({ nextAttemptAt: clock.now() + LOCK_RETRY_MS })
+      } else {
+        if (ranAny) await deps.recordSuccess().catch(() => undefined)
+        setStatus(idle)
+      }
 
       /* Triggers that outlasted this wake's cycle budget are not dropped; they get a
          later turn instead of an unbounded loop. */
       if (!disposed && pending.size > 0) {
         followUpTimer = clock.setTimer(() => {
           followUpTimer = null
+          /* As for the backoff timer: the link may have dropped without an edge being
+             seen, and a deadline that has passed must not stay on show. */
+          if (!deps.isReachable() && deps.status.get().phase === 'backoff') {
+            setStatus({ nextAttemptAt: null })
+            return
+          }
           request('tick')
         }, lockDenied ? LOCK_RETRY_MS : FOLLOW_UP_MS)
       }

@@ -456,6 +456,65 @@ describe('createSyncRunner', () => {
     expect(h.recordSuccess).toHaveBeenCalledTimes(1)
   })
 
+  describe('a retry wake that another tab holds the lock against', () => {
+    const afterOneFailure = async () => {
+      let failures = 1
+      let granted = true
+      const h = harness({
+        lock: async (run) => (granted ? { ran: true, value: await run() } : { ran: false }),
+        push: async () => { if (failures-- > 0) throw new TypeError('Failed to fetch'); return pushed(0) },
+      })
+      h.runner.trigger('session')
+      await flush()
+      expect(h.status()).toMatchObject({ phase: 'backoff', nextAttemptAt: 1_002_000 })
+      granted = false
+      await h.advance(2_000)
+      return { h, grant: () => { granted = true } }
+    }
+
+    it('keeps the failure it last saw and gives a fresh deadline, then recovers when the lock is free', async () => {
+      const { h, grant } = await afterOneFailure()
+
+      expect(h.push).toHaveBeenCalledTimes(1)
+      expect(h.status()).toMatchObject({ phase: 'backoff', failure: 'retry', nextAttemptAt: 1_007_000 })
+
+      grant()
+      await h.advance(5_000)
+
+      expect(h.push).toHaveBeenCalledTimes(2)
+      expect(h.status()).toMatchObject({ phase: 'idle', failure: null, nextAttemptAt: null })
+      expect(h.recordSuccess).toHaveBeenCalledTimes(1)
+    })
+
+    it('stops showing a deadline when the link drops, and resumes at the reachable edge', async () => {
+      const { h, grant } = await afterOneFailure()
+
+      h.state.reachable = false
+      h.runner.onReachability(false)
+      await h.advance(5_000)
+
+      expect(h.status()).toMatchObject({ phase: 'backoff', failure: 'retry', nextAttemptAt: null })
+      expect(h.push).toHaveBeenCalledTimes(1)
+
+      grant()
+      h.state.reachable = true
+      h.runner.onReachability(true)
+      await flush()
+      expect(h.push).toHaveBeenCalledTimes(2)
+      expect(h.status().phase).toBe('idle')
+    })
+
+    it('stops showing a deadline when the link dropped without an edge being seen', async () => {
+      const { h } = await afterOneFailure()
+
+      h.state.reachable = false
+      await h.advance(5_000)
+
+      expect(h.status()).toMatchObject({ phase: 'backoff', failure: 'retry', nextAttemptAt: null })
+      expect(h.push).toHaveBeenCalledTimes(1)
+    })
+  })
+
   it('ticks while the tab is visible and reachable, and not otherwise', async () => {
     const h = harness()
     h.runner.start()
