@@ -1,5 +1,6 @@
 import { liveQuery } from 'dexie'
 import type { FetchImpl } from '../api/client'
+import { connectivityOverride } from './connectivityOverride'
 import { healthMonitor } from './health'
 import { localDatabaseFor, type LocalDatabase } from './localDatabase'
 import { classifySyncFailure, pushSync, type PushFailure, type SyncPushResult } from './syncPush'
@@ -361,7 +362,7 @@ const realClock: Clock = {
   clearTimer: (id) => clearTimeout(id as ReturnType<typeof setTimeout>),
 }
 
-const browserReachable = () => navigator.onLine && healthMonitor.getSnapshot()
+const browserReachable = () => connectivityOverride.get() ?? (navigator.onLine && healthMonitor.getSnapshot())
 
 /* One tab syncs at a time per account. A tab that does not get the lock skips; replay
    makes a stray duplicate harmless, so where Web Locks do not exist it runs anyway. */
@@ -421,6 +422,7 @@ export function bindSyncRunner(options: BindOptions): () => void {
   document.addEventListener('visibilitychange', visibility)
   /* Subscribing also keeps the shared health probe running for the whole session. */
   const unsubscribeHealth = healthMonitor.subscribe(reachability)
+  const unsubscribeOverride = connectivityOverride.subscribe(reachability)
 
   /* A newly queued entry, by its sequence number. Editing a queued entry again
      coalesces into it and adds none, which is right: the debounce is already pending. */
@@ -443,6 +445,7 @@ export function bindSyncRunner(options: BindOptions): () => void {
     runner.dispose()
     watching.unsubscribe()
     unsubscribeHealth()
+    unsubscribeOverride()
     window.removeEventListener('online', reachability)
     window.removeEventListener('offline', reachability)
     document.removeEventListener('visibilitychange', visibility)

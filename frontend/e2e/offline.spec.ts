@@ -191,7 +191,12 @@ test('notification popup reads only the signed-in user rows from the local store
   await expect(page.getByText('CAT 1 was finalized.')).toBeVisible()
   await expect(page.getByText('Private notice')).toHaveCount(0)
   await expect(page.getByText('Do not show.')).toHaveCount(0)
-  await expect(page.getByText('just now')).toHaveCount(0)
+  /* The notification's own row, not the page: the top bar and the dashboard now say
+     "Synced just now" legitimately. The row holds the title and the body, so it is the
+     right scope, and it must not invent a time of its own. */
+  const row = page.getByText('Edit not applied').locator('xpath=ancestor::div[2]')
+  await expect(row).toContainText('CAT 1 was finalized.')
+  await expect(row).not.toContainText('just now')
   await page.getByRole('button', { name: 'Mark all read' }).click()
   await expect(page.getByRole('button', { name: 'Mark all read' })).toHaveCount(0)
 })

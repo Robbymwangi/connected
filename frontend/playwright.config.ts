@@ -4,7 +4,9 @@ import { defineConfig, devices } from '@playwright/test'
    cannot cover: they need a real service worker across navigations. The offline
    spec drives a production build, so it builds and previews first.
 
-   Local runs need the browser and its system libraries once:
+   `make e2e` runs the suite in Playwright's own Docker image, which needs nothing
+   installed on the host. Running it natively needs the browser and its system
+   libraries once:
      npx playwright install --with-deps chromium
    (the --with-deps part needs sudo; CI images have the libraries already.) */
 export default defineConfig({
