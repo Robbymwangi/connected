@@ -87,6 +87,10 @@ instruction was to avoid two stores that disagree about a value; it is kept by d
   a plain accept. The record therefore gains a `serverShadow` of the server's value for
   protected fields, which is adopted when the entry is settled. This is built with the
   writers, not here.
+- The shadow records the version each of its values was read at (`serverShadowAt`). When
+  a pull overtakes an acknowledgement, that is how a settling push tells the value seeded
+  when the teacher edited, which it may revert to, from a newer one a pull has since
+  landed, which it must keep.
 - The Sync screen's counts (pending, conflicted, failed) are a query over the outbox. A
   record's own `sync: 'pending'` is a display flag that is true exactly when the outbox
   holds an open patch or finalize entry for it, written only in the transaction that

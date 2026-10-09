@@ -140,7 +140,7 @@ describe('updateGrid', () => {
 })
 
 describe('mergeSyncedState', () => {
-  it('keeps local mark cells and touched conflicts while accepting newer synced metadata', () => {
+  it('takes mark cells from the database and keeps only touched conflicts while accepting newer synced metadata', () => {
     const conflict = seed.conflicts[0]
     const remote = {
       ...seed,
@@ -183,9 +183,48 @@ describe('mergeSyncedState', () => {
 
     expect(merged.assessments.find((assessment) => assessment.id === conflict.assessmentId)?.name).toBe('Server name')
     expect(merged.assessments[0].id).toBe('local-assessment')
-    expect(merged.marks[conflict.assessmentId][conflict.studentId].c1).toEqual({ mark: score(8), sync: 'local' })
+    expect(merged.marks[conflict.assessmentId][conflict.studentId].c1).toEqual({ mark: score(4), sync: 'synced' })
     expect(merged.marks[conflict.assessmentId][conflict.studentId][conflict.criterionId].sync).toBe('synced')
     expect(merged.conflicts[0].proposals[0].note).toBe('Local proposal')
+  })
+
+  it('keeps the overlay cell of a conflict settled in memory, but not a cell the database now reports synced', () => {
+    const conflict = seed.conflicts[0]
+    const resolved = reduce(seed, { type: 'resolveConflict', id: conflict.id, choice: theirsOf(conflict), note: 'moderated', user: hod, at })
+    const remote = {
+      ...seed,
+      marks: {
+        ...seed.marks,
+        [conflict.assessmentId]: {
+          ...seed.marks[conflict.assessmentId],
+          [conflict.studentId]: {
+            ...seed.marks[conflict.assessmentId][conflict.studentId],
+            [conflict.criterionId]: { mark: conflict.mine.mark, sync: 'synced' as const },
+          },
+        },
+      },
+    }
+
+    const overlaid = mergeSyncedState(remote, resolved, new Set([conflict.id]))
+    const plain = mergeSyncedState(remote, resolved, new Set())
+
+    expect(overlaid.marks[conflict.assessmentId][conflict.studentId][conflict.criterionId])
+      .toEqual({ mark: conflict.theirs.mark, sync: 'local', author: conflict.theirs.who })
+    expect(plain.marks[conflict.assessmentId][conflict.studentId][conflict.criterionId])
+      .toEqual({ mark: conflict.mine.mark, sync: 'synced' })
+  })
+
+  it('takes an assessment the database reports synced, and keeps one the database does not have', () => {
+    const syncedHere = { ...seed.assessments[0], sync: 'pending' as const }
+    const notStored = { ...seed.assessments[1], id: 'only-in-memory', version: 0, sync: 'pending' as const }
+    const current = { ...seed, assessments: [notStored, syncedHere, ...seed.assessments.slice(1)] }
+    const remote = { ...seed, assessments: seed.assessments.map((assessment) => ({ ...assessment, sync: 'synced' as const })) }
+
+    const merged = mergeSyncedState(remote, current, new Set())
+
+    expect(merged.assessments.find((assessment) => assessment.id === syncedHere.id)?.sync).toBe('synced')
+    expect(merged.assessments.find((assessment) => assessment.id === 'only-in-memory')).toMatchObject({ version: 0, sync: 'pending' })
+    expect(merged.assessments.filter((assessment) => assessment.id === syncedHere.id)).toHaveLength(1)
   })
 
   it('merges a sync hydration against the reducer state at dispatch time', () => {

@@ -231,25 +231,22 @@ function settle(state: State, conflict: ActiveConflict, resolution: Resolution, 
    has it directly and every dispatch below needs the exact same Resolver
    ConflictActions used to decide what the UI showed. */
 export function mergeSyncedState(remote: State, current: State, dirtyConflictIds: ReadonlySet<string>): State {
-  const preservedAssessments = current.assessments.filter((assessment) =>
-    assessment.version === 0 || assessment.sync === 'pending',
-  )
-  const preservedAssessmentIds = new Set(preservedAssessments.map((assessment) => assessment.id))
+  /* Every write reaches the database before the reducer commits it, so the database
+     is the authority for what is pending and what is synced. The reducer's own value
+     survives only for what the database cannot hold yet: an assessment it has not
+     stored, and the cell a conflict resolved in memory has overlaid. */
+  const remoteIds = new Set(remote.assessments.map((assessment) => assessment.id))
   const assessments = [
-    ...preservedAssessments,
-    ...remote.assessments.filter((assessment) => !preservedAssessmentIds.has(assessment.id)),
+    ...current.assessments.filter((assessment) => !remoteIds.has(assessment.id) && (assessment.version === 0 || assessment.sync === 'pending')),
+    ...remote.assessments,
   ]
   const marks = { ...remote.marks }
 
-  for (const [assessmentId, localGrid] of Object.entries(current.marks)) {
-    for (const [studentId, localRow] of Object.entries(localGrid)) {
-      for (const [criterionId, cell] of Object.entries(localRow)) {
-        if (cell.sync !== 'local') continue
-        marks[assessmentId] ??= {}
-        marks[assessmentId][studentId] ??= {}
-        marks[assessmentId][studentId][criterionId] = cell
-      }
-    }
+  const overlaid = [...current.conflicts, ...current.history].filter((conflict) => dirtyConflictIds.has(conflict.id))
+  for (const { assessmentId, studentId, criterionId } of overlaid) {
+    const cell = current.marks[assessmentId]?.[studentId]?.[criterionId]
+    if (cell?.sync !== 'local') continue
+    marks[assessmentId] = { ...marks[assessmentId], [studentId]: { ...marks[assessmentId]?.[studentId], [criterionId]: cell } }
   }
 
   const conflicts = [

@@ -17,23 +17,28 @@ function isOpen(entry: OutboxEntry): boolean {
   return entry.kind !== 'command' && OPEN_STATES.includes(entry.state)
 }
 
-/* The server's value for each field this write protects, kept so a refused entry can
-   be reverted and a pull can land its value without losing it. A field is copied only
-   while the record still holds the server's value for it: not once an open entry
-   covers it, and not on a record the server has not seen. */
-function shadowFor(current: LocalRecord, fields: string[], entries: OutboxEntry[]): Record<string, unknown> | undefined {
-  const existing = typeof current.serverShadow === 'object' && current.serverShadow !== null
-    ? current.serverShadow as Record<string, unknown>
-    : undefined
-  if (current.version === 0) return existing
+function mapOf(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? { ...value as Record<string, unknown> } : {}
+}
+
+/* The server's value for each field this write protects, with the version it was
+   read at, kept so a refused entry can be reverted and a pull can land its value
+   without losing it. A field is copied only while the record still holds the server's
+   value for it: not once an open entry covers it, and not on a record the server has
+   not seen. The version tells a settling push which of a seeded value and a later
+   pulled one it is looking at. */
+function shadowFor(current: LocalRecord, fields: string[], entries: OutboxEntry[]): { serverShadow?: Record<string, unknown>; serverShadowAt?: Record<string, unknown> } {
+  const shadow = mapOf(current.serverShadow)
+  const shadowAt = mapOf(current.serverShadowAt)
+  if (current.version === 0) return Object.keys(shadow).length ? { serverShadow: shadow, serverShadowAt: shadowAt } : {}
 
   const covered = new Set(entries.filter(isOpen).flatMap((entry) => Object.keys(entry.fields)))
-  const shadow = { ...existing }
   for (const field of fields) {
     if (field in shadow || covered.has(field)) continue
     shadow[field] = current[field] ?? null
+    shadowAt[field] = current.version
   }
-  return Object.keys(shadow).length ? shadow : undefined
+  return Object.keys(shadow).length ? { serverShadow: shadow, serverShadowAt: shadowAt } : {}
 }
 
 export function createAssessments(database: LocalDatabase, items: NewAssessment[], at: string): Promise<void> {
@@ -53,9 +58,9 @@ export function finalizeAssessmentRecord(database: LocalDatabase, id: string, us
 
     const fields = { status: 'finalized', finalizedBy: userId, finalizedAt: at }
     const entries = await entriesForRecord(database, 'assessments', id)
-    const serverShadow = shadowFor(current, Object.keys(fields), entries)
+    const shadow = shadowFor(current, Object.keys(fields), entries)
 
-    await database.assessments.put({ ...current, ...fields, sync: 'pending', ...(serverShadow ? { serverShadow } : {}) })
+    await database.assessments.put({ ...current, ...fields, sync: 'pending', ...shadow })
     await enqueue(database, { table: 'assessments', recordId: id, kind: 'finalize', baseVersion: current.version, fields, at })
     return true
   })
@@ -97,7 +102,7 @@ export function writeMarkCells(
         : {}
       const fields = { ...identity, ...wireMarkFields(change.cell.mark) }
 
-      const serverShadow = current ? shadowFor(current, Object.keys(wireMarkFields(change.cell.mark)), entries) : undefined
+      const shadow = current ? shadowFor(current, Object.keys(wireMarkFields(change.cell.mark)), entries) : {}
       const record: LocalRecord = {
         ...(current ?? {}),
         id: change.id,
@@ -108,7 +113,7 @@ export function writeMarkCells(
         ...wireMarkFields(change.cell.mark),
         sync: 'pending',
         localAuthor: author,
-        ...(serverShadow ? { serverShadow } : {}),
+        ...shadow,
       }
 
       await database.marks.put(record)
