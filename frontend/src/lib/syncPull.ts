@@ -76,43 +76,56 @@ function parsePage(value: unknown): SyncPage {
   return { changes, cursor: page.cursor as number | string, more: page.more }
 }
 
+/* The fields each record has in flight, from the outbox. A queued, sent, or
+   conflicted patch or finalize protects its fields from the pull; a command, an
+   acknowledged entry, and a failed one protect nothing. */
+async function protectedFields(database: LocalDatabase): Promise<Map<string, Set<string>>> {
+  const open = await database.outbox.where('state').anyOf(['queued', 'sent', 'conflict']).toArray()
+  const protectedBy = new Map<string, Set<string>>()
+  for (const entry of open) {
+    if (entry.kind === 'command') continue
+    const key = `${entry.table}:${entry.recordId}`
+    const fields = protectedBy.get(key) ?? new Set<string>()
+    for (const field of Object.keys(entry.fields)) fields.add(field)
+    protectedBy.set(key, fields)
+  }
+  return protectedBy
+}
+
+function shadowOf(record: LocalRecord | undefined): Record<string, unknown> {
+  const shadow = record?.serverShadow
+  return typeof shadow === 'object' && shadow !== null && !Array.isArray(shadow) ? { ...shadow as Record<string, unknown> } : {}
+}
+
 async function applyPage(database: LocalDatabase, page: SyncPage, userId: string): Promise<number> {
   let applied = 0
-  const tables = [...SYNC_TABLES.map((name) => database.table(name)), database.metadata]
+  const tables = [...SYNC_TABLES.map((name) => database.table(name)), database.metadata, database.outbox]
 
   await database.transaction('rw', tables, async () => {
+    const protectedBy = await protectedFields(database)
+
     for (const change of page.changes) {
       const table = database.table(change.table)
       const current = await table.get(change.recordId)
       if (current && current.version >= change.version) continue
 
-      const pendingFields = current?.pendingFields
-      const hasPendingFields = typeof pendingFields === 'object' && pendingFields !== null && !Array.isArray(pendingFields) && Object.keys(pendingFields).length > 0
-      const pendingFinalize = typeof current?.pendingFinalize === 'object' && current.pendingFinalize !== null && !Array.isArray(current.pendingFinalize)
-        ? current.pendingFinalize as Record<string, unknown>
-        : null
-      const localFields = {
-        ...(hasPendingFields ? pendingFields as Record<string, unknown> : {}),
-        ...(pendingFinalize ? { status: 'finalized', ...pendingFinalize } : {}),
+      /* A protected field keeps the local value, since the outbox is about to send
+         it; the server's value waits in the shadow for the entry's outcome (ADR 0011).
+         A delete is never held back. The version always advances. */
+      const protectedHere = protectedBy.get(`${change.table}:${change.recordId}`)
+      const record: LocalRecord = { ...(current ?? {}), id: change.recordId, version: change.version }
+      const shadow = shadowOf(current)
+      for (const [field, value] of Object.entries(change.fields)) {
+        if (protectedHere?.has(field) && field !== 'deletedAt') {
+          shadow[field] = value
+        } else {
+          record[field] = value
+          delete shadow[field]
+        }
       }
-      const hasLocalFields = Object.keys(localFields).length > 0
-      const pendingBaseVersion = Number.isSafeInteger(current?.pendingBaseVersion)
-        ? current?.pendingBaseVersion as number
-        : current?.version ?? 0
+      if (Object.keys(shadow).length) record.serverShadow = shadow
+      else delete record.serverShadow
 
-      const record: LocalRecord = {
-        ...(current ?? {}),
-        ...change.fields,
-        ...localFields,
-        id: change.recordId,
-        version: change.version,
-        ...(hasLocalFields ? {
-          pendingBaseVersion,
-          pendingFields: hasPendingFields ? pendingFields : {},
-          ...(pendingFinalize ? { pendingFinalize } : {}),
-          sync: 'pending',
-        } : {}),
-      }
       await table.put(record)
       applied++
     }

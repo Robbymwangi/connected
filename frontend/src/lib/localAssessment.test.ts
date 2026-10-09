@@ -15,17 +15,18 @@ const directory = mapSchoolDirectory({
 })
 
 describe('createLocalAssessmentRecord', () => {
-  it('creates a version-0 scheduled wire row using local class and subject ids', () => {
+  it('creates a version-0 scheduled row, and the create fields to send, using local class and subject ids', () => {
     const record = createLocalAssessmentRecord({
       subject: 'English', stream: '4W', name: 'CAT 1', term: 'Term 1', year: 2025,
       date: '2025-05-12', entered: 0, total: 1, status: 'scheduled', sync: 'pending',
     }, 'assessment-1', directory)
 
     expect(record).toEqual({
-      id: 'assessment-1', version: 0, classId: 'class-1', subjectId: 'subject-1',
-      name: 'CAT 1', term: 'Term 1', year: 2025, date: '2025-05-12', status: 'scheduled', sync: 'pending',
-      pendingBaseVersion: 0,
-      pendingFields: { classId: 'class-1', subjectId: 'subject-1', name: 'CAT 1', term: 'Term 1', year: 2025, date: '2025-05-12' },
+      record: {
+        id: 'assessment-1', version: 0, classId: 'class-1', subjectId: 'subject-1',
+        name: 'CAT 1', term: 'Term 1', year: 2025, date: '2025-05-12', status: 'scheduled', sync: 'pending',
+      },
+      createFields: { classId: 'class-1', subjectId: 'subject-1', name: 'CAT 1', term: 'Term 1', year: 2025, date: '2025-05-12' },
     })
   })
 

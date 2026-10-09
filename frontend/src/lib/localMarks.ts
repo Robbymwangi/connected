@@ -32,10 +32,6 @@ function markFromRecord(record: LocalRecord): Mark | null {
   return null
 }
 
-function hasPendingFields(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length > 0
-}
-
 export function gridFromMarkRows(rows: LocalRecord[], fallback: Grid, names: ReadonlyMap<string, string> = new Map()): Grid {
   const grid: Grid = Object.fromEntries(Object.entries(fallback).map(([studentId, row]) => [studentId, { ...row }]))
 
@@ -47,15 +43,13 @@ export function gridFromMarkRows(rows: LocalRecord[], fallback: Grid, names: Rea
     if (!studentId || !criterionId || !mark) continue
 
     const version = integer(row.version) ?? 0
-    const pendingBaseVersion = integer(row.pendingBaseVersion)
-    const pending = hasPendingFields(row.pendingFields)
     const localAuthor = typeof row.localAuthor === 'string' ? row.localAuthor : ''
     const lastEditedBy = typeof row.lastEditedBy === 'string' ? row.lastEditedBy : ''
     grid[studentId] ??= {}
     grid[studentId][criterionId] = {
       mark,
-      sync: pending || row.sync === 'pending' || version === 0 ? 'local' : 'synced',
-      baseVersion: pendingBaseVersion ?? version,
+      sync: row.sync === 'pending' || version === 0 ? 'local' : 'synced',
+      baseVersion: version,
       ...((localAuthor || names.get(lastEditedBy)) ? { author: localAuthor || names.get(lastEditedBy) } : {}),
     }
   }
@@ -92,37 +86,9 @@ export function changedGridCells(before: Grid, after: Grid): GridCellChange[] {
   return changes
 }
 
-function wireMarkFields(mark: Mark): Record<string, unknown> {
+export function wireMarkFields(mark: Mark): Record<string, unknown> {
   return {
     markKind: mark.kind,
     score: mark.kind === 'score' ? mark.value : null,
-  }
-}
-
-export function pendingMarkRecord(
-  current: LocalRecord | undefined,
-  change: GridCellChange & { assessmentId: string },
-  id: string,
-  author: string,
-): LocalRecord {
-  const baseVersion = integer(current?.pendingBaseVersion) ?? change.cell.baseVersion ?? integer(current?.version) ?? 0
-  const existingFields = hasPendingFields(current?.pendingFields) ? current.pendingFields : {}
-  const identityFields = !current || baseVersion === 0
-    ? { assessmentId: change.assessmentId, studentId: change.studentId, criterionId: change.criterionId }
-    : {}
-  const fields = { ...existingFields, ...identityFields, ...wireMarkFields(change.cell.mark) }
-
-  return {
-    ...(current ?? {}),
-    id,
-    version: integer(current?.version) ?? change.cell.baseVersion ?? 0,
-    assessmentId: change.assessmentId,
-    studentId: change.studentId,
-    criterionId: change.criterionId,
-    ...wireMarkFields(change.cell.mark),
-    pendingBaseVersion: baseVersion,
-    pendingFields: fields,
-    sync: 'pending',
-    localAuthor: author,
   }
 }

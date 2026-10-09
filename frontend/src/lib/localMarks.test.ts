@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Grid } from '../fixtures/marks'
 import { ABSENT, EMPTY, score } from './grading'
-import { changedGridCells, emptyGrid, gridFromMarkRows, mergePendingMarkCells, pendingMarkRecord } from './localMarks'
+import { changedGridCells, emptyGrid, gridFromMarkRows, mergePendingMarkCells, wireMarkFields } from './localMarks'
 
 describe('local mark persistence helpers', () => {
   it('creates empty rows for the requested students and criteria', () => {
@@ -39,35 +39,32 @@ describe('local mark persistence helpers', () => {
     })
   })
 
-  it('keeps the earliest base and unions edited fields while refreshing unrelated server fields', () => {
-    const current = {
-      id: 'mark-1', version: 4, assessmentId: 'assessment', studentId: 'student', criterionId: 'criterion',
-      markKind: 'score', score: 12, lastEditedBy: 'server-user', pendingBaseVersion: 3,
-      pendingFields: { markKind: 'score', score: 12 }, sync: 'pending',
-    }
-    const record = pendingMarkRecord(current, {
-      assessmentId: 'assessment', studentId: 'student', criterionId: 'criterion',
-      cell: { mark: ABSENT, sync: 'local', baseVersion: 3 },
-    }, 'mark-1', 'Local Teacher')
+  it('shows a pending record, or one the server has not seen, as local with the stored version as its base', () => {
+    const grid: Grid = { student: { a: { mark: EMPTY, sync: 'synced' }, b: { mark: EMPTY, sync: 'synced' } } }
 
-    expect(record).toMatchObject({
-      id: 'mark-1', version: 4, lastEditedBy: 'server-user', localAuthor: 'Local Teacher',
-      pendingBaseVersion: 3, pendingFields: { markKind: 'absent', score: null },
-      markKind: 'absent', score: null, sync: 'pending',
+    expect(gridFromMarkRows([
+      { id: 'm1', version: 4, assessmentId: 'x', studentId: 'student', criterionId: 'a', markKind: 'score', score: 9, sync: 'pending', localAuthor: 'Me' },
+      { id: 'm2', version: 0, assessmentId: 'x', studentId: 'student', criterionId: 'b', markKind: 'absent', score: null },
+    ], grid)).toEqual({
+      student: {
+        a: { mark: score(9), sync: 'local', baseVersion: 4, author: 'Me' },
+        b: { mark: ABSENT, sync: 'local', baseVersion: 0 },
+      },
     })
   })
 
-  it('creates a complete version-0 mark patch with identity fields', () => {
-    const record = pendingMarkRecord(undefined, {
-      assessmentId: 'assessment', studentId: 'student', criterionId: 'criterion',
-      cell: { mark: score(9), sync: 'local', baseVersion: 0 },
-    }, 'mark-1', 'Local Teacher')
+  it('ignores the removed pending markers', () => {
+    const grid: Grid = { student: { a: { mark: EMPTY, sync: 'synced' } } }
 
-    expect(record).toMatchObject({
-      id: 'mark-1', version: 0, pendingBaseVersion: 0, localAuthor: 'Local Teacher', sync: 'pending',
-      pendingFields: {
-        assessmentId: 'assessment', studentId: 'student', criterionId: 'criterion', markKind: 'score', score: 9,
-      },
-    })
+    expect(gridFromMarkRows([{
+      id: 'm1', version: 4, assessmentId: 'x', studentId: 'student', criterionId: 'a', markKind: 'score', score: 9,
+      pendingBaseVersion: 2, pendingFields: { score: 9 },
+    }], grid).student.a).toEqual({ mark: score(9), sync: 'synced', baseVersion: 4 })
+  })
+
+  it('names the wire fields of a mark, with a null score unless it is a score', () => {
+    expect(wireMarkFields(score(9))).toEqual({ markKind: 'score', score: 9 })
+    expect(wireMarkFields(ABSENT)).toEqual({ markKind: 'absent', score: null })
+    expect(wireMarkFields(EMPTY)).toEqual({ markKind: 'empty', score: null })
   })
 })
