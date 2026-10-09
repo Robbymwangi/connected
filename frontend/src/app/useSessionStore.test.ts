@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest'
+import { assessments } from '../fixtures/assessments'
+import { classes } from '../fixtures/classes'
+import { activeConflicts, resolvedConflicts } from '../fixtures/conflicts'
+import { marksByAssessment } from '../fixtures/marks'
+import { rubricFor } from '../fixtures/rubrics'
+import { subjects } from '../fixtures/rubrics'
+import { rosterFor } from '../fixtures/students'
 import { score } from '../lib/grading'
-import { reduce, seed } from './useSessionStore'
+import { emptyGrid } from '../lib/localMarks'
+import { reduce, mergeSyncedState } from './useSessionStore'
+
+const seed: Parameters<typeof reduce>[0] = {
+  assessments,
+  marks: marksByAssessment,
+  conflicts: activeConflicts,
+  history: resolvedConflicts,
+  criteriaBySubject: Object.fromEntries(subjects.map((subject) => [subject, rubricFor(subject)])),
+  resultRecords: [],
+}
 
 const me = { id: 'u-1', name: 'John Doe', moderatedSubjects: [] as string[] }
 const hod = { id: 'u-3', name: 'Mr. Kamau', moderatedSubjects: ['English', 'Maths', 'Science'] }
@@ -113,9 +130,76 @@ describe('addAssessments', () => {
 describe('updateGrid', () => {
   it('seeds an empty grid for an assessment with no marks yet', () => {
     const scheduled = seed.assessments.find((a) => a.status === 'scheduled')!
-    const next = reduce(seed, { type: 'updateGrid', assessmentId: scheduled.id, update: (g) => g })
+    const cls = classes.find((item) => item.stream === scheduled.stream)!
+    const fallback = emptyGrid(rosterFor(cls.id).map((student) => student.id), rubricFor(scheduled.subject).map((criterion) => criterion.id))
+    const next = reduce(seed, { type: 'updateGrid', assessmentId: scheduled.id, update: (g) => g, emptyGrid: fallback })
     const grid = next.marks[scheduled.id]
     expect(Object.keys(grid)).toHaveLength(28)
     expect(Object.values(grid)[0].sc1.mark.kind).toBe('empty')
+  })
+})
+
+describe('mergeSyncedState', () => {
+  it('keeps local mark cells and touched conflicts while accepting newer synced metadata', () => {
+    const conflict = seed.conflicts[0]
+    const remote = {
+      ...seed,
+      assessments: seed.assessments.map((assessment) => assessment.id === conflict.assessmentId
+        ? { ...assessment, name: 'Server name', version: assessment.version + 1 }
+        : assessment),
+      marks: {
+        ...seed.marks,
+        [conflict.assessmentId]: {
+          ...seed.marks[conflict.assessmentId],
+          [conflict.studentId]: {
+            ...seed.marks[conflict.assessmentId][conflict.studentId],
+            c1: { mark: score(4), sync: 'synced' as const },
+            [conflict.criterionId]: { mark: conflict.mine.mark, sync: 'synced' as const },
+          },
+        },
+      },
+      conflicts: [{ ...conflict, proposals: [] }],
+    }
+    const current = {
+      ...seed,
+      assessments: [
+        { ...seed.assessments[0], id: 'local-assessment', version: 0, sync: 'pending' as const },
+        ...seed.assessments,
+      ],
+      marks: {
+        ...seed.marks,
+        [conflict.assessmentId]: {
+          ...seed.marks[conflict.assessmentId],
+          [conflict.studentId]: {
+            ...seed.marks[conflict.assessmentId][conflict.studentId],
+            c1: { mark: score(8), sync: 'local' as const },
+          },
+        },
+      },
+      conflicts: [{ ...conflict, proposals: [{ byId: me.id, by: me.name, choice: theirsOf(conflict), note: 'Local proposal', at }] }],
+    }
+
+    const merged = mergeSyncedState(remote, current, new Set([conflict.id]))
+
+    expect(merged.assessments.find((assessment) => assessment.id === conflict.assessmentId)?.name).toBe('Server name')
+    expect(merged.assessments[0].id).toBe('local-assessment')
+    expect(merged.marks[conflict.assessmentId][conflict.studentId].c1).toEqual({ mark: score(8), sync: 'local' })
+    expect(merged.marks[conflict.assessmentId][conflict.studentId][conflict.criterionId].sync).toBe('synced')
+    expect(merged.conflicts[0].proposals[0].note).toBe('Local proposal')
+  })
+
+  it('merges a sync hydration against the reducer state at dispatch time', () => {
+    const local = reduce(seed, { type: 'addAssessments', drafts: [] })
+    const assessmentId = seed.assessments[0].id
+    const remote = {
+      ...seed,
+      assessments: seed.assessments.map((assessment) => assessment.id === assessmentId
+        ? { ...assessment, name: 'Updated remotely' }
+        : assessment),
+    }
+
+    const hydrated = reduce(local, { type: 'hydrate', state: remote, dirtyConflictIds: [] })
+
+    expect(hydrated.assessments.find((assessment) => assessment.id === assessmentId)?.name).toBe('Updated remotely')
   })
 })

@@ -17,7 +17,7 @@ import type { CurrentUser } from '../lib/session'
    state shows up later, that is its own decision, with its own ADR. */
 export type AuthContextValue = {
   user: CurrentUser
-  signOut: () => void
+  signOut: () => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

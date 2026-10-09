@@ -1,7 +1,7 @@
 import type { Assessment } from '../fixtures/assessments'
 import type { Grid } from '../fixtures/marks'
 import type { ResultRecord } from '../fixtures/results'
-import { rubricFor } from '../fixtures/rubrics'
+import { rubricFor, type Criterion } from '../fixtures/rubrics'
 import { performanceLevel, rowTotal, type PerformanceLevel } from './grading'
 
 /* A student's results across assessments, from two sources: the live marking grid
@@ -26,17 +26,19 @@ export function resultsForStudent(
   assessments: Assessment[],
   grids: Record<string, Grid | undefined>,
   records: ResultRecord[],
+  criteriaBySubject?: Readonly<Record<string, Criterion[]>>,
 ): StudentResult[] {
   const out: StudentResult[] = []
   for (const a of assessments) {
     if (a.stream !== stream) continue
-    const rubric = rubricFor(a.subject)
-    const max = rubric.reduce((s, c) => s + c.max, 0)
-    if (max === 0) continue
-
+    const rubric = criteriaBySubject?.[a.subject] ?? rubricFor(a.subject)
+    const rubricMax = rubric.reduce((s, c) => s + c.max, 0)
+    const record = records.find((r) => r.studentId === studentId && r.assessmentId === a.id)
     const row = grids[a.id]?.[studentId]
     const fromGrid = row ? rowTotal(rubric.map((c) => row[c.id]?.mark ?? { kind: 'empty' })) : null
-    const record = records.find((r) => r.studentId === studentId && r.assessmentId === a.id)
+    const max = fromGrid !== null ? rubricMax : record?.max ?? rubricMax
+    if (max <= 0) continue
+
     const total = fromGrid ?? record?.total ?? null
     if (total === null) continue
 
@@ -48,7 +50,7 @@ export function resultsForStudent(
       date: a.date,
       total,
       max,
-      level: performanceLevel(total, max),
+      level: fromGrid !== null ? performanceLevel(total, max) : record?.level ?? performanceLevel(total, max),
       source: fromGrid !== null ? 'grid' : 'record',
     })
   }

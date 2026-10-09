@@ -1,17 +1,18 @@
-import { Mail, Phone } from 'lucide-react'
+import { Mail } from 'lucide-react'
 import { BackNav } from '../../components/BackNav'
 import { StatusPill } from '../../components/StatusPill'
-import { classes } from '../../fixtures/classes'
+import type { SchoolClass } from '../../fixtures/classes'
 import type { Teacher } from '../../fixtures/teachers'
 import { Panel } from './Panel'
 
 type TeacherDetailProps = {
   teacher: Teacher
+  classes: SchoolClass[]
   onBack: () => void
   onOpenClass: (classId: string) => void
 }
 
-export function TeacherDetail({ teacher: t, onBack, onOpenClass }: TeacherDetailProps) {
+export function TeacherDetail({ teacher: t, classes, onBack, onOpenClass }: TeacherDetailProps) {
   const streams = classes.filter((c) => c.stream in t.subjectsByStream)
 
   return (
@@ -58,9 +59,6 @@ export function TeacherDetail({ teacher: t, onBack, onOpenClass }: TeacherDetail
           <div className="flex flex-col gap-3 px-5 py-4 text-sm">
             <p className="flex items-center gap-2 text-foreground">
               <Mail className="size-4 text-muted-foreground" /> {t.email}
-            </p>
-            <p className="flex items-center gap-2 text-foreground">
-              <Phone className="size-4 text-muted-foreground" /> {t.phone}
             </p>
           </div>
         </Panel>

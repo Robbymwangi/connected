@@ -283,6 +283,10 @@ IndexedDB schema over Dexie, replacing the frontend fixtures. Dexie is a wrapper
 over an awkward browser API and is acceptable; a replication library is not.
 
 **3.4 Mutation outbox**
+*State entering this item (2026-10-08; 3.3 slices 4e.1 and 4e.2):* assessment creates and finalizations, plus mark-cell edits, already persist in the account's Dexie database. Assessment creates carry a client UUID and version 0. Finalize is stored separately from creation. Mark rows use the server-compatible UUIDv5 and retain `pendingBaseVersion` plus changed fields in local-only metadata. A newer pull updates server fields and version while preserving those pending mark fields. These are persistence markers, not outbox entries: they have no mutation id, replay, acknowledgement, or conflict-removal behavior. Build the outbox on top of them; do not add a second local-write store.
+
+Conflict proposals, referrals, acceptances, and resolutions are not yet persisted. Persist each as its own outbox command on the conflict record, with the base version the teacher saw. A resolution's selected mark is a local display overlay until the conflict command is acknowledged and the settled mark arrives by pull. Do not also enqueue an ordinary mark patch for that resolution: the server applies the chosen value while handling the conflict command, and a later mark patch could create a spurious conflict.
+
 Append on every local write with a client-generated mutation id, record UUID, base
 `version`, and changed fields only. Replay on reconnect, oldest first per record;
 the server deduplicates on the mutation id, so a lost response is replayed without

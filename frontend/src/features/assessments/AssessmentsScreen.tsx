@@ -1,8 +1,8 @@
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import type { SessionStore } from '../../app/useSessionStore'
+import type { SchoolDirectoryState } from '../../app/useSchoolDirectory'
 import type { Assessment } from '../../fixtures/assessments'
-import { classes } from '../../fixtures/classes'
 import { DEFAULT_FILTERS, filterAssessments, type QueueFilters } from '../../lib/assessmentQueue'
 import { MarkingGrid } from './grid/MarkingGrid'
 import { AssessmentReport } from './AssessmentReport'
@@ -14,6 +14,7 @@ type View = 'queue' | 'browse'
 
 type AssessmentsScreenProps = {
   store: SessionStore
+  directory: SchoolDirectoryState
   /* Set when the user is inside one assessment; undefined on the list. */
   assessmentId?: string
   view?: 'grid' | 'report'
@@ -28,6 +29,7 @@ type AssessmentsScreenProps = {
 
 export function AssessmentsScreen({
   store,
+  directory,
   assessmentId,
   view,
   creating: creatingOnArrival = false,
@@ -40,12 +42,17 @@ export function AssessmentsScreen({
   const [listView, setListView] = useState<View>('queue')
   const [filters, setFilters] = useState<QueueFilters>(DEFAULT_FILTERS)
   const [creating, setCreating] = useState(creatingOnArrival)
+  const school = directory.status === 'ready' ? directory.data : null
+  const referenceYear = school?.years[0] ?? new Date().getFullYear()
+  const referenceClasses = school?.classesForYear(referenceYear) ?? []
+  const referenceGrades = [...new Set(referenceClasses.map((cls) => cls.grade))]
 
   const open = assessmentId ? list.find((a) => a.id === assessmentId) : undefined
   if (open && view === 'grid') {
     return (
       <MarkingGrid
         assessment={open}
+        directory={directory}
         grid={store.gridFor(open.id)}
         onUpdateGrid={(update) => store.updateGrid(open.id, update)}
         conflicts={conflicts.filter((k) => k.assessmentId === open.id)}
@@ -69,9 +76,10 @@ export function AssessmentsScreen({
      year from the chosen date's calendar year; neither is inferred from the other,
      because no school-calendar rule exists yet to map dates onto terms. The store
      assigns each record its UUID. */
-  const create = (draft: NewAssessment) => {
+  const create = async (draft: NewAssessment) => {
     const created: Omit<Assessment, 'id' | 'version'>[] = draft.classIds.flatMap((classId) => {
-      const cls = classes.find((c) => c.id === classId)
+      const year = Number(draft.date.slice(0, 4))
+      const cls = school?.classesForYear(year).find((c) => c.id === classId)
       if (!cls) return []
       return [{
         subject: draft.subject,
@@ -86,7 +94,7 @@ export function AssessmentsScreen({
         sync: 'pending',
       }]
     })
-    store.addAssessments(created)
+    await store.addAssessments(created)
     /* Show the year the new records landed in, so they are not filtered out of view. */
     setFilters((f) => ({ ...f, year: Number(draft.date.slice(0, 4)) }))
   }
@@ -119,7 +127,8 @@ export function AssessmentsScreen({
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition-opacity hover:opacity-90"
+            disabled={!school || school.subjects.length === 0 || referenceClasses.length === 0}
+            className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="size-4" /> New
           </button>
@@ -129,6 +138,7 @@ export function AssessmentsScreen({
       {listView === 'queue' ? (
         <QueueList
           assessments={list}
+          subjects={school?.subjects ?? []}
           filters={filters}
           onFiltersChange={setFilters}
           onOpenGrid={(id) => onOpen(id, 'grid')}
@@ -137,6 +147,8 @@ export function AssessmentsScreen({
       ) : (
         <BrowseTree
           assessments={list}
+          classes={referenceClasses}
+          grades={referenceGrades}
           onOpenGrid={(id) => onOpen(id, 'grid')}
           onOpenReport={(id) => onOpen(id, 'report')}
         />
@@ -144,6 +156,9 @@ export function AssessmentsScreen({
 
       <CreateAssessmentDialog
         open={creating}
+        classes={referenceClasses}
+        subjects={school?.subjects ?? []}
+        criteriaBySubject={school?.criteriaBySubject ?? {}}
         onClose={() => {
           setCreating(false)
           onCreateClosed?.()

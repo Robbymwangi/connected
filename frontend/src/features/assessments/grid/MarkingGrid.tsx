@@ -5,11 +5,10 @@ import { LevelBadge } from '../../../components/LevelBadge'
 import { StatusPill } from '../../../components/StatusPill'
 import { Toast, type ToastKind } from '../../../components/Toast'
 import type { Assessment } from '../../../fixtures/assessments'
-import { classes } from '../../../fixtures/classes'
 import type { ActiveConflict, Choice } from '../../../fixtures/conflicts'
 import type { Grid } from '../../../fixtures/marks'
-import { rubricFor } from '../../../fixtures/rubrics'
-import { initials, rosterFor } from '../../../fixtures/students'
+import { initials } from '../../../fixtures/students'
+import type { SchoolDirectoryState } from '../../../app/useSchoolDirectory'
 import { useConnectivity } from '../../../lib/connectivity'
 import { ABSENT, EMPTY, performanceLevel, rowTotal, type Mark } from '../../../lib/grading'
 import { STATUS_META } from '../statusMeta'
@@ -21,21 +20,23 @@ type Focus = { studentId: string; criterionId: string }
 
 type MarkingGridProps = {
   assessment: Assessment
+  directory: SchoolDirectoryState
   /* The marks live in the session store, not here, so edits survive navigation. */
   grid: Grid
-  onUpdateGrid: (update: (grid: Grid) => Grid) => void
+  onUpdateGrid: (update: (grid: Grid) => Grid) => Promise<void>
   /* Conflicts for this assessment only, and the three ways to move one (ADR 0002). */
   conflicts: ActiveConflict[]
   onResolveConflict: (id: string, choice: Choice, note: string) => void
   onProposeResolution: (id: string, choice: Choice, note: string) => void
   onAcceptProposal: (id: string) => void
   onReferConflict: (id: string) => void
-  onFinalize: (assessmentId: string) => void
+  onFinalize: (assessmentId: string) => Promise<void>
   onBack: () => void
 }
 
 export function MarkingGrid({
   assessment,
+  directory,
   grid,
   onUpdateGrid: setGrid,
   conflicts,
@@ -46,10 +47,11 @@ export function MarkingGrid({
   onFinalize,
   onBack,
 }: MarkingGridProps) {
-  const rubric = rubricFor(assessment.subject)
+  const school = directory.status === 'ready' ? directory.data : null
+  const rubric = school?.criteriaBySubject[assessment.subject] ?? []
   const maxTotal = rubric.reduce((sum, c) => sum + c.max, 0)
-  const cls = classes.find((c) => c.stream === assessment.stream)
-  const roster = rosterFor(cls?.id ?? '')
+  const cls = school?.classesForYear(assessment.year).find((item) => item.stream === assessment.stream)
+  const roster = cls ? school?.studentsForYear(assessment.year).filter((student) => student.classId === cls.id) ?? [] : []
   const finalized = assessment.status === 'finalized' || assessment.status === 'reports-generated'
 
   const [editing, setEditing] = useState(false)
@@ -76,8 +78,12 @@ export function MarkingGrid({
 
   const canEdit = editing && !finalized
 
+  const persistGrid = (update: (grid: Grid) => Grid) => {
+    void setGrid(update).catch(() => showToast('saveError', 5000))
+  }
+
   const setMark = (studentId: string, criterionId: string, mark: Mark, extra?: Partial<Grid[string][string]>) =>
-    setGrid((g) => ({
+    persistGrid((g) => ({
       ...g,
       [studentId]: {
         ...g[studentId],
@@ -86,7 +92,7 @@ export function MarkingGrid({
     }))
 
   const setRow = (studentId: string, mark: Mark) =>
-    setGrid((g) => ({
+    persistGrid((g) => ({
       ...g,
       [studentId]: Object.fromEntries(
         rubric.map((c) => [c.id, { ...g[studentId][c.id], mark, sync: 'local' as const }]),
@@ -116,8 +122,8 @@ export function MarkingGrid({
     conflicts.find((k) => k.studentId === studentId && k.criterionId === criterionId)
   const openConflict = conflicts.find((k) => k.id === openConflictId) ?? null
 
-  const finalize = () => {
-    onFinalize(assessment.id)
+  const finalize = async () => {
+    await onFinalize(assessment.id)
     setEditing(false)
     setFinalizeOpen(false)
   }
@@ -266,6 +272,7 @@ export function MarkingGrid({
       <ConflictDialog
         conflict={openConflict}
         subject={assessment.subject}
+        criterionMax={rubric.find((criterion) => criterion.id === openConflict?.criterionId)?.max ?? 0}
         onResolve={(choice, note) => {
           if (!openConflict) return
           onResolveConflict(openConflict.id, choice, note)

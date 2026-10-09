@@ -59,6 +59,106 @@ test('signing in shows the account from /me, and reloading offline shows the sam
   await expect(page.getByText(E2E_USER.name).first()).toBeVisible()
 })
 
+test('a legacy cached session migrates into Dexie and starts sync before an offline reload', async ({ page, context }) => {
+  const legacySession = {
+    token: 'legacy-token',
+    user: {
+      id: E2E_USER.id,
+      firstName: 'Jane',
+      fullName: E2E_USER.name,
+      initials: 'JT',
+      role: 'Teacher',
+      email: E2E_USER.email,
+      moderatedSubjectIds: [],
+    },
+  }
+
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible()
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null)
+  await page.evaluate(async (session) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('connected-session', 1)
+      request.onupgradeneeded = () => request.result.createObjectStore('session')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction('session', 'readwrite')
+      transaction.objectStore('session').put(session, 'current')
+      transaction.oncomplete = () => resolve()
+      transaction.onerror = () => reject(transaction.error)
+    })
+    database.close()
+  }, legacySession)
+
+  await page.route('**/api/me', (route) => route.fulfill({ status: 500, body: 'offline' }))
+  await page.route('**/api/sync**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        changes: [{ table: 'students', recordId: 'student-1', version: 1, fields: { name: 'Amina' } }],
+        cursor: 7,
+        more: false,
+      }),
+    }),
+  )
+
+  const syncResponse = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/sync')
+  await page.reload()
+  await expect(page.getByRole('heading', { level: 1, name: /morning|afternoon|evening/i })).toBeVisible()
+  await syncResponse
+
+  const migrated = await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('connected')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const session = await new Promise<unknown>((resolve, reject) => {
+      const request = database.transaction('sessions').objectStore('sessions').get('current')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    database.close()
+
+    const accountDatabase = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('connected-user-e2e-teacher')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const student = await new Promise<unknown>((resolve, reject) => {
+      const request = accountDatabase.transaction('students').objectStore('students').get('student-1')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    accountDatabase.close()
+
+    const legacyDatabase = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('connected-session')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const oldSession = await new Promise<unknown>((resolve, reject) => {
+      const request = legacyDatabase.transaction('session').objectStore('session').get('current')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    legacyDatabase.close()
+
+    return { session, student, oldSession }
+  })
+
+  expect(migrated.session).toEqual({ key: 'current', session: legacySession })
+  expect(migrated.student).toMatchObject({ id: 'student-1', version: 1, name: 'Amina' })
+  expect(migrated.oldSession).toBeUndefined()
+
+  await context.setOffline(true)
+  await page.reload()
+  await expect(page.getByRole('heading', { level: 1, name: /morning|afternoon|evening/i })).toBeVisible()
+})
+
 test('a second, fresh tab in the same context also sees the signed-in account offline', async ({ page, context }) => {
   await signIn(page)
   await context.setOffline(true)
@@ -76,6 +176,22 @@ test('signing out returns to the sign-in form, and a reload does not restore the
   await page.getByRole('button', { name: 'Open navigation' }).click()
   await page.getByRole('button', { name: 'Log Out' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible()
+
+  const storedSession = await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('connected')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const session = await new Promise<unknown>((resolve, reject) => {
+      const request = database.transaction('sessions').objectStore('sessions').get('current')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    database.close()
+    return session
+  })
+  expect(storedSession).toBeUndefined()
 
   await page.reload()
   await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible()

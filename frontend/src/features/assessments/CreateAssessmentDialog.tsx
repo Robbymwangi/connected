@@ -2,8 +2,8 @@ import { Check } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Modal } from '../../components/Modal'
 import { TERMS } from '../../fixtures/assessments'
-import { classes } from '../../fixtures/classes'
-import { rubricFor, subjects, type Subject } from '../../fixtures/rubrics'
+import type { SchoolClass } from '../../fixtures/classes'
+import type { Criterion, Subject } from '../../fixtures/rubrics'
 
 export type NewAssessment = {
   subject: Subject
@@ -26,19 +26,26 @@ const STEPS = 4
 
 type CreateAssessmentDialogProps = {
   open: boolean
+  classes: SchoolClass[]
+  subjects: string[]
+  criteriaBySubject: Record<string, Criterion[]>
   onClose: () => void
-  onCreate: (assessment: NewAssessment) => void
+  onCreate: (assessment: NewAssessment) => void | Promise<void>
 }
 
 /* Four steps: subject, name and date, streams, confirmation. Each step must be
    complete before the next; the export let name and date through empty. */
-export function CreateAssessmentDialog({ open, onClose, onCreate }: CreateAssessmentDialogProps) {
+export function CreateAssessmentDialog({ open, classes, subjects, criteriaBySubject, onClose, onCreate }: CreateAssessmentDialogProps) {
   const [step, setStep] = useState(0)
   const [draft, setDraft] = useState<Draft>(EMPTY)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const reset = () => {
     setStep(0)
     setDraft(EMPTY)
+    setSaving(false)
+    setSaveError(null)
   }
   const close = () => {
     onClose()
@@ -57,16 +64,24 @@ export function CreateAssessmentDialog({ open, onClose, onCreate }: CreateAssess
     ? classes.filter((c) => c.subjects.includes(draft.subject as string))
     : []
 
-  const create = () => {
+  const create = async () => {
     if (!draft.subject) return
-    onCreate({
-      subject: draft.subject,
-      name: draft.name.trim(),
-      term: draft.term,
-      date: draft.date,
-      classIds: draft.classIds,
-    })
-    setStep(3)
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await onCreate({
+        subject: draft.subject,
+        name: draft.name.trim(),
+        term: draft.term,
+        date: draft.date,
+        classIds: draft.classIds,
+      })
+      setStep(3)
+    } catch {
+      setSaveError('Could not save this assessment on this device.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const inputClass =
@@ -108,8 +123,8 @@ export function CreateAssessmentDialog({ open, onClose, onCreate }: CreateAssess
             </PrimaryButton>
           )}
           {step === 2 && (
-            <PrimaryButton onClick={create} disabled={!canContinue}>
-              Create
+            <PrimaryButton onClick={create} disabled={!canContinue || saving}>
+              {saving ? 'Saving...' : 'Create'}
             </PrimaryButton>
           )}
           {step === 3 && <PrimaryButton onClick={close}>Done</PrimaryButton>}
@@ -132,7 +147,7 @@ export function CreateAssessmentDialog({ open, onClose, onCreate }: CreateAssess
               <span>
                 {s}
                 <span className="ml-2 text-xs text-muted-foreground">
-                  {rubricFor(s).map((c) => c.name).join(', ')}
+                  {(criteriaBySubject[s] ?? []).map((c) => c.name).join(', ')}
                 </span>
               </span>
             </button>
@@ -173,6 +188,7 @@ export function CreateAssessmentDialog({ open, onClose, onCreate }: CreateAssess
       {step === 2 && (
         <div className="flex flex-col gap-3">
           <p className="mb-1 text-sm font-semibold text-foreground">Select streams</p>
+          {saveError && <p className="text-sm text-danger" role="alert">{saveError}</p>}
           {eligibleClasses.map((c) => {
             const selected = draft.classIds.includes(c.id)
             return (
