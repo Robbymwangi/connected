@@ -2,27 +2,26 @@ import { describe, expect, it } from 'vitest'
 import type { ActiveConflict, Proposal } from '../fixtures/conflicts'
 import {
   abilityOf,
-  agreedResolution,
   canRefer,
   isValidChoice,
-  chosenMark,
-  directResolution,
   isAutoResolvable,
   isSelfConflict,
   isValidNote,
   marksEqual,
-  toHistory,
+  planCommand,
 } from './conflicts'
 import { ABSENT, EMPTY, score } from './grading'
 
-const SUBJECT = 'English'
+const SUBJECT = 'subject-english'
 const me = { id: 'u-1', name: 'John Doe', moderatedSubjects: [] as string[] }
 const hod = { id: 'u-3', name: 'Mr. Kamau', moderatedSubjects: [SUBJECT] }
 
 const crossTeacher: ActiveConflict = {
   id: 'c',
   assessmentId: 'a1',
+  subjectId: SUBJECT,
   baseVersion: 6,
+  conflictVersion: 1,
   studentId: 's1',
   criterionId: 'c3',
   student: 'Wanjiku Njoroge',
@@ -98,9 +97,9 @@ describe('abilityOf', () => {
     expect(canRefer({ ...crossTeacher, referral: { reason: 'party', byId: 'u-2', by: 'Ms. Akinyi', at: 'x' } }, me)).toBe(false)
   })
   it('moderation is per subject: a moderator of another subject only observes', () => {
-    const maths = { id: 'u-3', name: 'Mr. Kamau', moderatedSubjects: ['Maths'] }
+    const maths = { id: 'u-3', name: 'Mr. Kamau', moderatedSubjects: ['subject-maths'] }
     expect(abilityOf(crossTeacher, maths, SUBJECT)).toEqual({ kind: 'observer' })
-    expect(abilityOf(crossTeacher, maths, 'Maths')).toEqual({ kind: 'resolve', noteRequired: true })
+    expect(abilityOf(crossTeacher, maths, 'subject-maths')).toEqual({ kind: 'resolve', noteRequired: true })
   })
   it('a moderator who is also a party acts as a party: proposes, cannot resolve, may refer', () => {
     const partyAndHod = { id: 'u-1', name: 'John Doe', moderatedSubjects: [SUBJECT] }
@@ -121,16 +120,6 @@ describe('abilityOf', () => {
   })
 })
 
-describe('chosenMark', () => {
-  it('a side keeps that side\'s mark and author', () => {
-    expect(chosenMark(crossTeacher, { kind: 'side', editId: 'e-t' }, 'John Doe')).toEqual({ mark: score(11), author: 'Ms. Akinyi' })
-    expect(() => chosenMark(crossTeacher, { kind: 'side', editId: 'nope' }, 'John Doe')).toThrow(RangeError)
-  })
-  it('a correction is authored by whoever settled it', () => {
-    expect(chosenMark(crossTeacher, { kind: 'corrected', mark: ABSENT }, 'Mr. Kamau')).toEqual({ mark: ABSENT, author: 'Mr. Kamau' })
-  })
-})
-
 describe('isValidChoice', () => {
   it('accepts only the conflict\'s own edits as sides', () => {
     expect(isValidChoice(crossTeacher, { kind: 'side', editId: 'e-m' }, 20)).toBe(true)
@@ -141,25 +130,6 @@ describe('isValidChoice', () => {
     expect(isValidChoice(crossTeacher, { kind: 'corrected', mark: score(21) }, 20)).toBe(false)
     expect(isValidChoice(crossTeacher, { kind: 'corrected', mark: ABSENT }, 20)).toBe(true)
     expect(isValidChoice(crossTeacher, { kind: 'corrected', mark: EMPTY }, 20)).toBe(false)
-  })
-})
-
-describe('resolutions', () => {
-  it('own edits settle as self, cross-teacher settles as moderated', () => {
-    const keepMine = { kind: 'side' as const, editId: 'e-m' }
-    expect(directResolution(ownEdits, keepMine, me, '')).toEqual({ kind: 'self', byId: 'u-1', by: 'John Doe', choice: keepMine })
-    expect(directResolution(crossTeacher, keepMine, hod, 'moderated')).toEqual({ kind: 'moderated', byId: 'u-3', by: 'Mr. Kamau', choice: keepMine, note: 'moderated' })
-  })
-  it('an acceptance records both names and the proposer\'s note', () => {
-    expect(agreedResolution(proposalByHer, me)).toEqual({ kind: 'agreed', proposedById: 'u-2', proposedBy: 'Ms. Akinyi', acceptedById: 'u-1', acceptedBy: 'John Doe', choice: proposalByHer.choice, note: 're-marked' })
-  })
-  it('history keeps both sides and drops the working fields', () => {
-    const h = toHistory({ ...crossTeacher, proposals: [proposalByHer] }, agreedResolution(proposalByHer, me), '2026-08-28T09:00:00')
-    expect(h.mine).toEqual(crossTeacher.mine)
-    expect(h.theirs).toEqual(crossTeacher.theirs)
-    expect(h.proposals).toEqual([proposalByHer])
-    expect('baseVersion' in h).toBe(false)
-    expect(h.resolvedAt).toBe('2026-08-28T09:00:00')
   })
 })
 
@@ -174,5 +144,121 @@ describe('isValidNote', () => {
   it('counts characters, not UTF-16 units, as the server does', () => {
     expect(isValidNote('😀'.repeat(2000))).toBe(true)
     expect(isValidNote('😀'.repeat(2001))).toBe(false)
+  })
+})
+
+describe('planCommand', () => {
+  const her = { id: 'u-2', name: 'Ms. Akinyi', moderatedSubjects: [] as string[] }
+  const mineSide = { kind: 'side' as const, editId: 'e-m' }
+  const theirSide = { kind: 'side' as const, editId: 'e-t' }
+  const plan = (conflict: ActiveConflict, request: Parameters<typeof planCommand>[1], user = me, max = 20) =>
+    planCommand(conflict, request, user, max)
+
+  describe('resolve', () => {
+    it('lets a teacher settle their own two-device edits, with no note', () => {
+      expect(plan(ownEdits, { action: 'resolve', choice: theirSide, note: '' })).toEqual({
+        kind: 'resolve', resolution: 'self', byId: 'u-1', choice: theirSide,
+      })
+    })
+
+    it('refuses a party settling a cross-teacher conflict alone', () => {
+      expect(plan(crossTeacher, { action: 'resolve', choice: theirSide, note: 'please' })).toBeNull()
+    })
+
+    it('lets a moderator settle it, but only with a note, which is trimmed', () => {
+      expect(plan(crossTeacher, { action: 'resolve', choice: theirSide, note: '  ' }, hod)).toBeNull()
+      expect(plan(crossTeacher, { action: 'resolve', choice: theirSide, note: ' moderated ' }, hod)).toEqual({
+        kind: 'resolve', resolution: 'moderated', byId: 'u-3', choice: theirSide, note: 'moderated',
+      })
+    })
+
+    it('judges moderation against the conflict\'s own subject id', () => {
+      const elsewhere = { ...crossTeacher, subjectId: 'subject-maths' }
+
+      expect(plan(elsewhere, { action: 'resolve', choice: theirSide, note: 'n' }, hod)).toBeNull()
+    })
+
+    it('refuses a side that is not one of the edits, a corrected mark over the maximum, and an empty one', () => {
+      const attempt = (choice: Parameters<typeof isValidChoice>[1]) => plan(ownEdits, { action: 'resolve', choice, note: '' })
+
+      expect(attempt({ kind: 'side', editId: 'nope' })).toBeNull()
+      expect(attempt({ kind: 'corrected', mark: score(99) })).toBeNull()
+      expect(attempt({ kind: 'corrected', mark: EMPTY })).toBeNull()
+      expect(attempt({ kind: 'corrected', mark: ABSENT })).not.toBeNull()
+    })
+
+    it('a moderator who is also a party acts as a party and cannot resolve', () => {
+      const partyAndHod = { id: 'u-1', name: 'John Doe', moderatedSubjects: [SUBJECT] }
+
+      expect(plan(crossTeacher, { action: 'resolve', choice: theirSide, note: 'n' }, partyAndHod)).toBeNull()
+    })
+  })
+
+  describe('propose', () => {
+    it('needs a note and a valid choice', () => {
+      expect(plan(crossTeacher, { action: 'propose', choice: theirSide, note: '' })).toBeNull()
+      expect(plan(crossTeacher, { action: 'propose', choice: { kind: 'side', editId: 'nope' }, note: 'n' })).toBeNull()
+      expect(plan(crossTeacher, { action: 'propose', choice: theirSide, note: ' agreed in moderation ' })).toEqual({
+        kind: 'propose', byId: 'u-1', choice: theirSide, note: 'agreed in moderation',
+      })
+    })
+
+    it('lets the other party counter once, and not a third time', () => {
+      const countered = plan({ ...crossTeacher, proposals: [proposalByHer] }, { action: 'propose', choice: mineSide, note: 'split it' })
+      expect(countered).toMatchObject({ kind: 'propose' })
+
+      const mine: Proposal = { ...proposalByHer, byId: 'u-1', by: 'John Doe', choice: mineSide }
+      const twoRounds = { ...crossTeacher, proposals: [mine, proposalByHer] }
+      expect(plan(twoRounds, { action: 'propose', choice: mineSide, note: 'again' })).toBeNull()
+    })
+
+    it('does not let the proposer propose again while theirs is waiting, or a non-party propose at all', () => {
+      const mine: Proposal = { ...proposalByHer, byId: 'u-1', by: 'John Doe', choice: mineSide }
+      const other = { id: 'u-9', name: 'Mr. Otieno', moderatedSubjects: [] as string[] }
+
+      expect(plan({ ...crossTeacher, proposals: [mine] }, { action: 'propose', choice: mineSide, note: 'n' })).toBeNull()
+      expect(plan(crossTeacher, { action: 'propose', choice: mineSide, note: 'n' }, other)).toBeNull()
+    })
+  })
+
+  describe('accept', () => {
+    it('lets the other party accept, naming who proposed and who accepted', () => {
+      expect(plan({ ...crossTeacher, proposals: [proposalByHer] }, { action: 'accept' })).toEqual({
+        kind: 'accept', proposedById: 'u-2', acceptedById: 'u-1',
+      })
+    })
+
+    it('does not let the proposer accept their own, a non-party accept, or accept when nothing is pending', () => {
+      const withHers = { ...crossTeacher, proposals: [proposalByHer] }
+      const other = { id: 'u-9', name: 'Mr. Otieno', moderatedSubjects: [] as string[] }
+
+      expect(plan(withHers, { action: 'accept' }, her)).toBeNull()
+      expect(plan(withHers, { action: 'accept' }, other)).toBeNull()
+      expect(plan(crossTeacher, { action: 'accept' })).toBeNull()
+    })
+
+    it('refuses a proposal that can no longer be applied, such as a corrected mark over a lowered maximum', () => {
+      const over: Proposal = { ...proposalByHer, choice: { kind: 'corrected', mark: score(18) } }
+
+      expect(plan({ ...crossTeacher, proposals: [over] }, { action: 'accept' }, me, 15)).toBeNull()
+      expect(plan({ ...crossTeacher, proposals: [over] }, { action: 'accept' }, me, 20)).not.toBeNull()
+    })
+  })
+
+  describe('refer', () => {
+    it('lets a party refer, but not their own edits, an already referred conflict, or a moderator', () => {
+      expect(plan(crossTeacher, { action: 'refer' })).toEqual({ kind: 'refer', byId: 'u-1' })
+      expect(plan(ownEdits, { action: 'refer' })).toBeNull()
+      expect(plan({ ...crossTeacher, referral: { reason: 'party', byId: 'u-2', by: 'Ms. Akinyi', at: 'x' } }, { action: 'refer' })).toBeNull()
+      expect(plan(crossTeacher, { action: 'refer' }, hod)).toBeNull()
+    })
+
+    it('after a proposal and a counter, lets only the original proposer refer', () => {
+      const mine: Proposal = { ...proposalByHer, byId: 'u-1', by: 'John Doe', choice: mineSide }
+      const twoRounds = { ...crossTeacher, proposals: [mine, proposalByHer] }
+
+      expect(plan(twoRounds, { action: 'refer' }, me)).not.toBeNull()
+      expect(plan(twoRounds, { action: 'refer' }, her)).toBeNull()
+    })
   })
 })

@@ -7,16 +7,17 @@ import type {
   Referral,
   Resolution,
 } from '../fixtures/conflicts'
+import type { ConflictCommand } from './conflictCommands'
 import type { Mark } from './grading'
 
 /* Settling a conflict under ADR 0002. Pure: the store applies what these return. */
 
-/* moderatedSubjects: the subjects this user moderates, because moderation is granted one subject at a time
-   (docs/spec/access-model.md); a conflict is judged against its own assessment's subject. */
+/* moderatedSubjects: the ids of the subjects this user moderates, because moderation is granted one subject at
+   a time (docs/spec/access-model.md); a conflict is judged against its own assessment's subject id. */
 export type Resolver = { id: string; name: string; moderatedSubjects: readonly string[] }
 
-export function moderates(user: Resolver, subject: string): boolean {
-  return user.moderatedSubjects.includes(subject)
+export function moderates(user: Resolver, subjectId: string): boolean {
+  return user.moderatedSubjects.includes(subjectId)
 }
 
 export function marksEqual(a: Mark, b: Mark): boolean {
@@ -64,9 +65,9 @@ export function isParty(conflict: ActiveConflict, user: Resolver): boolean {
   return conflict.mine.userId === user.id || conflict.theirs.userId === user.id
 }
 
-export function abilityOf(conflict: ActiveConflict, user: Resolver, subject: string): Ability {
+export function abilityOf(conflict: ActiveConflict, user: Resolver, subjectId: string): Ability {
   if (!isParty(conflict, user)) {
-    return moderates(user, subject) && !isSelfConflict(conflict) ? { kind: 'resolve', noteRequired: true } : { kind: 'observer' }
+    return moderates(user, subjectId) && !isSelfConflict(conflict) ? { kind: 'resolve', noteRequired: true } : { kind: 'observer' }
   }
   if (isSelfConflict(conflict)) return { kind: 'resolve', noteRequired: false }
   if (conflict.referral) return { kind: 'referred', referral: conflict.referral }
@@ -110,56 +111,9 @@ export function sideOf(conflict: ActiveConflict | HistoricalConflict, editId: st
   return [conflict.mine, conflict.theirs].find((s) => s.editId === editId)
 }
 
-/* The mark the cell ends up holding, and whose it is. */
-export function chosenMark(
-  conflict: ActiveConflict,
-  choice: Choice,
-  by: string,
-): { mark: Mark; author: string } {
-  if (choice.kind === 'corrected') return { mark: choice.mark, author: by }
-  const side = sideOf(conflict, choice.editId)
-  if (!side) throw new RangeError(`chosenMark: edit ${choice.editId} is not a side of conflict ${conflict.id}`)
-  return { mark: side.mark, author: side.who }
-}
-
-/* The resolution a direct settlement produces: self for own edits, moderated
-   otherwise. */
-export function directResolution(
-  conflict: ActiveConflict,
-  choice: Choice,
-  by: Resolver,
-  note: string,
-): Resolution {
-  return isSelfConflict(conflict)
-    ? { kind: 'self', byId: by.id, by: by.name, choice }
-    : { kind: 'moderated', byId: by.id, by: by.name, choice, note }
-}
-
-/* The resolution an acceptance produces. */
-export function agreedResolution(proposal: Proposal, acceptedBy: Resolver): Resolution {
-  return {
-    kind: 'agreed',
-    proposedById: proposal.byId,
-    proposedBy: proposal.by,
-    acceptedById: acceptedBy.id,
-    acceptedBy: acceptedBy.name,
-    choice: proposal.choice,
-    note: proposal.note,
-  }
-}
-
 /* Which mark a resolution settled on, for the audit record. */
 export function resolutionChoice(resolution: Resolution): Choice | null {
   return resolution.kind === 'auto' ? null : resolution.choice
-}
-
-export function toHistory(
-  conflict: ActiveConflict,
-  resolution: Resolution,
-  at: string,
-): HistoricalConflict {
-  const { baseVersion: _base, ...record } = conflict
-  return { ...record, resolution, resolvedAt: at }
 }
 
 /* The one line shown for a referral, in the active card and in history. */
@@ -167,4 +121,55 @@ export function describeReferral(referral: Referral): string {
   return referral.reason === 'rounds'
     ? 'Referred to a moderator: one proposal each, no agreement.'
     : `Referred to a moderator by ${referral.by}.`
+}
+
+/* What a teacher asks to do to a conflict, before the policy has had its say. */
+export type CommandRequest =
+  | { action: 'propose'; choice: Choice; note: string }
+  | { action: 'refer' }
+  | { action: 'accept' }
+  | { action: 'resolve'; choice: Choice; note: string }
+
+/* The command a request amounts to, or null when this user may not do it. This is the
+   one place the policy (ADR 0002, and the table in docs/spec/sync-protocol.md) decides
+   whether to enqueue anything; the server applies the same table and answers anything
+   that slipped past. `max` is the criterion's current maximum, so a corrected mark, or a
+   proposal being accepted, that no longer fits is refused here and not sent. */
+export function planCommand(
+  conflict: ActiveConflict,
+  request: CommandRequest,
+  user: Resolver,
+  max: number,
+): ConflictCommand | null {
+  const ability = abilityOf(conflict, user, conflict.subjectId)
+
+  switch (request.action) {
+    case 'resolve': {
+      if (ability.kind !== 'resolve') return null
+      const note = request.note.trim()
+      if (ability.noteRequired && !isValidNote(note)) return null
+      if (!isValidChoice(conflict, request.choice, max)) return null
+      return isSelfConflict(conflict)
+        ? { kind: 'resolve', resolution: 'self', byId: user.id, choice: request.choice }
+        : { kind: 'resolve', resolution: 'moderated', byId: user.id, choice: request.choice, note }
+    }
+
+    case 'propose': {
+      const may = ability.kind === 'propose' || (ability.kind === 'respond' && ability.canCounter)
+      const note = request.note.trim()
+      if (!may || !isValidNote(note) || !isValidChoice(conflict, request.choice, max)) return null
+      return { kind: 'propose', byId: user.id, choice: request.choice, note }
+    }
+
+    case 'refer':
+      return canRefer(conflict, user) ? { kind: 'refer', byId: user.id } : null
+
+    case 'accept': {
+      if (ability.kind !== 'respond') return null
+      /* A stored proposal was valid when made; checked again, since the maximum may
+         have changed or the proposal may have arrived by sync. */
+      if (!isValidChoice(conflict, ability.proposal.choice, max)) return null
+      return { kind: 'accept', proposedById: ability.proposal.byId, acceptedById: user.id }
+    }
+  }
 }

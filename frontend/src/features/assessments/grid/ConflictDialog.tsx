@@ -1,13 +1,12 @@
 import { TriangleAlert } from 'lucide-react'
 import { Modal } from '../../../components/Modal'
 import type { ActiveConflict, Choice } from '../../../fixtures/conflicts'
-import type { Subject } from '../../../fixtures/rubrics'
 import { ConflictActions } from '../../sync/ConflictActions'
 import { ConflictSides } from '../../sync/ConflictSides'
+import { WaitingToSync } from '../../sync/WaitingToSync'
 
 type ConflictDialogProps = {
   conflict: ActiveConflict | null
-  subject: Subject
   criterionMax: number
   onResolve: (choice: Choice, note: string) => void
   onPropose: (choice: Choice, note: string) => void
@@ -18,7 +17,7 @@ type ConflictDialogProps = {
 
 /* The grid's view of a contested cell: both sides and the same actions as the Sync
    screen, so the policy in ADR 0002 applies here too. */
-export function ConflictDialog({ conflict, subject, criterionMax, onResolve, onPropose, onAccept, onRefer, onClose }: ConflictDialogProps) {
+export function ConflictDialog({ conflict, criterionMax, onResolve, onPropose, onAccept, onRefer, onClose }: ConflictDialogProps) {
   return (
     <Modal
       open={conflict !== null}
@@ -33,9 +32,9 @@ export function ConflictDialog({ conflict, subject, criterionMax, onResolve, onP
             {conflict.student} · {conflict.criterion}
           </p>
           <ConflictSides mine={conflict.mine} theirs={conflict.theirs} mineEmphasis="contested" theirsEmphasis="contested" />
+          {conflict.local && <div className="px-4 pt-2"><WaitingToSync /></div>}
           <ConflictActions
             conflict={conflict}
-            subject={subject}
             criterionMax={criterionMax}
             onResolve={(choice, note) => {
               onResolve(choice, note)

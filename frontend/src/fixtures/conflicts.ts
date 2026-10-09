@@ -40,6 +40,9 @@ export type Referral =
 type ConflictRecord = {
   id: string
   assessmentId: string
+  /* The subject of the assessment, by id: moderation is granted one subject at a time,
+     and the grants are ids (docs/spec/access-model.md). */
+  subjectId: string
   studentId: string
   criterionId: string
   student: string
@@ -50,11 +53,18 @@ type ConflictRecord = {
   /* Every proposal made, oldest first; the last one is the pending one. */
   proposals: Proposal[]
   referral?: Referral
+  /* True while the view includes a command this device has queued or sent that the
+     server's row does not show yet: the card says it is waiting to sync. */
+  local?: true
 }
 
 export type ActiveConflict = ConflictRecord & {
   /* The record version this device's edit was made against. */
   baseVersion: number
+  /* The version of the conflict itself the teacher is being shown, counting commands
+     already answered but not yet pulled. A command is sent against this, never against
+     baseVersion, which is the mark's. */
+  conflictVersion: number
 }
 
 /* How a conflict was settled. Actors carry their id and their display name. */
@@ -80,7 +90,9 @@ export const activeConflicts: ActiveConflict[] = [
   {
     id: 'c-1',
     assessmentId: 'a1',
+    subjectId: 'english',
     baseVersion: 6,
+    conflictVersion: 1,
     studentId: 's1',
     criterionId: 'c3',
     student: 'Wanjiku Njoroge',
@@ -93,7 +105,9 @@ export const activeConflicts: ActiveConflict[] = [
   {
     id: 'c-2',
     assessmentId: 'a1',
+    subjectId: 'english',
     baseVersion: 6,
+    conflictVersion: 1,
     studentId: 's2',
     criterionId: 'c2',
     student: 'Kofi Mensah',
@@ -114,7 +128,9 @@ export const activeConflicts: ActiveConflict[] = [
   {
     id: 'c-3',
     assessmentId: 'a1',
+    subjectId: 'english',
     baseVersion: 6,
+    conflictVersion: 1,
     studentId: 's6',
     criterionId: 'c1',
     student: 'Amara Kamau',
@@ -132,6 +148,7 @@ export const resolvedConflicts: HistoricalConflict[] = [
   {
     id: 'h-4',
     assessmentId: 'a7',
+    subjectId: 'english',
     studentId: 's2',
     criterionId: 'c2',
     student: 'Kofi Mensah',
@@ -168,6 +185,7 @@ export const resolvedConflicts: HistoricalConflict[] = [
   {
     id: 'h-2',
     assessmentId: 'a7',
+    subjectId: 'english',
     studentId: 's4',
     criterionId: 'c3',
     student: 'Liam Osei',
@@ -198,6 +216,7 @@ export const resolvedConflicts: HistoricalConflict[] = [
   {
     id: 'h-3',
     assessmentId: 'a7',
+    subjectId: 'english',
     studentId: 's5',
     criterionId: 'c4',
     student: 'Fatou Diallo',
@@ -212,6 +231,7 @@ export const resolvedConflicts: HistoricalConflict[] = [
   {
     id: 'h-1',
     assessmentId: 'a7',
+    subjectId: 'english',
     studentId: 's3',
     criterionId: 'c1',
     student: 'Amina Osei',
