@@ -115,16 +115,21 @@ async function freeze(database: LocalDatabase, limit: number): Promise<OutboxEnt
       return assessmentOfMark.get(entry.recordId) ?? (typeof fromFields === 'string' ? fromFields : null)
     }
 
+    /* A held command whose assessment cannot be worked out (its conflict or the mark
+       behind it is not on this device) might belong to any assessment, so every finalize
+       waits behind it: the server refuses a finalize while a mark conflict is open. */
+    const UNKNOWN = '*'
     const held = new Set<string>()
     const selected: OutboxEntry[] = []
     for (const entry of open) {
       const assessmentId = assessmentOf(entry)
       const ready =
         (entry.state === 'sent' || (entry.state === 'queued' && entry.baseVersion !== null)) &&
-        !(entry.kind === 'finalize' && assessmentId !== null && held.has(assessmentId)) &&
+        !(entry.kind === 'finalize' && (held.has(UNKNOWN) || (assessmentId !== null && held.has(assessmentId)))) &&
         selected.length < limit
       if (ready) selected.push(entry)
       else if (assessmentId !== null) held.add(assessmentId)
+      else if (entry.kind === 'command') held.add(UNKNOWN)
     }
 
     await database.outbox.bulkUpdate(
