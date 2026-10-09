@@ -420,6 +420,21 @@ going would hide it. (Proposed.)
   refused as `edit-blocked`. The server refuses a finalize mixed with other fields, so the mistake
   surfaces instead of hiding.
 
+**Decided while building the client (3.4, slice 5a). Proposed, not yet reviewed.**
+- When a mark conflict resolves, whoever resolved it, the device drops the entry it kept
+  for the conflict, the cell takes the settled mark, and an edit that was held behind the
+  conflict is sent against the version the resolution produced. That edit is then judged by
+  rule 2 and accepted: the later edit wins. A device that wanted it to surface as a new
+  conflict would send it against the version the teacher saw before the conflict instead;
+  this is the one-line choice (`baseAfterResolution`), and it is the reviewer's to confirm.
+- A command answered with a stale base is dropped with a notice, and the fresh conflict
+  the server returned is adopted, so the teacher decides again with what is now true.
+  Commands queued behind it were decided on a state that never existed, and are dropped
+  too. A command that is refused fails with its reason, and so does every command queued
+  behind it. A command is never `merged`; one answered so is a protocol error.
+- An acknowledged command is kept until the conflict row it was answered at has been
+  pulled, or the conflict has resolved, because until then it is what the display shows.
+
 ## Conflict commands
 
 A conflict is settled by four commands on `table: "conflicts"`, with `recordId` the conflict's own id and

@@ -6,6 +6,8 @@ import {
   type LocalRecord,
   type SyncTableName,
 } from './localDatabase'
+import { reconcileWithinTransaction } from './reconcileConflicts'
+import { mapOf, withShadow } from './shadow'
 
 const PAGE_LIMIT = 500
 
@@ -26,6 +28,10 @@ export type SyncPullResult = {
   pages: number
   changesApplied: number
   cursor: number
+  /* Mark edits held back by a conflict that this pull found resolved. Releasing one
+     rebases the edit behind it, which creates no new queued entry, so the caller has to
+     be told there is something to push. */
+  released: number
 }
 
 export const syncCursorKey = (userId: string) => `syncCursor:${userId}`
@@ -96,21 +102,6 @@ async function protectedFields(database: LocalDatabase): Promise<Map<string, Set
   return protectedBy
 }
 
-export function mapOf(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? { ...value as Record<string, unknown> } : {}
-}
-
-export function withShadow(record: LocalRecord, shadow: Record<string, unknown>, shadowAt: Record<string, unknown>): LocalRecord {
-  if (Object.keys(shadow).length) {
-    record.serverShadow = shadow
-    record.serverShadowAt = shadowAt
-  } else {
-    delete record.serverShadow
-    delete record.serverShadowAt
-  }
-  return record
-}
-
 /* A protected field keeps the local value, since the outbox is about to send it; the
    server's value waits in the shadow, with the version it came from, for the entry's
    outcome (ADR 0011). A delete is never held back. The version never goes backwards.
@@ -164,8 +155,9 @@ function applyAckedRow(
   return withShadow(record, shadow, shadowAt)
 }
 
-async function applyPage(database: LocalDatabase, page: SyncPage, userId: string): Promise<number> {
+async function applyPage(database: LocalDatabase, page: SyncPage, userId: string): Promise<{ applied: number; released: number }> {
   let applied = 0
+  let released = 0
   const tables = [...SYNC_TABLES.map((name) => database.table(name)), database.metadata, database.outbox]
 
   await database.transaction('rw', tables, async () => {
@@ -187,10 +179,14 @@ async function applyPage(database: LocalDatabase, page: SyncPage, userId: string
       applied++
     }
 
+    /* On the last page only: the server logs a conflict's resolution before the mark it
+       writes, and a page can split the two, so only a finished pull has both. */
+    if (!page.more) released = (await reconcileWithinTransaction(database)).released
+
     await database.metadata.put({ key: syncCursorKey(userId), value: page.cursor })
   })
 
-  return applied
+  return { applied, released }
 }
 
 async function performPull(
@@ -207,6 +203,7 @@ async function performPull(
 
   let pages = 0
   let changesApplied = 0
+  let released = 0
   let more = true
 
   while (more) {
@@ -227,13 +224,15 @@ async function performPull(
       throw new Error('GET /sync did not advance its continuation cursor')
     }
 
-    changesApplied += await applyPage(store, response, userId)
+    const page = await applyPage(store, response, userId)
+    changesApplied += page.applied
+    released += page.released
     pages++
     cursor = response.cursor
     more = response.more
   }
 
-  return { pages, changesApplied, cursor: cursor as number }
+  return { pages, changesApplied, cursor: cursor as number, released }
 }
 
 export function pullSync(

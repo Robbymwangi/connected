@@ -127,6 +127,47 @@ describe('readSyncRows', () => {
     })
   })
 
+  describe('a mark conflict that a resolution is already on its way for', () => {
+    const conflictEntry = (conflictId: string, recordId: string): OutboxEntry => ({
+      ...entry('conflict', recordId), conflictId,
+    })
+    const command = (state: OutboxEntry['state'], fields: Record<string, unknown>, conflictId = 'c1'): OutboxEntry => ({
+      id: crypto.randomUUID(), table: 'conflicts', recordId: conflictId, kind: 'command', baseVersion: 1, fields, at: 'x', state,
+    })
+    const resolution = { resolution: { kind: 'self', byId: 'u1' } }
+
+    it.each([['queued'], ['sent'], ['acked']] as const)('no longer asks for review once a %s resolution exists', async (state) => {
+      const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
+      stores.push(database)
+      await database.outbox.bulkAdd([conflictEntry('c1', 'a'), conflictEntry('c2', 'b'), command(state, resolution)])
+
+      const rows = await readSyncRows(database)
+
+      expect(rows.conflict).toBe(1)
+    })
+
+    it('still asks for review when the command is only a proposal or a referral, or was refused', async () => {
+      const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
+      stores.push(database)
+      await database.outbox.bulkAdd([
+        conflictEntry('c1', 'a'),
+        command('queued', { proposal: { byId: 'u1' } }),
+        command('sent', { referral: { byId: 'u1' } }),
+        command('failed', resolution),
+      ])
+
+      expect((await readSyncRows(database)).conflict).toBe(1)
+    })
+
+    it('counts a queued or sent command as pending, and a refused one as needing review', async () => {
+      const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
+      stores.push(database)
+      await database.outbox.bulkAdd([command('queued', resolution), command('sent', resolution), command('acked', resolution), command('failed', resolution)])
+
+      expect(await readSyncRows(database)).toMatchObject({ queued: 1, sent: 1, failed: 1, conflict: 0 })
+    })
+  })
+
   it('reads an empty database as nothing waiting and never synced', async () => {
     const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
     stores.push(database)

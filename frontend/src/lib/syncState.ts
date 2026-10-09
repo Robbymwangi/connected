@@ -23,7 +23,17 @@ export type SyncRows = {
 export function readSyncRows(database: LocalDatabase): Promise<SyncRows> {
   return database.transaction('r', [database.outbox, database.metadata], async () => {
     const count = (state: string) => database.outbox.where('state').equals(state).count()
-    const [queued, sent, conflict, failed] = await Promise.all([count('queued'), count('sent'), count('conflict'), count('failed')])
+    const [queued, sent, failed] = await Promise.all([count('queued'), count('sent'), count('failed')])
+
+    /* A mark edit retained for a conflict needs a person, until a resolution for that
+       conflict is on its way: then it needs only to arrive. */
+    const retained = await database.outbox.where('state').equals('conflict').toArray()
+    const resolving = new Set(
+      (await database.outbox.where('state').anyOf(['queued', 'sent', 'acked'])
+        .filter((entry) => entry.kind === 'command' && entry.fields.resolution !== undefined).toArray())
+        .map((entry) => entry.recordId),
+    )
+    const conflict = retained.filter((entry) => !(entry.conflictId && resolving.has(entry.conflictId))).length
     const notices = (await database.metadata.get(syncNoticesKey))?.value
     const lastSuccessAt = (await database.metadata.get(syncLastSuccessKey))?.value
     return {

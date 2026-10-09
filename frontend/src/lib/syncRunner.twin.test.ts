@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { assertDisplayFlags } from './displayFlags.testing'
 import { LocalDatabase } from './localDatabase'
 import { createAssessments, finalizeAssessmentRecord, writeMarkCells } from './localWrites'
+import { enqueue } from './outbox'
 import { score } from './grading'
 import { createSyncRunner, syncLastSuccessKey, type RunnerStatus } from './syncRunner'
 import { pullSync } from './syncPull'
@@ -74,7 +75,7 @@ async function editedOffline(marks: number) {
   return database
 }
 
-function runnerFor(database: LocalDatabase, server: ReturnType<typeof standInServer>) {
+function runnerFor(database: LocalDatabase, server: { fetchImpl: typeof fetch }) {
   let status: RunnerStatus = { phase: 'idle', failure: null, message: null, nextAttemptAt: null }
   const runner = createSyncRunner({
     token: 'tok',
@@ -151,6 +152,86 @@ describe('reconciling offline edits with no one clicking', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
 
     expect(server.bodies).toHaveLength(posts)
+    runner.dispose()
+  })
+})
+
+/* A server that versions the conflict and mark rows it is told about and serves each
+   change back from its log, so a pull can catch up with what a push did. */
+function conflictServer(seed: Record<string, number>, served: Array<{ table: string; recordId: string; version: number; fields: Record<string, unknown> }> = []) {
+  const versions = new Map(Object.entries(seed))
+  const bodies: string[] = []
+  const log = [...served]
+  const fetchImpl = vi.fn(async (_path: unknown, init?: RequestInit) => {
+    if (init?.method !== 'POST') return json({ changes: log, cursor: 9, more: false })
+    const raw = String(init.body)
+    bodies.push(raw)
+    const entries = (JSON.parse(raw) as { entries: Wire[] }).entries
+    return json({
+      results: entries.map((entry) => {
+        const version = (versions.get(entry.recordId) ?? 0) + 1
+        versions.set(entry.recordId, version)
+        if (entry.table === 'conflicts') log.push({ table: 'conflicts', recordId: entry.recordId, version, fields: {} })
+        return { id: entry.id, status: 'accepted', version }
+      }),
+    })
+  })
+  return { fetchImpl: fetchImpl as unknown as typeof fetch, bodies, entriesOf: () => bodies.map((raw) => (JSON.parse(raw) as { entries: Wire[] }).entries) }
+}
+
+describe('conflict commands, end to end', () => {
+  it('sends a proposal and then a referral queued behind it, the second against the version the first was answered at, and tidies up when the pull catches up', async () => {
+    const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
+    stores.push(database)
+    await database.conflicts.put({ id: 'c1', version: 1, markId: 'm1', proposals: [], referral: null, resolution: null, resolvedAt: null })
+    await enqueue(database, {
+      table: 'conflicts', recordId: 'c1', kind: 'command', baseVersion: 1, at: AT,
+      fields: { proposal: { byId: 'u1', choice: { kind: 'side', editId: 'e1' }, note: 'mine is right' } },
+    })
+    await enqueue(database, { table: 'conflicts', recordId: 'c1', kind: 'command', baseVersion: 1, at: AT, fields: { referral: { byId: 'u1' } } })
+    const server = conflictServer({ c1: 1 })
+    const { runner } = runnerFor(database, server)
+
+    runner.trigger('session')
+    await until(drained(database))
+
+    const rounds = server.entriesOf()
+    expect(rounds.map((entries) => entries.map((entry) => [Object.keys(entry.fields)[0], entry.baseVersion]))).toEqual([
+      [['proposal', 1]],
+      [['referral', 2]],
+    ])
+    expect(await database.outbox.count()).toBe(0)
+    expect(await database.conflicts.get('c1')).toMatchObject({ version: 3 })
+    runner.dispose()
+  })
+
+  it('releases an edit held behind a mark conflict once the conflict resolves, and sends it against the version the resolution produced', async () => {
+    const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
+    stores.push(database)
+    await database.conflicts.put({ id: 'c1', version: 1, markId: 'm1', resolution: null, resolvedAt: null })
+    await database.marks.put({
+      id: 'm1', version: 5, assessmentId: 'a1', markKind: 'score', score: 10, sync: 'pending', localAuthor: 'Me',
+      serverShadow: { markKind: 'score', score: 12 }, serverShadowAt: { markKind: 5, score: 5 },
+    })
+    await database.outbox.bulkAdd([
+      { id: crypto.randomUUID(), table: 'marks', recordId: 'm1', kind: 'patch', baseVersion: 3, fields: { markKind: 'score', score: 9 }, at: AT, state: 'conflict', conflictId: 'c1' },
+      { id: crypto.randomUUID(), table: 'marks', recordId: 'm1', kind: 'patch', baseVersion: null, fields: { markKind: 'score', score: 10 }, at: AT, state: 'queued' },
+    ])
+    const server = conflictServer({ m1: 5 }, [
+      { table: 'conflicts', recordId: 'c1', version: 2, fields: { resolution: { kind: 'self', byId: 'u1' }, resolvedAt: '2026-10-09T09:00:00Z' } },
+    ])
+    const { runner } = runnerFor(database, server)
+
+    runner.trigger('session')
+    await until(drained(database))
+
+    const rounds = server.entriesOf()
+    expect(rounds).toHaveLength(1)
+    expect(rounds[0]).toHaveLength(1)
+    expect(rounds[0][0]).toMatchObject({ table: 'marks', recordId: 'm1', baseVersion: 5, fields: { score: 10 } })
+    expect(await database.marks.get('m1')).toMatchObject({ version: 6, score: 10 })
+    expect(await database.marks.get('m1')).not.toHaveProperty('sync')
+    await assertDisplayFlags(database)
     runner.dispose()
   })
 })

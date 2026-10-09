@@ -563,22 +563,214 @@ describe('the response', () => {
 })
 
 describe('a conflict command', () => {
-  it('is not sent in this slice, whether sent before or queued without a base', async () => {
+  const referral = { referral: { byId: 'u1' } }
+  const proposal = { proposal: { byId: 'u1', choice: { kind: 'side', editId: 'e1' }, note: 'mine is right' } }
+  const command = (over: Partial<OutboxEntry> = {}) => entry({
+    table: 'conflicts', recordId: 'c1', kind: 'command', baseVersion: 1, fields: referral, ...over,
+  })
+  const conflictRow = (over: Partial<LocalRecord> = {}): LocalRecord => ({
+    id: 'c1', version: 1, markId: 'm1', proposals: [], referral: null, resolution: null, resolvedAt: null, ...over,
+  })
+  const staleCurrent = (version = 3, fields: Record<string, unknown> = { proposals: [{ byId: 'u2' }] }) => (
+    { table: 'conflicts', recordId: 'c1', version, fields }
+  )
+
+  it('is sent in order with the other entries, in the wire shape, and a queued one with no base waits', async () => {
     const database = createDatabase()
-    await database.conflicts.put({ id: 'c1', version: 2, markId: 'm1' })
-    const command = entry({
-      table: 'conflicts', recordId: 'c1', kind: 'command', baseVersion: 2, state: 'sent',
-      fields: { referral: { byId: 'u1' } },
+    await database.conflicts.put(conflictRow())
+    await database.marks.put(mark())
+    const sent = command({ fields: proposal })
+    await database.outbox.bulkAdd([markEdit(), sent, command({ baseVersion: null, fields: referral })])
+    const fetchMock = server((entries) => entries.map((item) => accepted(item.id, 7)))
+
+    const result = await pushSync('token', 'u1', asFetch(fetchMock), database)
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { entries: Wire[] }
+    expect(body.entries.map((item) => [item.table, item.recordId])).toEqual([['marks', 'm1'], ['conflicts', 'c1']])
+    expect(body.entries[1]).toEqual({ id: sent.id, table: 'conflicts', recordId: 'c1', baseVersion: 1, fields: proposal, at: AT })
+    expect(result).toMatchObject({ sent: 2, held: 1 })
+  })
+
+  it.each([['accepted'], ['replayed']])('settles as %s: the command is kept as acknowledged, the conflict is untouched, and the next waits no longer', async (kind) => {
+    const database = createDatabase()
+    await database.conflicts.put(conflictRow())
+    const first = command({ fields: proposal })
+    await database.outbox.bulkAdd([first, command({ baseVersion: null, fields: referral })])
+
+    await pushSync('token', 'u1', asFetch(server((e) => e.map((item) => accepted(item.id, 2, kind === 'replayed' ? { replayed: true } : {})))), database)
+
+    const [done, next] = await database.outbox.orderBy('seq').toArray()
+    expect(done).toMatchObject({ id: first.id, state: 'acked', ackVersion: 2 })
+    expect(next).toMatchObject({ state: 'queued', baseVersion: 2, fields: referral })
+    expect(await database.conflicts.get('c1')).toEqual(conflictRow())
+    await assertDisplayFlags(database)
+  })
+
+  it('treats merged as a protocol error, since a command is never merged', async () => {
+    const database = createDatabase()
+    await database.conflicts.put(conflictRow())
+    await database.outbox.add(command())
+
+    await expect(pushSync('token', 'u1', asFetch(server((e) => e.map((item) => ({ id: item.id, status: 'merged', version: 2 })))), database))
+      .rejects.toBeInstanceOf(SyncPushProtocolError)
+
+    expect((await database.outbox.toArray())[0].state).toBe('sent')
+  })
+
+  describe('answered with a stale base', () => {
+    const stale = (current: unknown, extra: object = {}) => server((e) => e.map((item) => ({ id: item.id, status: 'conflict', current, ...extra })))
+
+    it('is dropped with a notice, the fresh conflict is adopted, and the commands queued behind it are dropped too', async () => {
+      const database = createDatabase()
+      await database.conflicts.put(conflictRow())
+      const first = command({ fields: proposal })
+      const behind = command({ baseVersion: null, fields: referral })
+      await database.outbox.bulkAdd([first, behind])
+
+      const result = await pushSync('token', 'u1', asFetch(stale(staleCurrent())), database)
+
+      expect(result.settled.conflict).toBe(1)
+      expect(await database.outbox.count()).toBe(0)
+      expect(await database.conflicts.get('c1')).toMatchObject({ version: 3, proposals: [{ byId: 'u2' }] })
+      const notices = (await database.metadata.get(syncNoticesKey))?.value as Array<Record<string, unknown>>
+      expect(notices.map((notice) => [notice.id, notice.table, notice.recordId])).toEqual([
+        [first.id, 'conflicts', 'c1'], [behind.id, 'conflicts', 'c1'],
+      ])
+      expect(notices[0]).toMatchObject({ sent: proposal, current: { proposals: [{ byId: 'u2' }] } })
+      await assertDisplayFlags(database)
     })
-    const queued = entry({
-      table: 'conflicts', recordId: 'c1', kind: 'command', baseVersion: null,
-      fields: { proposal: { byId: 'u1', choice: { kind: 'side', editId: 'e1' }, note: 'x' } },
+
+    it('does not roll the conflict back when a pull has already brought a newer version', async () => {
+      const database = createDatabase()
+      await database.conflicts.put(conflictRow({ version: 5, proposals: [{ byId: 'u3' }] }))
+      await database.outbox.add(command({ state: 'sent' }))
+
+      await pushSync('token', 'u1', asFetch(stale(staleCurrent(3))), database)
+
+      expect(await database.conflicts.get('c1')).toMatchObject({ version: 5, proposals: [{ byId: 'u3' }] })
+      expect(await database.outbox.count()).toBe(0)
     })
-    await database.outbox.bulkAdd([command, queued])
+
+    it('adopts nothing from a replayed answer whose row is gone, but still drops the command with a notice', async () => {
+      const database = createDatabase()
+      await database.conflicts.put(conflictRow())
+      await database.outbox.add(command({ state: 'sent' }))
+
+      await pushSync('token', 'u1', asFetch(stale(null, { replayed: true })), database)
+
+      expect(await database.conflicts.get('c1')).toEqual(conflictRow())
+      expect(await database.outbox.count()).toBe(0)
+      expect(((await database.metadata.get(syncNoticesKey))?.value as unknown[])).toHaveLength(1)
+    })
+  })
+
+  it.each([
+    ['invalid', 'a note is required', { reason: 'a note is required' }],
+    ['forbidden', 'forbidden', {}],
+  ])('fails on %s with its reason, and fails the commands queued behind it', async (status, reason, extra) => {
+    const database = createDatabase()
+    await database.conflicts.put(conflictRow())
+    await database.outbox.bulkAdd([command({ fields: proposal }), command({ baseVersion: null, fields: referral })])
+
+    await pushSync('token', 'u1', asFetch(server((e) => e.map((item) => ({ id: item.id, status, ...extra })))), database)
+
+    const [first, behind] = await database.outbox.orderBy('seq').toArray()
+    expect(first).toMatchObject({ state: 'failed', reason })
+    expect(behind).toMatchObject({ state: 'failed', reason: 'an earlier action on this conflict was refused' })
+    expect(await database.conflicts.get('c1')).toEqual(conflictRow())
+    await assertDisplayFlags(database)
+  })
+
+  it('holds a finalize while a command on a mark of its assessment is held back', async () => {
+    const database = createDatabase()
+    await database.assessments.put({ id: 'a1', version: 3, status: 'finalized', sync: 'pending' })
+    await database.marks.put(mark({ id: 'm1', sync: undefined, localAuthor: undefined, serverShadow: undefined, serverShadowAt: undefined }))
+    await database.conflicts.put(conflictRow())
+    await database.outbox.bulkAdd([
+      command({ baseVersion: null }),
+      entry({
+        table: 'assessments', recordId: 'a1', kind: 'finalize', baseVersion: 3,
+        fields: { status: 'finalized', finalizedBy: 'u1', finalizedAt: AT },
+      }),
+    ])
     const fetchMock = vi.fn()
 
     expect((await pushSync('token', 'u1', asFetch(fetchMock), database)).sent).toBe(0)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('holds every finalize behind a held command whose assessment cannot be worked out, since it might be theirs', async () => {
+    const database = createDatabase()
+    await database.assessments.put({ id: 'a1', version: 3, status: 'finalized', sync: 'pending' })
+    await database.outbox.bulkAdd([
+      command({ recordId: 'c-not-on-this-device', baseVersion: null }),
+      entry({
+        table: 'assessments', recordId: 'a1', kind: 'finalize', baseVersion: 3,
+        fields: { status: 'finalized', finalizedBy: 'u1', finalizedAt: AT },
+      }),
+    ])
+    const fetchMock = vi.fn()
+
+    expect((await pushSync('token', 'u1', asFetch(fetchMock), database)).sent).toBe(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('does the same when the conflict is here but its mark is not', async () => {
+    const database = createDatabase()
+    await database.assessments.put({ id: 'a1', version: 3, status: 'finalized', sync: 'pending' })
+    await database.conflicts.put(conflictRow({ markId: 'mark-not-here' }))
+    await database.outbox.bulkAdd([
+      command({ baseVersion: null }),
+      entry({
+        table: 'assessments', recordId: 'a1', kind: 'finalize', baseVersion: 3,
+        fields: { status: 'finalized', finalizedBy: 'u1', finalizedAt: AT },
+      }),
+    ])
+
+    expect((await pushSync('token', 'u1', asFetch(vi.fn()), database)).sent).toBe(0)
+  })
+
+  it('does not hold a finalize behind a held command that is known to belong to another assessment', async () => {
+    const database = createDatabase()
+    await database.assessments.bulkPut([
+      { id: 'a1', version: 3, status: 'finalized', sync: 'pending' },
+      { id: 'a2', version: 3, status: 'scheduled' },
+    ])
+    await database.marks.put(mark({ id: 'm2', assessmentId: 'a2', sync: undefined, localAuthor: undefined, serverShadow: undefined, serverShadowAt: undefined }))
+    await database.conflicts.put(conflictRow({ markId: 'm2' }))
+    await database.outbox.bulkAdd([
+      command({ baseVersion: null }),
+      entry({
+        table: 'assessments', recordId: 'a1', kind: 'finalize', baseVersion: 3,
+        fields: { status: 'finalized', finalizedBy: 'u1', finalizedAt: AT },
+      }),
+    ])
+    const fetchMock = server((e) => e.map((item) => accepted(item.id, 4)))
+
+    await pushSync('token', 'u1', asFetch(fetchMock), database)
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { entries: Wire[] }
+    expect(body.entries.map((item) => item.recordId)).toEqual(['a1'])
+  })
+
+  it('goes out ahead of a finalize on its assessment in the same batch when it is sendable', async () => {
+    const database = createDatabase()
+    await database.assessments.put({ id: 'a1', version: 3, status: 'finalized', sync: 'pending' })
+    await database.marks.put(mark({ id: 'm1', sync: undefined, localAuthor: undefined, serverShadow: undefined, serverShadowAt: undefined }))
+    await database.conflicts.put(conflictRow())
+    await database.outbox.bulkAdd([
+      command(),
+      entry({
+        table: 'assessments', recordId: 'a1', kind: 'finalize', baseVersion: 3,
+        fields: { status: 'finalized', finalizedBy: 'u1', finalizedAt: AT },
+      }),
+    ])
+    const fetchMock = server((e) => e.map((item) => accepted(item.id, 4)))
+
+    await pushSync('token', 'u1', asFetch(fetchMock), database)
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { entries: Wire[] }
+    expect(body.entries.map((item) => item.table)).toEqual(['conflicts', 'assessments'])
   })
 })
 

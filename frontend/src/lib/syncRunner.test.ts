@@ -121,6 +121,19 @@ describe('runSyncPass', () => {
     expect(d.pull).toHaveBeenCalledTimes(1)
   })
 
+  it('asks for another push when the pull released edits that were held behind a conflict', async () => {
+    const d = { ...deps([pushed(0)]), pull: vi.fn(async () => ({ released: 2 })) }
+
+    const result = await runSyncPass(d, reasons('session'))
+
+    expect(result).toEqual({ morePush: true })
+  })
+
+  it('does not, when the pull released nothing or says nothing', async () => {
+    expect((await runSyncPass({ ...deps([pushed(0)]), pull: vi.fn(async () => ({ released: 0 })) }, reasons('session'))).morePush).toBe(false)
+    expect((await runSyncPass(deps([pushed(0)]), reasons('session'))).morePush).toBe(false)
+  })
+
   it('lets a push failure through without pulling', async () => {
     const d = { ...deps([]), push: vi.fn().mockRejectedValue(new TypeError('offline')) }
 
@@ -231,6 +244,19 @@ describe('createSyncRunner', () => {
 
     expect(h.push).toHaveBeenCalledTimes(2)
     expect(h.pull).toHaveBeenCalledTimes(2)
+  })
+
+  it('pushes again at once when a pull released held edits, without pulling a second time', async () => {
+    let released = 1
+    const h = harness({ pull: async () => ({ released: released-- > 0 ? 1 : 0 }) })
+
+    h.runner.trigger('session')
+    await flush()
+    await flush()
+
+    expect(h.push).toHaveBeenCalledTimes(2)
+    expect(h.pull).toHaveBeenCalledTimes(1)
+    expect(h.status().phase).toBe('idle')
   })
 
   it('caps the reruns of one wake and schedules the rest instead of looping', async () => {

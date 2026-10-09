@@ -74,7 +74,10 @@ export async function runSyncPass(deps: PassDeps, reasons: ReadonlySet<RunReason
      conflict record arrives by pull. */
   if ([...reasons].some((reason) => reason !== 'enqueue') || settledAny) {
     deps.onPhase?.('pulling')
-    await deps.pull()
+    const pulled = await deps.pull()
+    /* A pull that released edits held behind a resolved conflict has rebased them, which
+       queues nothing new for the enqueue watcher to see; so say there is more to send. */
+    if (typeof pulled === 'object' && pulled !== null && (pulled as { released?: unknown }).released) morePush = true
   }
   return { morePush }
 }
