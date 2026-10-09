@@ -69,6 +69,7 @@ describe('finalizeAssessmentRecord', () => {
     expect(await database.assessments.get('a1')).toMatchObject({
       status: 'finalized', finalizedBy: 'u1', finalizedAt: AT, sync: 'pending',
       serverShadow: { status: 'scheduled', finalizedBy: null, finalizedAt: null },
+      serverShadowAt: { status: 4, finalizedBy: 4, finalizedAt: 4 },
     })
     const [entry] = await entries('assessments', 'a1')
     expect(entry).toMatchObject({
@@ -141,6 +142,7 @@ describe('writeMarkCells', () => {
 
     expect(await database.marks.get('m1')).toMatchObject({
       version: 6, score: 14, sync: 'pending', serverShadow: { markKind: 'score', score: 12 },
+      serverShadowAt: { markKind: 6, score: 6 },
     })
     const [entry] = await entries('marks', 'm1')
     expect(entry).toMatchObject({ baseVersion: 6, fields: { markKind: 'score', score: 14 } })
@@ -157,6 +159,7 @@ describe('writeMarkCells', () => {
     expect(list).toHaveLength(1)
     expect(list[0]).toMatchObject({ baseVersion: 6, fields: { markKind: 'score', score: 15 }, at: LATER })
     expect((await database.marks.get('m1'))?.serverShadow).toEqual({ markKind: 'score', score: 12 })
+    expect((await database.marks.get('m1'))?.serverShadowAt).toEqual({ markKind: 6, score: 6 })
   })
 
   it('caps the base at the stored version, so a pull between render and write cannot rebase the edit', async () => {

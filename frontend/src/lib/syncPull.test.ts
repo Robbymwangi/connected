@@ -200,6 +200,69 @@ describe('pullSync', () => {
       expect(await store.row('marks', 'm1')).toMatchObject({ version: 3, deletedAt: '2026-10-09T09:00:00Z' })
     })
 
+    it('records the version each shadowed server value came from, and drops it with the key', async () => {
+      const store = createDatabase()
+      await store.seed('marks', { ...markRow, serverShadow: { score: 8 }, serverShadowAt: { score: 2 } })
+      await store.database.outbox.add(entry({ table: 'marks', recordId: 'm1', baseVersion: 2, fields: { score: 9 } }))
+
+      await pull(store, [mark({ score: 6, lastEditedBy: 'teacher-2' }, 3)], 23)
+      expect(await store.row('marks', 'm1')).toMatchObject({ serverShadow: { score: 6 }, serverShadowAt: { score: 3 } })
+
+      await pull(store, [mark({ score: 5 }, 4)], 24)
+      expect(await store.row('marks', 'm1')).toMatchObject({ serverShadow: { score: 5 }, serverShadowAt: { score: 4 } })
+
+      await store.database.outbox.clear()
+      await pull(store, [mark({ score: 4 }, 5)], 25)
+      const record = await store.row('marks', 'm1')
+      expect(record).toMatchObject({ version: 5, score: 4 })
+      expect(record).not.toHaveProperty('serverShadow')
+      expect(record).not.toHaveProperty('serverShadowAt')
+    })
+
+    describe('the version an acknowledgement raised the record to', () => {
+      const acked = { ...markRow, version: 5, ackedVersion: 5, serverShadow: { score: 9 }, serverShadowAt: { score: 5 } }
+      const queued = () => entry({ table: 'marks', recordId: 'm1', baseVersion: 5, fields: { score: 10 } })
+
+      it('applies the change at that version once, for unprotected fields only, then clears the marker', async () => {
+        const store = createDatabase()
+        await store.seed('marks', acked)
+        await store.database.outbox.add(queued())
+
+        const first = await pull(store, [mark({ score: 9, lastEditedBy: 'u1' }, 5)])
+        const second = await pull(store, [mark({ score: 9, lastEditedBy: 'u-other' }, 5)], 24)
+
+        expect(first.changesApplied).toBe(1)
+        expect(second.changesApplied).toBe(0)
+        const record = await store.row('marks', 'm1')
+        expect(record).toMatchObject({ version: 5, score: 9, lastEditedBy: 'u1', serverShadow: { score: 9 }, serverShadowAt: { score: 5 } })
+        expect(record).not.toHaveProperty('ackedVersion')
+      })
+
+      it('ignores a change at another version than the marked one, and drops the marker on a newer one', async () => {
+        const store = createDatabase()
+        await store.seed('marks', acked)
+        await store.database.outbox.add(queued())
+
+        const older = await pull(store, [mark({ lastEditedBy: 'x' }, 4)])
+        expect(older.changesApplied).toBe(0)
+        expect(await store.row('marks', 'm1')).toMatchObject({ ackedVersion: 5 })
+
+        await pull(store, [mark({ lastEditedBy: 'y' }, 6)], 24)
+        const record = await store.row('marks', 'm1')
+        expect(record).toMatchObject({ version: 6, lastEditedBy: 'y' })
+        expect(record).not.toHaveProperty('ackedVersion')
+      })
+
+      it('does nothing at an equal version for a record that carries no marker', async () => {
+        const store = createDatabase()
+        await store.seed('marks', { ...acked, ackedVersion: undefined })
+
+        const result = await pull(store, [mark({ lastEditedBy: 'x' }, 5)])
+
+        expect(result.changesApplied).toBe(0)
+      })
+    })
+
     it('does not move a record it skips as stale', async () => {
       const store = createDatabase()
       await store.seed('marks', { ...markRow, version: 4, serverShadow: { score: 8 } })

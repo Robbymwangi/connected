@@ -39,6 +39,29 @@ function isFields(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/* One change as the server states it, whether in a pull page or as the `current` row
+   of a push result; both are the same shape. */
+export function parseSyncChange(change: unknown): SyncChange {
+  if (typeof change !== 'object' || change === null) throw new Error('Invalid GET /sync change')
+  const row = change as Record<string, unknown>
+  if (
+    !isSyncTable(row.table) ||
+    typeof row.recordId !== 'string' ||
+    !Number.isSafeInteger(row.version) ||
+    (row.version as number) < 1 ||
+    !isFields(row.fields)
+  ) {
+    throw new Error('Invalid GET /sync change')
+  }
+
+  return {
+    table: row.table,
+    recordId: row.recordId,
+    version: row.version as number,
+    fields: row.fields,
+  }
+}
+
 function parsePage(value: unknown): SyncPage {
   if (typeof value !== 'object' || value === null) throw new Error('Invalid GET /sync response')
 
@@ -52,26 +75,7 @@ function parsePage(value: unknown): SyncPage {
     throw new Error('Invalid GET /sync response')
   }
 
-  const changes = page.changes.map((change): SyncChange => {
-    if (typeof change !== 'object' || change === null) throw new Error('Invalid GET /sync change')
-    const row = change as Record<string, unknown>
-    if (
-      !isSyncTable(row.table) ||
-      typeof row.recordId !== 'string' ||
-      !Number.isSafeInteger(row.version) ||
-      (row.version as number) < 1 ||
-      !isFields(row.fields)
-    ) {
-      throw new Error('Invalid GET /sync change')
-    }
-
-    return {
-      table: row.table,
-      recordId: row.recordId,
-      version: row.version as number,
-      fields: row.fields,
-    }
-  })
+  const changes = page.changes.map(parseSyncChange)
 
   return { changes, cursor: page.cursor as number | string, more: page.more }
 }
@@ -92,9 +96,72 @@ async function protectedFields(database: LocalDatabase): Promise<Map<string, Set
   return protectedBy
 }
 
-function shadowOf(record: LocalRecord | undefined): Record<string, unknown> {
-  const shadow = record?.serverShadow
-  return typeof shadow === 'object' && shadow !== null && !Array.isArray(shadow) ? { ...shadow as Record<string, unknown> } : {}
+function mapOf(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? { ...value as Record<string, unknown> } : {}
+}
+
+function withShadow(record: LocalRecord, shadow: Record<string, unknown>, shadowAt: Record<string, unknown>): LocalRecord {
+  if (Object.keys(shadow).length) {
+    record.serverShadow = shadow
+    record.serverShadowAt = shadowAt
+  } else {
+    delete record.serverShadow
+    delete record.serverShadowAt
+  }
+  return record
+}
+
+/* A protected field keeps the local value, since the outbox is about to send it; the
+   server's value waits in the shadow, with the version it came from, for the entry's
+   outcome (ADR 0011). A delete is never held back. The version never goes backwards.
+   Shared by the pull and, with the row a conflict carries, the push. */
+export function applyServerRow(
+  current: LocalRecord | undefined,
+  row: { recordId: string; version: number; fields: Record<string, unknown> },
+  protectedHere?: ReadonlySet<string>,
+): LocalRecord {
+  const record: LocalRecord = { ...(current ?? {}), id: row.recordId, version: Math.max(current?.version ?? 0, row.version) }
+  const shadow = mapOf(current?.serverShadow)
+  const shadowAt = mapOf(current?.serverShadowAt)
+
+  for (const [field, value] of Object.entries(row.fields)) {
+    if (protectedHere?.has(field) && field !== 'deletedAt') {
+      shadow[field] = value
+      shadowAt[field] = row.version
+    } else {
+      record[field] = value
+      delete shadow[field]
+      delete shadowAt[field]
+    }
+  }
+  if (Number.isSafeInteger(record.ackedVersion) && record.version > (record.ackedVersion as number)) delete record.ackedVersion
+
+  return withShadow(record, shadow, shadowAt)
+}
+
+/* A settled push raises the record to the version the server answered, so the next
+   edit bases on it. The log row at that version then arrives as an equal-version
+   change, and carries what only the server writes (lastEditedBy, a finalize's own
+   timestamp). It is applied once, to the fields no open entry protects, and the
+   marker is cleared. */
+function applyAckedRow(
+  current: LocalRecord,
+  row: { fields: Record<string, unknown> },
+  protectedHere?: ReadonlySet<string>,
+): LocalRecord {
+  const record: LocalRecord = { ...current }
+  const shadow = mapOf(current.serverShadow)
+  const shadowAt = mapOf(current.serverShadowAt)
+
+  for (const [field, value] of Object.entries(row.fields)) {
+    if (protectedHere?.has(field) && field !== 'deletedAt') continue
+    record[field] = value
+    delete shadow[field]
+    delete shadowAt[field]
+  }
+  delete record.ackedVersion
+
+  return withShadow(record, shadow, shadowAt)
 }
 
 async function applyPage(database: LocalDatabase, page: SyncPage, userId: string): Promise<number> {
@@ -107,26 +174,16 @@ async function applyPage(database: LocalDatabase, page: SyncPage, userId: string
     for (const change of page.changes) {
       const table = database.table(change.table)
       const current = await table.get(change.recordId)
-      if (current && current.version >= change.version) continue
-
-      /* A protected field keeps the local value, since the outbox is about to send
-         it; the server's value waits in the shadow for the entry's outcome (ADR 0011).
-         A delete is never held back. The version always advances. */
       const protectedHere = protectedBy.get(`${change.table}:${change.recordId}`)
-      const record: LocalRecord = { ...(current ?? {}), id: change.recordId, version: change.version }
-      const shadow = shadowOf(current)
-      for (const [field, value] of Object.entries(change.fields)) {
-        if (protectedHere?.has(field) && field !== 'deletedAt') {
-          shadow[field] = value
-        } else {
-          record[field] = value
-          delete shadow[field]
-        }
-      }
-      if (Object.keys(shadow).length) record.serverShadow = shadow
-      else delete record.serverShadow
 
-      await table.put(record)
+      if (current && current.version >= change.version) {
+        if (current.version !== change.version || current.ackedVersion !== change.version) continue
+        await table.put(applyAckedRow(current, change, protectedHere))
+        applied++
+        continue
+      }
+
+      await table.put(applyServerRow(current, change, protectedHere))
       applied++
     }
 

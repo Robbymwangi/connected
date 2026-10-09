@@ -571,6 +571,15 @@ push result rather than being overwritten by someone else's pull, so a
 local edit in flight is never silently clobbered by a pull that lands while
 it's still unacknowledged.
 
+One change that is not greater than the local version is applied anyway. A settled
+push raises the local record to the version the server answered, so that the next
+edit is based on it; the log row at exactly that version then arrives, and carries
+what only the server writes (a mark's `lastEditedBy`, a finalize's own
+`finalizedAt`). The device remembers the version it raised the record to, applies
+the change at exactly that version once, to the fields no open entry still holds,
+and forgets the version. A change at any other version that is not greater is
+skipped as before. (Proposed, with 3.4 slice 3; not yet reviewed.)
+
 ## Conflict taxonomy
 
 Auto-resolvable: both sides of a rejected write hold the same mark. Resolved
