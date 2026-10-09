@@ -1,7 +1,8 @@
 import { Bell, Menu, Moon, Search, Sun } from 'lucide-react'
 import { useRef, useState } from 'react'
-import { syncState } from '../fixtures/sync'
+import { useCurrentUser } from '../app/AuthContext'
 import { useConnectivity } from '../lib/connectivity'
+import { useSyncState } from '../lib/useSyncState'
 import { useTheme } from '../lib/theme'
 import { NotificationsPopup } from './NotificationsPopup'
 import { SyncStatusIndicator } from './SyncStatusIndicator'
@@ -15,6 +16,7 @@ type TopBarProps = {
 export function TopBar({ menuPinned, onMenuHover, onMenuClick }: TopBarProps) {
   const { theme, toggleTheme } = useTheme()
   const { isOnline, toggleOverride } = useConnectivity()
+  const sync = useSyncState(useCurrentUser().id)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const notificationsTrigger = useRef<HTMLButtonElement>(null)
 
@@ -86,7 +88,7 @@ export function TopBar({ menuPinned, onMenuHover, onMenuClick }: TopBarProps) {
         <div className="flex items-center px-4 lg:px-5">
           <SyncStatusIndicator
             isOnline={isOnline}
-            lastSyncedAt={syncState.lastSyncedAt}
+            sync={sync}
             onToggleOverride={toggleOverride}
           />
         </div>

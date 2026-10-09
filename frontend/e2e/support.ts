@@ -65,7 +65,87 @@ export async function signIn(page: Page, syncChanges: E2ESyncChange[] = E2E_SYNC
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null)
   await syncResponse
 
+  /* The response arriving is not the pull being applied: the changes are written to
+     IndexedDB a moment later, and a spec that navigates straight away can cut that
+     write off and find an empty store. The cursor is committed in the same transaction
+     as the changes, so its presence means they are all there. */
+  await page.waitForFunction(async (userId) => {
+    /* Opening a database that does not exist yet would create it, empty, and race the
+       app's own versioned open; so look first, and only then open. */
+    const name = `connected-user-${userId}`
+    if (!(await indexedDB.databases()).some((known) => known.name === name)) return false
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(name)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    if (!database.objectStoreNames.contains('metadata')) {
+      database.close()
+      return false
+    }
+    const stored = await new Promise<unknown>((resolve, reject) => {
+      const request = database.transaction('metadata').objectStore('metadata').get(`syncCursor:${userId}`)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    database.close()
+    return stored !== undefined
+  }, E2E_USER.id)
+
   await page.unroute('**/api/login')
   await page.unroute('**/api/me')
   await page.unroute('**/api/sync**')
+}
+
+export type RecordedEntry = {
+  id: string
+  table: string
+  recordId: string
+  baseVersion: number
+  fields: Record<string, unknown>
+}
+
+/* Stands in for the API once a spec brings the device back online: a reachable
+   /api/health, an empty pull, and a POST /api/sync that accepts every entry and numbers
+   each record's versions from 1. It records the raw body of every POST, so a spec can
+   assert on the order of the rounds and that a resend is byte-identical. Install it
+   after going offline-to-online is wanted, not before: while offline, edits must
+   queue, and a reachable health route would send them. */
+export async function fakeSyncServer(page: Page) {
+  const bodies: string[] = []
+  const versions = new Map<string, number>()
+  const control = { dropNextResponse: false }
+
+  await page.route('**/api/health', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) }),
+  )
+  await page.route('**/api/sync**', async (route) => {
+    const request = route.request()
+    if (request.method() !== 'POST') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ changes: [], cursor: 2, more: false }) })
+      return
+    }
+
+    const raw = request.postData() ?? ''
+    bodies.push(raw)
+    if (control.dropNextResponse) {
+      control.dropNextResponse = false
+      await route.abort('connectionreset')
+      return
+    }
+
+    const entries = (JSON.parse(raw) as { entries: RecordedEntry[] }).entries
+    const results = entries.map((entry) => {
+      const version = (versions.get(entry.recordId) ?? 0) + 1
+      versions.set(entry.recordId, version)
+      return { id: entry.id, status: 'accepted', version }
+    })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ results }) })
+  })
+
+  return {
+    bodies,
+    control,
+    rounds: () => bodies.map((raw) => (JSON.parse(raw) as { entries: RecordedEntry[] }).entries),
+  }
 }

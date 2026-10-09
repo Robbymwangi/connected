@@ -17,10 +17,10 @@ EPOCH_HAVE := api/storage/app/.dev-data-epoch
 
 .DEFAULT_GOAL := help
 .PHONY: help setup up down restart logs api-shell api-test api-migrate api-fresh \
-        api-epoch dev offline fe-check fe-test check reset
+        api-epoch dev offline fe-check fe-test e2e check reset
 
 help: ## List the targets
-	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[1m%-13s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  \033[1m%-13s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 # --- One-time setup ---------------------------------------------------------
 
@@ -114,6 +114,15 @@ fe-check: ## Typecheck and lint the frontend
 
 fe-test: ## Vitest
 	cd frontend && npm test
+
+# The browser tests need Chromium and its system libraries. This runs them in
+# Playwright's own image (matching @playwright/test), as you, so nothing on the host
+# needs installing and no root-owned files land in the repo. Not part of `make check`.
+PLAYWRIGHT_IMAGE := mcr.microsoft.com/playwright:v1.63.0-noble
+
+e2e: ## Playwright, in Docker (offline, sign-in, and sync specs)
+	docker run --rm --user "$$(id -u):$$(id -g)" --ipc=host -v "$(CURDIR)":/repo -w /repo/frontend \
+		-e CI=1 -e HOME=/tmp $(PLAYWRIGHT_IMAGE) npx playwright test
 
 # --- Everything -------------------------------------------------------------------
 

@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react'
+import { connectivityOverride } from './connectivityOverride'
 import { healthMonitor } from './health'
 
 /* Connectivity is one fact and sync state is another; this hook reports only the
@@ -22,8 +23,9 @@ export function useConnectivity({ onChange }: Options = {}) {
   const reachable = useSyncExternalStore(healthMonitor.subscribe, healthMonitor.getSnapshot)
 
   /* Development-only manual override for demos and evaluation runs. Not a control a
-     teacher can reach: the toggle is undefined outside development builds. */
-  const [override, setOverride] = useState<boolean | null>(null)
+     teacher can reach: the toggle is undefined outside development builds. Held in a
+     shared store, not here, so the sync runner sees the same answer as the pill. */
+  const override = useSyncExternalStore(connectivityOverride.subscribe, connectivityOverride.get)
 
   /* Callers hear about the effective value only when it changes: with the override
      set, a browser event or a probe result underneath it is not a change. */
@@ -62,7 +64,7 @@ export function useConnectivity({ onChange }: Options = {}) {
   const toggleOverride = import.meta.env.DEV
     ? () => {
         const next = !isOnline
-        setOverride(next)
+        connectivityOverride.set(next)
         lastNotified.current = next
         onChange?.(next)
       }
