@@ -40,6 +40,8 @@ function entry(partial: Partial<OutboxEntry> & Pick<OutboxEntry, 'table' | 'reco
   return { id: crypto.randomUUID(), kind: 'patch', baseVersion: 1, at: '2026-10-09T08:00:00.000Z', state: 'queued', ...partial }
 }
 
+const asFetch = (mock: unknown) => mock as unknown as typeof fetch
+
 function json(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200 })
 }
@@ -69,7 +71,7 @@ describe('pullSync', () => {
 
     const result = await pullSync('token', 'user-1', fetchMock as unknown as typeof fetch, store.database)
 
-    expect(result).toEqual({ pages: 2, changesApplied: 3, cursor: 42 })
+    expect(result).toEqual({ pages: 2, changesApplied: 3, cursor: 42, released: 0 })
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
       '/api/sync?limit=500',
       '/api/sync?limit=500&since=continuation-token',
@@ -105,7 +107,7 @@ describe('pullSync', () => {
     const result = await pullSync('token', 'user-1', fetchMock as unknown as typeof fetch, store.database)
 
     expect(String(fetchMock.mock.calls[0][0])).toBe('/api/sync?limit=500&since=18')
-    expect(result).toEqual({ pages: 1, changesApplied: 1, cursor: 22 })
+    expect(result).toEqual({ pages: 1, changesApplied: 1, cursor: 22, released: 0 })
     expect(await store.row('marks', 'm1')).toEqual({
       id: 'm1',
       version: 3,
@@ -263,6 +265,82 @@ describe('pullSync', () => {
       })
     })
 
+    it('is not protected by a conflict command, and a pulled conflict row lands whole', async () => {
+      const store = createDatabase()
+      await store.seed('conflicts', { id: 'c1', version: 1, markId: 'm1', proposals: [], resolution: null, resolvedAt: null })
+      await store.database.outbox.add(entry({
+        table: 'conflicts', recordId: 'c1', kind: 'command', baseVersion: 1, state: 'sent',
+        fields: { referral: { byId: 'u1' } },
+      }))
+
+      await pull(store, [{ table: 'conflicts', recordId: 'c1', version: 2, fields: { referral: { reason: 'party' } } }])
+
+      const record = await store.row('conflicts', 'c1')
+      expect(record).toMatchObject({ version: 2, referral: { reason: 'party' } })
+      expect(record).not.toHaveProperty('serverShadow')
+      expect(record).not.toHaveProperty('sync')
+    })
+
+    describe('a mark conflict that resolves', () => {
+      const retained = () => entry({
+        table: 'marks', recordId: 'm1', baseVersion: 3, state: 'conflict', conflictId: 'c1',
+        fields: { markKind: 'score', score: 9 },
+      })
+      const setup = async (store: Store) => {
+        await store.setCursor('user-1', 22)
+        await store.seed('conflicts', { id: 'c1', version: 1, markId: 'm1', resolution: null, resolvedAt: null })
+        await store.seed('marks', {
+          id: 'm1', version: 5, assessmentId: 'a1', markKind: 'score', score: 9, sync: 'pending',
+          serverShadow: { score: 7 }, serverShadowAt: { score: 5 },
+        })
+        await store.database.outbox.add(retained())
+      }
+      const resolution = { table: 'conflicts', recordId: 'c1', version: 2, fields: { resolution: { kind: 'self' }, resolvedAt: '2026-10-09T09:00:00Z' } }
+      const settledMark = { table: 'marks', recordId: 'm1', version: 6, fields: { markKind: 'score', score: 12 } }
+
+      it('releases the retained entry at the end of the pull, adopting the settled mark, and reports how many', async () => {
+        const store = createDatabase()
+        await setup(store)
+
+        const result = await pull(store, [resolution, settledMark])
+
+        expect(result.released).toBe(1)
+        expect(await store.database.outbox.count()).toBe(0)
+        const record = await store.row('marks', 'm1')
+        expect(record).toMatchObject({ version: 6, score: 12 })
+        expect(record).not.toHaveProperty('sync')
+        await assertDisplayFlags(store.database)
+      })
+
+      it('waits for the last page, since the log writes the resolution before the mark and a page can split them', async () => {
+        const store = createDatabase()
+        await setup(store)
+        const seen: number[] = []
+        const fetchMock = vi.fn()
+          .mockResolvedValueOnce(json({ changes: [resolution], cursor: 23, more: true }))
+          .mockImplementationOnce(async () => {
+            seen.push(await store.database.outbox.count())
+            return json({ changes: [settledMark], cursor: 24, more: false })
+          })
+
+        const result = await pullSync('token', 'user-1', asFetch(fetchMock), store.database)
+
+        expect(seen).toEqual([1])
+        expect(result).toMatchObject({ pages: 2, released: 1 })
+        expect(await store.row('marks', 'm1')).toMatchObject({ version: 6, score: 12 })
+      })
+
+      it('keeps the entry when the conflict is still open', async () => {
+        const store = createDatabase()
+        await setup(store)
+
+        const result = await pull(store, [{ table: 'conflicts', recordId: 'c1', version: 2, fields: { proposals: [{ byId: 'u2' }] } }])
+
+        expect(result.released).toBe(0)
+        expect(await store.database.outbox.count()).toBe(1)
+      })
+    })
+
     it('does not move a record it skips as stale', async () => {
       const store = createDatabase()
       await store.seed('marks', { ...markRow, version: 4, serverShadow: { score: 8 } })
@@ -289,7 +367,7 @@ describe('pullSync', () => {
 
     const result = await pullSync('token', 'user-1', fetchMock as unknown as typeof fetch, store.database)
 
-    expect(result).toEqual({ pages: 2, changesApplied: 2, cursor: 20 })
+    expect(result).toEqual({ pages: 2, changesApplied: 2, cursor: 20, released: 0 })
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
       '/api/sync?limit=500&since=18',
       '/api/sync?limit=500&since=19',
@@ -307,8 +385,8 @@ describe('pullSync', () => {
     finishResponse?.(json({ changes: [], cursor: 19, more: false }))
 
     await expect(Promise.all([first, second])).resolves.toEqual([
-      { pages: 1, changesApplied: 0, cursor: 19 },
-      { pages: 1, changesApplied: 0, cursor: 19 },
+      { pages: 1, changesApplied: 0, cursor: 19, released: 0 },
+      { pages: 1, changesApplied: 0, cursor: 19, released: 0 },
     ])
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(store.transaction).toHaveBeenCalledTimes(1)

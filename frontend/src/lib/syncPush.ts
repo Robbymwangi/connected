@@ -1,7 +1,8 @@
 import { ApiError, apiFetch, type FetchImpl } from '../api/client'
 import { localDatabaseFor, SYNC_TABLES, type LocalDatabase, type LocalRecord, type SyncTableName } from './localDatabase'
 import { entriesForRecord, type OutboxEntry } from './outbox'
-import { applyServerRow, mapOf, parseSyncChange, withShadow, type SyncChange } from './syncPull'
+import { flagged, mapOf, revertedRecord, withShadow } from './shadow'
+import { applyServerRow, parseSyncChange, type SyncChange } from './syncPull'
 
 /* The push client (build-plan 3.4, docs/spec/sync-protocol.md "POST /sync"). One call
    sends one batch of the outbox and settles what the server answered. It does not
@@ -89,12 +90,26 @@ function emptyCounts(): Record<PushResultStatus, number> {
    on the record. A finalize also waits while any earlier entry of its assessment is
    held back, or a mark held behind it would be refused as edit-blocked. */
 async function freeze(database: LocalDatabase, limit: number): Promise<OutboxEntry[]> {
-  return database.transaction('rw', [database.outbox, database.marks], async () => {
-    const open = (await database.outbox.where('state').anyOf(OPEN_STATES).sortBy('seq')).filter((entry) => entry.kind !== 'command')
-    const markRows = await database.marks.bulkGet(open.filter((entry) => entry.table === 'marks').map((entry) => entry.recordId))
+  return database.transaction('rw', [database.outbox, database.marks, database.conflicts], async () => {
+    const open = await database.outbox.where('state').anyOf(OPEN_STATES).sortBy('seq')
+
+    /* Which assessment an entry belongs to, so a finalize can wait behind anything of
+       its assessment that is held back. A command reaches its assessment through the
+       conflict's mark. */
+    const commandConflicts = await database.conflicts.bulkGet(open.filter((entry) => entry.kind === 'command').map((entry) => entry.recordId))
+    const markOfConflict = new Map(commandConflicts.flatMap((row) => (row && typeof row.markId === 'string' ? [[row.id, row.markId] as const] : [])))
+    const markIds = [
+      ...open.filter((entry) => entry.table === 'marks').map((entry) => entry.recordId),
+      ...markOfConflict.values(),
+    ]
+    const markRows = await database.marks.bulkGet(markIds)
     const assessmentOfMark = new Map(markRows.flatMap((row) => (row && typeof row.assessmentId === 'string' ? [[row.id, row.assessmentId] as const] : [])))
     const assessmentOf = (entry: OutboxEntry): string | null => {
       if (entry.table === 'assessments') return entry.recordId
+      if (entry.kind === 'command') {
+        const markId = markOfConflict.get(entry.recordId)
+        return markId ? assessmentOfMark.get(markId) ?? null : null
+      }
       if (entry.table !== 'marks') return null
       const fromFields = entry.fields.assessmentId
       return assessmentOfMark.get(entry.recordId) ?? (typeof fromFields === 'string' ? fromFields : null)
@@ -141,6 +156,7 @@ function parseResults(raw: unknown, sent: OutboxEntry[]): PushResult[] {
     if (typeof value.status !== 'string' || !STATUSES.includes(value.status)) protocolError('unknown status')
     if (value.replayed !== undefined && value.replayed !== true) protocolError('replayed must be true when present')
     const status = value.status as PushResultStatus
+    if (status === 'merged' && entry.kind === 'command') protocolError('a command is never merged')
     const result: PushResult = { id: entry.id, status, ...(value.replayed === true ? { replayed: true } : {}) }
 
     if (status === 'accepted' || status === 'merged') {
@@ -179,17 +195,6 @@ function parseResults(raw: unknown, sent: OutboxEntry[]): PushResult[] {
   })
 }
 
-function flagged(record: LocalRecord, open: boolean): LocalRecord {
-  const next: LocalRecord = { ...record }
-  if (open) {
-    next.sync = 'pending'
-  } else {
-    delete next.sync
-    delete next.localAuthor
-  }
-  return next
-}
-
 /* The record after its entry was accepted or merged at version V. */
 function settledRecord(record: LocalRecord, entry: OutboxEntry, version: number, coveredLater: ReadonlySet<string>): LocalRecord {
   const next: LocalRecord = { ...record, version: Math.max(record.version, version) }
@@ -217,19 +222,6 @@ function settledRecord(record: LocalRecord, entry: OutboxEntry, version: number,
   return withShadow(next, shadow, shadowAt)
 }
 
-function revertedRecord(record: LocalRecord, entry: OutboxEntry, coveredLater: ReadonlySet<string>): LocalRecord {
-  const next: LocalRecord = { ...record }
-  const shadow = mapOf(record.serverShadow)
-  const shadowAt = mapOf(record.serverShadowAt)
-  for (const field of Object.keys(entry.fields)) {
-    if (coveredLater.has(field) || !(field in shadow)) continue
-    next[field] = shadow[field]
-    delete shadow[field]
-    delete shadowAt[field]
-  }
-  return withShadow(next, shadow, shadowAt)
-}
-
 async function failQueued(database: LocalDatabase, entries: OutboxEntry[], reason: string): Promise<void> {
   const queued = entries.filter((entry) => entry.state === 'queued')
   await database.outbox.bulkUpdate(queued.map((entry) => ({ key: entry.seq as number, changes: { state: 'failed', reason } })))
@@ -251,10 +243,61 @@ async function discardRefusedCreate(database: LocalDatabase, entry: OutboxEntry,
   }
 }
 
+const BEHIND_REFUSED = 'an earlier action on this conflict was refused'
+
+function noticeFor(entry: OutboxEntry, current: Record<string, unknown> | null): SyncNotice {
+  return { id: entry.id, table: entry.table, recordId: entry.recordId, kind: 'conflict', sent: entry.fields, current, at: entry.at }
+}
+
+/* A command acts on a conflict, not on a record this device edited, so it leaves the
+   conflict row and every pending flag alone: the conflict changes only when the server's
+   version of it is pulled. What a command can come back as:
+   - accepted: kept as acknowledged, which drives the display until the pull catches up;
+     the command queued behind it can now be sent against the version the server answered.
+   - a stale base: the conflict moved on without this device (the other party proposed, a
+     moderator resolved). The command is dropped with a notice and the fresh conflict
+     adopted, so the teacher decides again with what is now true; commands queued behind
+     it were decided on a state that never existed, and go with it.
+   - refused: failed with its reason, and so is everything queued behind it. */
+async function settleCommand(database: LocalDatabase, entry: OutboxEntry, result: PushResult, notices: SyncNotice[]): Promise<void> {
+  const behind = (await entriesForRecord(database, 'conflicts', entry.recordId))
+    .filter((other) => other.kind === 'command' && (other.seq as number) > (entry.seq as number) && other.state === 'queued')
+
+  if (result.status === 'accepted') {
+    const version = result.version as number
+    await database.outbox.update(entry.seq as number, { state: 'acked', ackVersion: version })
+    const next = behind.find((other) => other.baseVersion === null)
+    if (next) await database.outbox.update(next.seq as number, { baseVersion: version })
+    return
+  }
+
+  if (result.status === 'conflict') {
+    await database.outbox.delete(entry.seq as number)
+    notices.push(noticeFor(entry, result.current?.fields ?? null))
+    const row = await database.conflicts.get(entry.recordId)
+    if (result.current && (!row || result.current.version >= row.version)) {
+      await database.conflicts.put(applyServerRow(row, result.current))
+    }
+    for (const other of behind) {
+      await database.outbox.delete(other.seq as number)
+      notices.push(noticeFor(other, result.current?.fields ?? null))
+    }
+    return
+  }
+
+  const reason = result.status === 'forbidden' ? 'forbidden' : (result.reason ?? 'invalid')
+  await database.outbox.update(entry.seq as number, { state: 'failed', reason })
+  await failQueued(database, behind, BEHIND_REFUSED)
+}
+
 async function settle(database: LocalDatabase, entry: OutboxEntry, result: PushResult, notices: SyncNotice[]): Promise<boolean> {
   /* Another run may have settled or cleared this entry while the request was out. */
   const fresh = await database.outbox.get(entry.seq as number)
   if (!fresh || fresh.id !== entry.id || fresh.state !== 'sent') return false
+  if (entry.kind === 'command') {
+    await settleCommand(database, entry, result, notices)
+    return true
+  }
 
   const table = database.table(entry.table)
   let record = await table.get(entry.recordId)
