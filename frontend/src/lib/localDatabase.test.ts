@@ -6,7 +6,7 @@ describe('LocalDatabase schema', () => {
     const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
 
     expect(database.tables.map((table) => table.name).sort()).toEqual(
-      [...SYNC_TABLES, 'metadata', 'sessions'].sort(),
+      [...SYNC_TABLES, 'metadata', 'sessions', 'outbox'].sort(),
     )
     for (const tableName of SYNC_TABLES) {
       expect(database.table(tableName).schema.primKey.keyPath).toBe('id')
