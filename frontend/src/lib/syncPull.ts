@@ -96,11 +96,11 @@ async function protectedFields(database: LocalDatabase): Promise<Map<string, Set
   return protectedBy
 }
 
-function mapOf(value: unknown): Record<string, unknown> {
+export function mapOf(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? { ...value as Record<string, unknown> } : {}
 }
 
-function withShadow(record: LocalRecord, shadow: Record<string, unknown>, shadowAt: Record<string, unknown>): LocalRecord {
+export function withShadow(record: LocalRecord, shadow: Record<string, unknown>, shadowAt: Record<string, unknown>): LocalRecord {
   if (Object.keys(shadow).length) {
     record.serverShadow = shadow
     record.serverShadowAt = shadowAt
