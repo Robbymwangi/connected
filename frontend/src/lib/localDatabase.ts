@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
+import type { OutboxEntry } from './outbox'
 import type { Session } from './session'
 
 export const SYNC_TABLES = [
@@ -54,6 +55,7 @@ export class LocalDatabase extends Dexie {
   users!: EntityTable<LocalRecord, 'id'>
   metadata!: EntityTable<MetadataRecord, 'key'>
   sessions!: EntityTable<SessionRecord, 'key'>
+  outbox!: EntityTable<OutboxEntry, 'seq'>
 
   constructor(name = DATABASE_NAME) {
     super(name)
@@ -77,6 +79,13 @@ export class LocalDatabase extends Dexie {
       users: '&id, email',
       metadata: '&key',
       sessions: '&key',
+    })
+
+    /* The outbox of unsettled local writes (build-plan 3.4). Existing pending
+       markers on records are moved into it by a later upgrade, together with the
+       writers that stop producing them. */
+    this.version(2).stores({
+      outbox: '++seq, &id, [table+recordId], state',
     })
   }
 }
