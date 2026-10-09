@@ -58,7 +58,10 @@ on telling people. In the same merge request, bump the number on line 1 of
 `api/database/DEV_DATA_EPOCH` and put the reason on line 2. `make up` and `make setup`
 compare it with the epoch recorded on each machine and run `migrate:fresh --seed` when
 they differ, saying why. Set `SKIP_DEV_RESET=1` to defer it; `make api-fresh` does it on
-demand. Additive migrations do not need a bump.
+demand. Additive migrations do not need a bump. CI enforces this: the `epoch` check fails a
+merge request that edits or deletes an existing migration, or touches a seeder, without
+bumping the epoch. A change that really needs none puts `Dev-data-epoch: not needed` on a line
+of its own in its description.
 
 ## Architecture decision records
 
