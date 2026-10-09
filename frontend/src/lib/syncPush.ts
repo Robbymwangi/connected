@@ -65,7 +65,7 @@ export class SyncPushProtocolError extends Error {
    sync ability, a malformed batch, a reply the client cannot read). */
 export type PushFailure = 'retry' | 'reauth' | 'defect'
 
-export function classifyPushFailure(error: unknown): PushFailure {
+export function classifySyncFailure(error: unknown): PushFailure {
   if (error instanceof ApiError) {
     if (error.status === 401) return 'reauth'
     if (error.status === 429 || error.status >= 500) return 'retry'
@@ -74,6 +74,9 @@ export function classifyPushFailure(error: unknown): PushFailure {
   if (error instanceof TypeError || error instanceof DOMException) return 'retry'
   return 'defect'
 }
+
+/* Kept for the push's own tests; the pull fails in the same ways. */
+export const classifyPushFailure = classifySyncFailure
 
 const isOpen = (entry: OutboxEntry) => entry.kind !== 'command' && OPEN_STATES.includes(entry.state)
 
