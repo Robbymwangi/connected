@@ -111,12 +111,21 @@ export type RecordedEntry = {
    assert on the order of the rounds and that a resend is byte-identical. Install it
    after going offline-to-online is wanted, not before: while offline, edits must
    queue, and a reachable health route would send them. */
-export async function fakeSyncServer(page: Page, options: { versions?: Record<string, number> } = {}) {
+export async function fakeSyncServer(
+  page: Page,
+  options: { versions?: Record<string, number>; conflicts?: Record<string, Record<string, unknown>> } = {},
+) {
   const bodies: string[] = []
   const versions = new Map<string, number>(Object.entries(options.versions ?? {}))
   /* What a pull is told after a conflict command is accepted: the conflict at its new
      version, so the device's copy catches up as it would from the real change log. */
   const served: E2ESyncChange[] = []
+  /* The conflict rows as a real server would hold them after the commands it accepted:
+     a pull that brought back an untouched row would make the device think its proposal or
+     referral had never happened. */
+  const conflicts = new Map<string, Record<string, unknown>>(
+    Object.entries(options.conflicts ?? {}).map(([id, fields]) => [id, structuredClone(fields)]),
+  )
   const control = { dropNextResponse: false }
 
   await page.route('**/api/health', (route) =>
@@ -142,9 +151,11 @@ export async function fakeSyncServer(page: Page, options: { versions?: Record<st
       const version = (versions.get(entry.recordId) ?? 0) + 1
       versions.set(entry.recordId, version)
       if (entry.table === 'conflicts') {
+        const fields = applyConflictCommand(conflicts.get(entry.recordId) ?? {}, entry.fields)
+        conflicts.set(entry.recordId, fields)
         const kept = served.filter((change) => change.recordId !== entry.recordId)
         served.length = 0
-        served.push(...kept, { table: 'conflicts', recordId: entry.recordId, version, fields: {} })
+        served.push(...kept, { table: 'conflicts', recordId: entry.recordId, version, fields })
       }
       return { id: entry.id, status: 'accepted', version }
     })
@@ -156,4 +167,27 @@ export async function fakeSyncServer(page: Page, options: { versions?: Record<st
     control,
     rounds: () => bodies.map((raw) => (JSON.parse(raw) as { entries: RecordedEntry[] }).entries),
   }
+}
+
+/* What the server does to a conflict row when it accepts one command (docs/spec/sync-protocol.md,
+   "Conflict commands"), enough for the specs: it fills in the names and times itself. */
+function applyConflictCommand(row: Record<string, unknown>, command: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...row }
+  const proposals = Array.isArray(row.proposals) ? [...row.proposals as Array<Record<string, unknown>>] : []
+  const at = '2026-10-09T08:00:00Z'
+  const { proposal, referral, resolution } = command as {
+    proposal?: Record<string, unknown>; referral?: Record<string, unknown>; resolution?: Record<string, unknown>
+  }
+
+  if (proposal) {
+    next.proposals = [...proposals, { ...proposal, by: 'Jane Teacher', at, receivedAt: at }]
+  } else if (referral) {
+    next.referral = proposals.length >= 2
+      ? { reason: 'rounds', at, receivedAt: at }
+      : { reason: 'party', byId: referral.byId, by: 'Jane Teacher', at, receivedAt: at }
+  } else if (resolution) {
+    next.resolution = { ...resolution, by: 'Jane Teacher' }
+    next.resolvedAt = at
+  }
+  return next
 }

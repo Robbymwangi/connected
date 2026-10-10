@@ -8,15 +8,16 @@ import { NotificationsPopup } from './NotificationsPopup'
 import { SyncStatusIndicator } from './SyncStatusIndicator'
 
 type TopBarProps = {
+  conflictsNeedingYou: number
   menuPinned: boolean
   onMenuHover: () => void
   onMenuClick: () => void
 }
 
-export function TopBar({ menuPinned, onMenuHover, onMenuClick }: TopBarProps) {
+export function TopBar({ conflictsNeedingYou, menuPinned, onMenuHover, onMenuClick }: TopBarProps) {
   const { theme, toggleTheme } = useTheme()
   const { isOnline, toggleOverride } = useConnectivity()
-  const sync = useSyncState(useCurrentUser().id)
+  const sync = useSyncState(useCurrentUser().id, conflictsNeedingYou)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const notificationsTrigger = useRef<HTMLButtonElement>(null)
 

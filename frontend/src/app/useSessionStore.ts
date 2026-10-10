@@ -1,11 +1,11 @@
 import { liveQuery } from 'dexie'
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { Assessment } from '../fixtures/assessments'
 import { type ActiveConflict, type Choice, type HistoricalConflict } from '../fixtures/conflicts'
 import type { Grid } from '../fixtures/marks'
 import type { Criterion } from '../fixtures/rubrics'
 import { requestConflictCommand } from '../lib/conflictCommands'
-import { type CommandRequest, type Resolver } from '../lib/conflicts'
+import { groupConflicts, type CommandRequest, type Resolver } from '../lib/conflicts'
 import { localDatabaseFor } from '../lib/localDatabase'
 import { createLocalAssessmentRecord } from '../lib/localAssessment'
 import { changedGridCells, emptyGrid, gridFromMarkRows, mergePendingMarkCells, type GridCellChange } from '../lib/localMarks'
@@ -31,6 +31,9 @@ type State = {
   history: HistoricalConflict[]
   criteriaBySubject: Record<string, Criterion[]>
   resultRecords: SyncedAssessmentState['resultRecords']
+  /* The last read of the database failed, so what is shown may be out of date or
+     incomplete. Kept alongside what was last read, not instead of it. */
+  loadFailed: boolean
 }
 
 const emptyState: State = {
@@ -40,10 +43,12 @@ const emptyState: State = {
   history: [],
   criteriaBySubject: {},
   resultRecords: [],
+  loadFailed: false,
 }
 
 type Action =
   | { type: 'hydrate'; state: SyncedAssessmentState }
+  | { type: 'loadFailed' }
   | { type: 'addAssessments'; drafts: Omit<Assessment, 'id' | 'version'>[]; ids?: string[] }
   | { type: 'finalizeAssessment'; id: string }
   | { type: 'updateGrid'; assessmentId: string; update: (grid: Grid) => Grid; emptyGrid?: Grid }
@@ -74,6 +79,9 @@ export function reduce(state: State, action: Action): State {
   switch (action.type) {
     case 'hydrate':
       return mergeSyncedState(action.state, state)
+
+    case 'loadFailed':
+      return { ...state, loadFailed: true }
 
     /* Primary keys are client-generated UUIDs, assigned here at creation; a record
        made offline cannot wait for a server to number it. Version 0 means the server
@@ -119,13 +127,13 @@ export function reduce(state: State, action: Action): State {
 /* The snapshot from the database replaces what is held. The one thing it keeps from
    before is an assessment the database does not have yet, which a snapshot taken a
    moment before a create commits would otherwise drop. */
-export function mergeSyncedState(remote: State, current: State): State {
+export function mergeSyncedState(remote: SyncedAssessmentState, current: State): State {
   const remoteIds = new Set(remote.assessments.map((assessment) => assessment.id))
   const assessments = [
     ...current.assessments.filter((assessment) => !remoteIds.has(assessment.id) && (assessment.version === 0 || assessment.sync === 'pending')),
     ...remote.assessments,
   ]
-  return { ...remote, assessments }
+  return { ...remote, assessments, loadFailed: false }
 }
 
 export function useSessionStore(user: Resolver, directory: SchoolDirectoryState) {
@@ -167,7 +175,10 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
         commit({ type: 'hydrate', state: remote })
         setHasHydrated(true)
       },
-      error: () => setHasHydrated(true),
+      error: () => {
+        commit({ type: 'loadFailed' })
+        setHasHydrated(true)
+      },
     })
 
     return () => subscription.unsubscribe()
@@ -179,14 +190,23 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
     return requestConflictCommand(database, conflict, request, user, max, new Date().toISOString())
   }
 
+  /* Which conflicts need this person, which only wait on others, and which they can only
+     read. One answer for the top bar, the dashboard, and the Sync screen. */
+  const groups = useMemo(
+    () => groupConflicts(state.conflicts, { id: user.id, name: user.name, moderatedSubjects: user.moderatedSubjects }),
+    [state.conflicts, user.id, user.name, user.moderatedSubjects],
+  )
+
   return {
     ready,
     assessments: state.assessments,
     marks: state.marks,
     conflicts: state.conflicts,
+    groups,
     history: state.history,
     criteriaBySubject: state.criteriaBySubject,
     resultRecords: state.resultRecords,
+    loadFailed: state.loadFailed,
 
     addAssessments: async (drafts: Omit<Assessment, 'id' | 'version'>[]) => {
       if (!drafts.length) return

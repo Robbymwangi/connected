@@ -10,7 +10,6 @@ export const lastSession = {
 
 export const progress = {
   studentsEnteredThisWeek: 142,
-  needsReview: 1,
   enteredToday: 20,
 }
 

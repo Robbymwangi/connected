@@ -38,7 +38,7 @@ export function Dashboard({ conflicts, onNavigate, onCreateAssessment, onViewCon
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <ProgressCard onExpand={() => onNavigate('assessments')} />
+          <ProgressCard needsYou={conflicts.length} onExpand={() => onNavigate('assessments')} />
           <ClassesCard onExpand={() => onNavigate('reports')} />
           <RecentCard
             onExpand={() => onNavigate('classes')}
