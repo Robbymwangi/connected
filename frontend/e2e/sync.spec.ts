@@ -277,3 +277,47 @@ test.describe('counting what needs a person', () => {
     await expect(needsReview(page)).toContainText('1')
   })
 })
+
+test.describe('finalizing with a conflict open', () => {
+  test.setTimeout(90_000)
+
+  test('waits for the conflict, then goes ahead once it is settled, with the resolution queued ahead of the finalize', async ({ page, context }) => {
+    await signIn(page, await conflictChanges({ a: E2E_USER.id, b: E2E_USER.id }))
+    await page.route('**/api/health', (route) => route.abort())
+    await context.setOffline(true)
+
+    await page.goto('/assessments/a1/grid')
+    const finalize = page.getByRole('button', { name: 'Finalize', exact: true })
+    await expect(finalize).toBeDisabled()
+    await expect(page.getByText('1 conflict is open on this assessment')).toBeVisible()
+    expect(await outboxEntries(page)).toHaveLength(0)
+
+    await page.getByRole('button', { name: /conflict/i }).click()
+    const dialog = page.getByRole('dialog', { name: 'Mark conflict' })
+    await dialog.getByRole('button', { name: /^Keep 15/ }).click()
+    await dialog.getByRole('button', { name: 'Confirm' }).click()
+
+    await expect(finalize).toBeEnabled()
+    await expect(page.getByText(/conflict is open on this assessment/)).toHaveCount(0)
+    await finalize.click()
+    await page.getByRole('dialog', { name: 'Finalize assessment?' }).getByRole('button', { name: 'Finalize' }).click()
+    await expect(page.getByText('Finalized', { exact: true })).toBeVisible()
+
+    const entries = await outboxEntries(page)
+    expect(entries.map((entry) => [entry.table, entry.kind])).toEqual([['conflicts', 'command'], ['assessments', 'finalize']])
+  })
+
+  test('is not blocked by a conflict on another assessment', async ({ page, context }) => {
+    const changes = await conflictChanges({ a: 'teacher-akinyi', b: 'teacher-otieno' })
+    const elsewhere = changes.map((change) => (
+      change.table === 'conflicts' || change.table === 'marks' ? { ...change, fields: { ...change.fields, assessmentId: 'a-other' } } : change
+    ))
+    await signIn(page, elsewhere)
+    await context.setOffline(true)
+
+    await page.goto('/assessments/a1/grid')
+
+    await expect(page.getByText(/conflict is open on this assessment/)).toHaveCount(0)
+  })
+})
+

@@ -16,8 +16,13 @@ export function FinalizeDialog({ open, onClose, onConfirm }: FinalizeDialogProps
     setError(null)
     try {
       await onConfirm()
-    } catch {
-      setError('Could not save finalization on this device.')
+    } catch (caught) {
+      /* A conflict can arrive while the dialog is open; say so, not that saving failed. */
+      setError(
+        caught instanceof Error && caught.name === 'OpenConflictsError'
+          ? `${caught.message}. Settle ${caught.message.startsWith('1 ') ? 'it' : 'them'} on the cell marked conflict first.`
+          : 'Could not save finalization on this device.',
+      )
     } finally {
       setSaving(false)
     }

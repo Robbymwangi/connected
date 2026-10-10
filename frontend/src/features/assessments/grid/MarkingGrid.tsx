@@ -1,4 +1,4 @@
-import { Undo2, UserX } from 'lucide-react'
+import { TriangleAlert, Undo2, UserX } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { BackNav } from '../../../components/BackNav'
 import { LevelBadge } from '../../../components/LevelBadge'
@@ -7,6 +7,7 @@ import { Toast, type ToastKind } from '../../../components/Toast'
 import type { Assessment } from '../../../fixtures/assessments'
 import type { ActiveConflict, Choice } from '../../../fixtures/conflicts'
 import { reportRequest } from '../../../lib/conflictCommands'
+import { describeFinalizeBlock } from '../../../lib/conflicts'
 import type { Grid } from '../../../fixtures/marks'
 import { initials } from '../../../fixtures/students'
 import type { SchoolDirectoryState } from '../../../app/useSchoolDirectory'
@@ -128,6 +129,10 @@ export function MarkingGrid({
   const reportConflictRequest = (request: Promise<boolean>, announce: boolean) =>
     reportRequest(request, { queued: announce ? () => showToast('resolved', 5000) : undefined, failed: () => showToast('saveError', 5000) })
 
+  /* The conflicts still open on this assessment, anyone's: the server refuses a finalize
+     while one is, so the control says so instead of letting it look finalized and revert. */
+  const finalizeBlock = describeFinalizeBlock(conflicts.filter((conflict) => conflict.assessmentId === assessment.id).length)
+
   const finalize = async () => {
     await onFinalize(assessment.id)
     setEditing(false)
@@ -176,13 +181,22 @@ export function MarkingGrid({
             <button
               type="button"
               onClick={() => setFinalizeOpen(true)}
-              className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-1.5 text-xs font-semibold text-warning transition-colors hover:bg-warning/20"
+              disabled={finalizeBlock !== null}
+              aria-describedby={finalizeBlock ? 'finalize-blocked' : undefined}
+              className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-1.5 text-xs font-semibold text-warning transition-colors hover:bg-warning/20 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-warning/10"
             >
               Finalize
             </button>
           )}
         </div>
       </div>
+
+      {finalizeBlock && !finalized && (
+        <p id="finalize-blocked" className="mb-3 flex items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
+          <TriangleAlert className="size-3.5 shrink-0 text-warning" aria-hidden="true" />
+          {finalizeBlock}
+        </p>
+      )}
 
       {canEdit && (
         <div className="mb-3 flex flex-wrap items-center gap-4 rounded-xl border border-border bg-muted/40 px-3 py-2 text-[10px] text-muted-foreground">
