@@ -5,6 +5,7 @@ import {
   canRefer,
   describeConflictCounts,
   describeConflictHeading,
+  describeFinalizeBlock,
   groupConflicts,
   isValidChoice,
   isAutoResolvable,
@@ -363,5 +364,17 @@ describe('describeConflictHeading', () => {
   it('says that what it shows was the last read, when it has something to show', () => {
     expect(describeConflictHeading({ ...none, needsYou: some(1) }, true)).toBe('1 conflict to resolve (as last read; could not refresh)')
     expect(describeConflictHeading({ ...none, waiting: some(2) }, true)).toBe('Nothing for you to do; 2 waiting on others (as last read; could not refresh)')
+  })
+})
+
+
+describe('describeFinalizeBlock', () => {
+  it('has nothing to say when no conflict is open', () => {
+    expect(describeFinalizeBlock(0)).toBeNull()
+  })
+
+  it('says why finalizing has to wait, and where to settle it', () => {
+    expect(describeFinalizeBlock(1)).toBe('1 conflict is open on this assessment. Settle it on the cell marked conflict before finalizing.')
+    expect(describeFinalizeBlock(3)).toBe('3 conflicts are open on this assessment. Settle them on the cells marked conflict before finalizing.')
   })
 })

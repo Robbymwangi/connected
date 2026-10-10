@@ -1,3 +1,4 @@
+import { overlayConflictRow } from './conflictCommands'
 import { wireMarkFields, type GridCellChange } from './localMarks'
 import type { LocalDatabase, LocalRecord } from './localDatabase'
 import { enqueue, entriesForRecord, type OutboxEntry } from './outbox'
@@ -50,11 +51,43 @@ export function createAssessments(database: LocalDatabase, items: NewAssessment[
   })
 }
 
+/* The server refuses a finalize while any mark of the assessment is in an unresolved
+   conflict, whoever's it is (docs/spec/workflow.md), so the device refuses to queue one:
+   otherwise it would look finalized here and revert on the next push. */
+export class OpenConflictsError extends Error {
+  readonly count: number
+
+  constructor(count: number) {
+    super(count === 1 ? '1 conflict is still open on this assessment' : `${count} conflicts are still open on this assessment`)
+    this.name = 'OpenConflictsError'
+    this.count = count
+  }
+}
+
+/* How many conflicts on this assessment's marks are still open, counting a conflict this
+   device has already resolved (the command is queued, sent, or answered) as settled: the
+   push sends that command ahead of the finalize, so the server will see it settled too. */
+async function openConflictCount(database: LocalDatabase, assessmentId: string): Promise<number> {
+  const markIds = await database.marks.where('assessmentId').equals(assessmentId).primaryKeys()
+  if (markIds.length === 0) return 0
+
+  let open = 0
+  for (const row of await database.conflicts.where('markId').anyOf(markIds).toArray()) {
+    if (row.deletedAt != null) continue
+    const shown = overlayConflictRow(row, await entriesForRecord(database, 'conflicts', row.id), { id: '', name: '' }).row
+    if (shown.resolution == null && shown.resolvedAt == null) open++
+  }
+  return open
+}
+
 export function finalizeAssessmentRecord(database: LocalDatabase, id: string, userId: string, at: string): Promise<boolean> {
-  return database.transaction('rw', [database.assessments, database.outbox], async () => {
+  return database.transaction('rw', [database.assessments, database.outbox, database.conflicts, database.marks], async () => {
     const current = await database.assessments.get(id)
     if (!current || current.deletedAt != null) return false
     if (current.status === 'finalized' || current.status === 'reports-generated') return false
+
+    const open = await openConflictCount(database, id)
+    if (open > 0) throw new OpenConflictsError(open)
 
     const fields = { status: 'finalized', finalizedBy: userId, finalizedAt: at }
     const entries = await entriesForRecord(database, 'assessments', id)

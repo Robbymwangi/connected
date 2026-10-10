@@ -215,3 +215,12 @@ export function describeConflictHeading(groups: ConflictGroups, loadFailed: bool
   if (groups.needsYou.length + groups.waiting.length === 0) return 'Conflicts could not be read'
   return `${describeConflictCounts(groups)} (as last read; could not refresh)`
 }
+
+/* Why the Finalize control is off, or null when it is on. Any open conflict on the
+   assessment blocks it, whoever's it is, because the server refuses either way. */
+export function describeFinalizeBlock(open: number): string | null {
+  if (open === 0) return null
+  return open === 1
+    ? '1 conflict is open on this assessment. Settle it on the cell marked conflict before finalizing.'
+    : `${open} conflicts are open on this assessment. Settle them on the cells marked conflict before finalizing.`
+}

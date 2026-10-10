@@ -50,8 +50,14 @@ test('coming back online with the API still down never reads online, not even fo
   await signIn(page)
   await expect(pill(page, 'Online')).toBeVisible()
 
+  await context.setOffline(true)
+  await expect(pill(page, 'Offline')).toBeVisible()
+
   /* Record every DOM change that shows the Online pill, so a flash too brief for an
-     assertion to catch still fails the test. */
+     assertion to catch still fails the test. It starts once the pill already reads Offline:
+     the claim is about the reconnect, and a change elsewhere on the page in the instant
+     between the link dropping and the pill following it (the sync line updating, say) is
+     not a flash of Online and must not be counted as one. */
   await page.evaluate(() => {
     const seen: boolean[] = []
     ;(window as unknown as { __seenOnline: boolean[] }).__seenOnline = seen
@@ -59,9 +65,6 @@ test('coming back online with the API still down never reads online, not even fo
       seen.push([...document.querySelectorAll('span')].some((el) => el.textContent === 'Online'))
     }).observe(document.body, { subtree: true, childList: true, characterData: true })
   })
-
-  await context.setOffline(true)
-  await expect(pill(page, 'Offline')).toBeVisible()
 
   await answerHealth(page, 'down')
   await context.setOffline(false)

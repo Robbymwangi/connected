@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { score } from './grading'
 import { assertDisplayFlags } from './displayFlags.testing'
 import { LocalDatabase, type LocalRecord } from './localDatabase'
-import { createAssessments, finalizeAssessmentRecord, writeMarkCells } from './localWrites'
-import { entriesForRecord } from './outbox'
+import { createAssessments, finalizeAssessmentRecord, OpenConflictsError, writeMarkCells } from './localWrites'
+import { entriesForRecord, type OutboxEntry } from './outbox'
 
 const AT = '2026-10-09T08:00:00.000Z'
 const LATER = '2026-10-09T08:05:00.000Z'
@@ -216,5 +216,84 @@ describe('writeMarkCells', () => {
 
   it('refuses an edit on an assessment that is not on this device', async () => {
     await expect(writeMarkCells(database, 'missing', [edit('m1', 's1', 'k1')], 'Teacher', AT)).rejects.toThrow()
+  })
+})
+
+describe('finalizeAssessmentRecord with conflicts', () => {
+  const conflict = (over: Record<string, unknown> = {}) => ({
+    id: 'c1', version: 2, markId: 'm1', proposals: [], referral: null, resolution: null, resolvedAt: null, ...over,
+  })
+  const command = (fields: Record<string, unknown>, over: Partial<OutboxEntry> = {}): OutboxEntry => ({
+    id: crypto.randomUUID(), table: 'conflicts', recordId: 'c1', kind: 'command', baseVersion: 2, fields, at: AT, state: 'queued', ...over,
+  })
+  const resolution = { resolution: { kind: 'self', byId: 'u1', choice: { kind: 'side', editId: 'e1' } } }
+
+  beforeEach(async () => {
+    await database.assessments.put({ id: 'a1', version: 4, ...CREATE, status: 'scheduled' })
+    await database.marks.put({ id: 'm1', version: 3, assessmentId: 'a1', studentId: 's1', criterionId: 'k1', markKind: 'score', score: 9 })
+  })
+
+  const refused = async () => {
+    await expect(finalizeAssessmentRecord(database, 'a1', 'u1', AT)).rejects.toBeInstanceOf(OpenConflictsError)
+    expect(await database.assessments.get('a1')).toMatchObject({ status: 'scheduled' })
+    expect(await database.assessments.get('a1')).not.toHaveProperty('sync')
+    expect(await database.outbox.count()).toBe(0)
+  }
+
+  it('refuses while a mark of the assessment is in an unresolved conflict, and writes nothing', async () => {
+    await database.conflicts.put(conflict())
+
+    await refused()
+  })
+
+  it('says how many are open', async () => {
+    await database.marks.put({ id: 'm2', version: 1, assessmentId: 'a1', studentId: 's2', criterionId: 'k1', markKind: 'score', score: 5 })
+    await database.conflicts.bulkPut([conflict(), conflict({ id: 'c2', markId: 'm2' })])
+
+    await expect(finalizeAssessmentRecord(database, 'a1', 'u1', AT)).rejects.toMatchObject({ name: 'OpenConflictsError', count: 2 })
+  })
+
+  it('refuses for anyone\'s conflict, since the server refuses either way', async () => {
+    await database.conflicts.put(conflict({ sideA: { userId: 'someone-else' }, sideB: { userId: 'someone-else-again' } }))
+
+    await refused()
+  })
+
+  it('goes ahead when the conflict is resolved, deleted, or on another assessment', async () => {
+    await database.assessments.put({ id: 'a2', version: 1, ...CREATE, status: 'scheduled' })
+    await database.marks.put({ id: 'm9', version: 1, assessmentId: 'a2', studentId: 's1', criterionId: 'k1', markKind: 'score', score: 1 })
+    await database.conflicts.bulkPut([
+      conflict({ resolution: { kind: 'auto' }, resolvedAt: AT }),
+      conflict({ id: 'c-deleted', deletedAt: AT }),
+      conflict({ id: 'c-other', markId: 'm9' }),
+    ])
+
+    expect(await finalizeAssessmentRecord(database, 'a1', 'u1', AT)).toBe(true)
+  })
+
+  it.each([['queued'], ['sent'], ['acked']] as const)('goes ahead when this device has a %s resolution for it, which the push sends first', async (state) => {
+    await database.conflicts.put(conflict())
+    await database.outbox.add(command(resolution, { state, ...(state === 'acked' ? { ackVersion: 3 } : {}) }))
+
+    expect(await finalizeAssessmentRecord(database, 'a1', 'u1', LATER)).toBe(true)
+    expect((await database.outbox.orderBy('seq').toArray()).map((entry) => entry.kind)).toEqual(['command', 'finalize'])
+  })
+
+  it('still refuses when the only command is a proposal or a referral, or the resolution failed or was already caught up with', async () => {
+    await database.conflicts.put(conflict())
+    await database.outbox.bulkAdd([
+      command({ proposal: { byId: 'u1', choice: { kind: 'side', editId: 'e1' }, note: 'n' } }),
+      command({ referral: { byId: 'u1' } }),
+      command(resolution, { state: 'failed', reason: 'no' }),
+    ])
+
+    await expect(finalizeAssessmentRecord(database, 'a1', 'u1', AT)).rejects.toBeInstanceOf(OpenConflictsError)
+  })
+
+  it('does not look at conflicts for an assessment that is already finalized', async () => {
+    await database.assessments.put({ id: 'a1', version: 4, ...CREATE, status: 'finalized' })
+    await database.conflicts.put(conflict())
+
+    expect(await finalizeAssessmentRecord(database, 'a1', 'u1', AT)).toBe(false)
   })
 })
