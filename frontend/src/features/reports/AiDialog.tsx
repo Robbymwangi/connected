@@ -71,7 +71,7 @@ export function AiDialog({ open, onClose, report }: AiDialogProps) {
             </div>
             <p className="text-sm font-semibold text-foreground">This needs a connection</p>
             <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">
-              The assistant runs on the server. Marking and reports keep working offline; come back online to ask questions about them.
+              The assistant runs on the server. Marking keeps working offline; reports and this dialog need a connection.
             </p>
           </div>
         ) : (

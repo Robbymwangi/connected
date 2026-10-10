@@ -1,5 +1,5 @@
-import { classes, type SchoolClass } from '../fixtures/classes'
-import { subjects, type Subject } from '../fixtures/rubrics'
+import { classes as fixtureClasses, type SchoolClass } from '../fixtures/classes'
+import type { Subject } from '../fixtures/rubrics'
 import type { Teacher } from '../fixtures/teachers'
 import type { Scope } from './analytics'
 
@@ -11,15 +11,15 @@ export function scopeLabel(scope: Scope): string {
   return `${scope.stream} · ${scope.subject}`
 }
 
-export function gradeOf(stream: string): string | undefined {
-  return classes.find((c) => c.stream === stream)?.grade
+export function gradeOf(stream: string, schoolClasses: SchoolClass[] = fixtureClasses): string | undefined {
+  return schoolClasses.find((c) => c.stream === stream)?.grade
 }
 
 /* What this teacher teaches, plus Overall for each of their streams. */
-export function myScopes(teacher: Teacher): ScopeOption[] {
+export function myScopes(teacher: Teacher, schoolClasses: SchoolClass[] = fixtureClasses): ScopeOption[] {
   const out: ScopeOption[] = []
   for (const [stream, taught] of Object.entries(teacher.subjectsByStream)) {
-    const grade = gradeOf(stream) ?? ''
+    const grade = gradeOf(stream, schoolClasses) ?? ''
     for (const subject of taught) out.push({ stream, subject: subject as Subject, grade, label: scopeLabel({ stream, subject: subject as Subject }) })
     out.push({ stream, subject: 'Overall', grade, label: scopeLabel({ stream, subject: 'Overall' }) })
   }
@@ -27,16 +27,16 @@ export function myScopes(teacher: Teacher): ScopeOption[] {
 }
 
 /* Every stream in the school with the subjects it offers, plus Overall. */
-export function allScopes(): Array<{ grade: string; streams: Array<{ cls: SchoolClass; scopes: ScopeOption[] }> }> {
-  const grades = [...new Set(classes.map((c) => c.grade))].sort()
+export function allScopes(schoolClasses: SchoolClass[] = fixtureClasses): Array<{ grade: string; streams: Array<{ cls: SchoolClass; scopes: ScopeOption[] }> }> {
+  const grades = [...new Set(schoolClasses.map((c) => c.grade))].sort()
   return grades.map((grade) => ({
     grade,
-    streams: classes
+    streams: schoolClasses
       .filter((c) => c.grade === grade)
       .map((cls) => ({
         cls,
         scopes: [
-          ...subjects.filter((s) => cls.subjects.includes(s)).map((subject) => ({ stream: cls.stream, subject, grade, label: scopeLabel({ stream: cls.stream, subject }) })),
+          ...cls.subjects.map((subject) => ({ stream: cls.stream, subject: subject as Subject, grade, label: scopeLabel({ stream: cls.stream, subject: subject as Subject }) })),
           { stream: cls.stream, subject: 'Overall' as const, grade, label: scopeLabel({ stream: cls.stream, subject: 'Overall' }) },
         ],
       })),
