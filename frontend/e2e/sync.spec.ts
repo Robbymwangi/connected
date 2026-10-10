@@ -146,7 +146,8 @@ test.describe('settling a conflict', () => {
   test.setTimeout(90_000)
 
   test('a party proposes and then refers offline, both survive a reload, and they go out in order once online', async ({ page, context }) => {
-    await signIn(page, await conflictChanges({ a: 'teacher-akinyi', b: E2E_USER.id }))
+    const changes = await conflictChanges({ a: 'teacher-akinyi', b: E2E_USER.id })
+    await signIn(page, changes)
     await page.route('**/api/health', (route) => route.abort())
     await context.setOffline(true)
 
@@ -163,7 +164,8 @@ test.describe('settling a conflict', () => {
     await expect(page.getByTestId('sync-line')).toHaveAttribute('data-sync-category', 'waiting')
 
     await page.unroute('**/api/health')
-    const server = await fakeSyncServer(page, { versions: { c1: 1 } })
+    const row = changes.find((change) => change.table === 'conflicts')
+    const server = await fakeSyncServer(page, { versions: { c1: 1 }, conflicts: { c1: row?.fields ?? {} } })
     await context.setOffline(false)
     await page.evaluate(() => window.dispatchEvent(new Event('online')))
 
@@ -175,6 +177,12 @@ test.describe('settling a conflict', () => {
     ])
     expect(rounds[0][0].fields).toEqual({ proposal: { byId: E2E_USER.id, choice: { kind: 'side', editId: 'edit-a' }, note: 'Re-marked against the rubric' } })
     expect(await outboxEntries(page)).toHaveLength(0)
+
+    /* Once the pull has caught up, the server's row says the same, so it stays settled: the
+       conflict is with a moderator now, and nothing is left for this teacher to do. */
+    await page.goto('/sync')
+    await expect(page.getByText('Nothing for you to do; 1 waiting on others')).toBeVisible()
+    await expect(page.getByTestId('sync-line')).toHaveAttribute('data-sync-category', 'synced')
   })
 
   test('a moderator of the subject, who is not a party, can settle it, which needs the subject id and not its name', async ({ page, context }) => {

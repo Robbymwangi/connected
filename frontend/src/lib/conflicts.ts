@@ -205,3 +205,13 @@ export function describeConflictCounts({ needsYou, waiting }: ConflictGroups): s
   }
   return waiting.length > 0 ? `Nothing for you to do; ${waiting.length} waiting on others` : 'All conflicts resolved'
 }
+
+/* The heading when the last read of the saved data may have failed. A failed read keeps
+   what was last read on screen, which is better than nothing and worse than the truth, so
+   it is labelled; and with nothing of theirs to show, "all clear" would be a claim nobody
+   checked. */
+export function describeConflictHeading(groups: ConflictGroups, loadFailed: boolean): string {
+  if (!loadFailed) return describeConflictCounts(groups)
+  if (groups.needsYou.length + groups.waiting.length === 0) return 'Conflicts could not be read'
+  return `${describeConflictCounts(groups)} (as last read; could not refresh)`
+}

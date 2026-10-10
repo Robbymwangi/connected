@@ -4,6 +4,7 @@ import {
   abilityOf,
   canRefer,
   describeConflictCounts,
+  describeConflictHeading,
   groupConflicts,
   isValidChoice,
   isAutoResolvable,
@@ -341,5 +342,26 @@ describe('describeConflictCounts', () => {
 
   it('does not count what a person can only watch', () => {
     expect(describeConflictCounts({ ...none, others: some(5) })).toBe('All conflicts resolved')
+  })
+})
+
+
+describe('describeConflictHeading', () => {
+  const none = { needsYou: [], waiting: [], others: [] }
+  const some = (n: number) => Array.from({ length: n }, (_, i) => ({ ...crossTeacher, id: `c${i}` }))
+
+  it('is the plain count when the saved data was read', () => {
+    expect(describeConflictHeading({ ...none, needsYou: some(2) }, false)).toBe('2 conflicts to resolve')
+    expect(describeConflictHeading(none, false)).toBe('All conflicts resolved')
+  })
+
+  it('never says all clear after a failed read, whatever was cached', () => {
+    expect(describeConflictHeading(none, true)).toBe('Conflicts could not be read')
+    expect(describeConflictHeading({ ...none, others: some(3) }, true)).toBe('Conflicts could not be read')
+  })
+
+  it('says that what it shows was the last read, when it has something to show', () => {
+    expect(describeConflictHeading({ ...none, needsYou: some(1) }, true)).toBe('1 conflict to resolve (as last read; could not refresh)')
+    expect(describeConflictHeading({ ...none, waiting: some(2) }, true)).toBe('Nothing for you to do; 2 waiting on others (as last read; could not refresh)')
   })
 })

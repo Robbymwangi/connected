@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import type { SessionStore } from '../../app/useSessionStore'
 import { FilterDropdown } from '../../components/FilterDropdown'
 import type { ActiveConflict } from '../../fixtures/conflicts'
-import { describeConflictCounts } from '../../lib/conflicts'
+import { describeConflictHeading } from '../../lib/conflicts'
 import { ActiveConflictCard } from './ActiveConflictCard'
 import { HistoricalConflictCard } from './HistoricalConflictCard'
 
@@ -33,8 +33,9 @@ export function SyncScreen({ store, highlight, onOpenGrid }: SyncScreenProps) {
 
   const { groups, history } = store
   const yours = [...groups.needsYou, ...groups.waiting]
-  /* A failed read is not "all clear": say so rather than show an empty list as good news. */
-  const unreadable = store.loadFailed && yours.length === 0 && groups.others.length === 0
+  /* A failed read is not "all clear", whatever happens to be cached: with nothing of the
+     person's own to show, say so rather than show an empty list as good news. */
+  const unreadable = store.loadFailed && yours.length === 0
 
   const card = (c: ActiveConflict) => {
     const assessment = store.assessments.find((item) => item.id === c.assessmentId)
@@ -62,7 +63,7 @@ export function SyncScreen({ store, highlight, onOpenGrid }: SyncScreenProps) {
         <div>
           <h1 className="text-2xl leading-tight font-bold tracking-tight text-foreground">Sync</h1>
           <p className="mt-1 text-sm font-medium text-muted-foreground">
-            {unreadable ? 'Conflicts could not be read' : describeConflictCounts(groups)}
+            {describeConflictHeading(groups, store.loadFailed)}
           </p>
         </div>
         <FilterDropdown label="Show" value={tab} options={TABS} onChange={setTab} />
