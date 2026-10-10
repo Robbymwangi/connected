@@ -3,9 +3,10 @@ import type { ReportSummaryResponse } from '../../api/reports'
 import { toReportView } from './reportModel'
 
 const response: ReportSummaryResponse = {
-  filters: { stream: '4W', subject_id: 'subject-1', year: 2026, term: null, assessment_name: null },
+  filters: { stream: '4W', subject_id: 'subject-1', year: 2026, term: null, assessment_name: null, assessment_id: null },
   available_years: [2026],
   available_assessments: ['CAT 1'],
+  student_outcomes: [],
   summary: {
     pass_rate: 75,
     mean_score: 68.5,

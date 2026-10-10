@@ -28,6 +28,13 @@ class AnalyticsSummaryController extends Controller
                     ->where('institution_id', $institutionId)
                     ->whereNull('deleted_at'),
             ],
+            'assessment_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('assessments', 'id')
+                    ->where('institution_id', $institutionId)
+                    ->whereNull('deleted_at'),
+            ],
             'year' => ['required', 'integer', 'min:2000', 'max:2100'],
             'term' => ['nullable', 'integer', 'between:1,3'],
             'assessment_name' => ['nullable', 'string', 'max:255'],
@@ -40,6 +47,7 @@ class AnalyticsSummaryController extends Controller
             (int) $validated['year'],
             isset($validated['term']) ? (int) $validated['term'] : null,
             $validated['assessment_name'] ?? null,
+            $validated['assessment_id'] ?? null,
         );
 
         return response()->json([
@@ -49,6 +57,7 @@ class AnalyticsSummaryController extends Controller
                 'year' => $filters->year,
                 'term' => $filters->term,
                 'assessment_name' => $filters->assessmentName,
+                'assessment_id' => $filters->assessmentId,
             ],
             'available_years' => $analytics->availableYears($institutionId, $filters->stream, $filters->subjectId),
             'available_assessments' => $analytics->availableAssessmentNames($filters),
@@ -65,6 +74,7 @@ class AnalyticsSummaryController extends Controller
                 'decline_list' => $analytics->declineList($filters),
                 'net_level_movement' => $analytics->netLevelMovement($filters),
             ],
+            'student_outcomes' => $analytics->studentOutcomes($filters),
         ]);
     }
 }

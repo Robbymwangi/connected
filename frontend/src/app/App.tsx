@@ -65,6 +65,7 @@ function AuthenticatedApp({ user, token, onSignOut }: { user: CurrentUser; token
           <AssessmentsScreen
             store={store}
             directory={directory}
+            token={token}
             assessmentId={location.assessmentId}
             view={location.view}
             creating={location.creating}

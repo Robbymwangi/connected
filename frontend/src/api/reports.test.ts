@@ -13,6 +13,7 @@ describe('getReportSummary', () => {
       subjectId: 'subject-id',
       term: 2,
       assessmentName: 'CAT 1 / Mid-term',
+      assessmentId: 'assessment-id',
     }, 'device-token', fetchMock)
 
     const [path, init] = fetchMock.mock.calls[0]
@@ -23,6 +24,7 @@ describe('getReportSummary', () => {
     expect(url.searchParams.get('subject_id')).toBe('subject-id')
     expect(url.searchParams.get('term')).toBe('2')
     expect(url.searchParams.get('assessment_name')).toBe('CAT 1 / Mid-term')
+    expect(url.searchParams.get('assessment_id')).toBe('assessment-id')
     expect((init.headers as Headers).get('Authorization')).toBe('Bearer device-token')
   })
 

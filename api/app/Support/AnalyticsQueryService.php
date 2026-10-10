@@ -49,6 +49,32 @@ final class AnalyticsQueryService
             ->all();
     }
 
+    /** @return list<array{studentId: string, studentName: string, classId: string, status: string, total: ?int, max: ?int, pct: ?float, level: ?string}> */
+    public function studentOutcomes(AnalyticsFilters $filters): array
+    {
+        if ($filters->assessmentId === null) {
+            return [];
+        }
+
+        return DB::query()->fromSub($this->outcomes($filters), 'outcomes')
+            ->select([
+                'student_id', 'student_name', 'class_id', 'outcome_status', 'total', 'max', 'pct', 'level',
+            ])
+            ->orderBy('student_name')
+            ->get()
+            ->map(fn (object $row): array => [
+                'studentId' => $row->student_id,
+                'studentName' => $row->student_name,
+                'classId' => $row->class_id,
+                'status' => $row->outcome_status,
+                'total' => $row->total === null ? null : (int) $row->total,
+                'max' => $row->max === null ? null : (int) $row->max,
+                'pct' => $row->pct === null ? null : (float) $row->pct,
+                'level' => $row->level,
+            ])
+            ->all();
+    }
+
     public function passRate(AnalyticsFilters $filters): ?float
     {
         $row = $this->scoredOutcomes($filters)
@@ -316,6 +342,10 @@ final class AnalyticsQueryService
             $query->where('a.name', $filters->assessmentName);
         }
 
+        if ($filters->assessmentId !== null) {
+            $query->where('a.id', $filters->assessmentId);
+        }
+
         return $query;
     }
 
@@ -347,7 +377,7 @@ final class AnalyticsQueryService
         $results = DB::table('results')
             ->where('institution_id', $filters->institutionId)
             ->whereNull('deleted_at')
-            ->select('id', 'assessment_id', 'student_id', 'total');
+            ->select('id', 'assessment_id', 'student_id', 'total', 'max');
 
         $assessmentRows = $this->scopedAssessments($filters);
 
@@ -374,6 +404,7 @@ final class AnalyticsQueryService
             ->whereNull('st.deleted_at')
             ->select([
                 'a.id as assessment_id',
+                'a.class_id as class_id',
                 'a.name as assessment_name',
                 'a.term',
                 'a.date as assessment_date',
@@ -387,6 +418,7 @@ final class AnalyticsQueryService
                 'grid.score_total',
                 'result.id as result_id',
                 'result.total as result_total',
+                'result.max as result_max',
             ])
             ->selectRaw(
                 "case when coalesce(grid.absent_count, 0) > 0 then 'absent' ".
@@ -398,19 +430,23 @@ final class AnalyticsQueryService
                 'then grid.score_total when result.id is not null and coalesce(grid.absent_count, 0) = 0 then result.total end as total'
             )
             ->selectRaw(
+                'case when coalesce(grid.absent_count, 0) = 0 and grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 '.
+                'then rubric.max_score when result.id is not null and coalesce(grid.absent_count, 0) = 0 then result.max end as max'
+            )
+            ->selectRaw(
                 'case when coalesce(grid.absent_count, 0) = 0 and (grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 or result.id is not null) '.
                 'then (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision '.
-                '/ nullif(rubric.max_score, 0) * 100 end as pct'
+                '/ nullif(case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then rubric.max_score else result.max end, 0) * 100 end as pct'
             )
             ->selectRaw(
                 'case when coalesce(grid.absent_count, 0) = 0 and (grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 or result.id is not null) then '.
-                'case when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(rubric.max_score, 0) >= 0.8 then \'EE\' '.
-                'when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(rubric.max_score, 0) >= 0.6 then \'ME\' '.
-                'when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(rubric.max_score, 0) >= 0.4 then \'AE\' else \'BE\' end end as level, '.
+                'case when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then rubric.max_score else result.max end, 0) >= 0.8 then \'EE\' '.
+                'when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then rubric.max_score else result.max end, 0) >= 0.6 then \'ME\' '.
+                'when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then rubric.max_score else result.max end, 0) >= 0.4 then \'AE\' else \'BE\' end end as level, '.
                 'case when coalesce(grid.absent_count, 0) = 0 and (grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 or result.id is not null) then '.
-                'case when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(rubric.max_score, 0) >= 0.8 then 3 '.
-                'when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(rubric.max_score, 0) >= 0.6 then 2 '.
-                'when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(rubric.max_score, 0) >= 0.4 then 1 else 0 end end as level_rank'
+                'case when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then rubric.max_score else result.max end, 0) >= 0.8 then 3 '.
+                'when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then rubric.max_score else result.max end, 0) >= 0.6 then 2 '.
+                'when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then rubric.max_score else result.max end, 0) >= 0.4 then 1 else 0 end end as level_rank'
             );
     }
 

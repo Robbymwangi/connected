@@ -6,6 +6,7 @@ export type ReportSummaryFilters = {
   subjectId?: string | null
   term?: number | null
   assessmentName?: string | null
+  assessmentId?: string | null
 }
 
 export type ReportSummaryResponse = {
@@ -15,9 +16,20 @@ export type ReportSummaryResponse = {
     year: number
     term: number | null
     assessment_name: string | null
+    assessment_id: string | null
   }
   available_years: number[]
   available_assessments: string[]
+  student_outcomes: Array<{
+    studentId: string
+    studentName: string
+    classId: string
+    status: 'scored' | 'absent' | 'missing'
+    total: number | null
+    max: number | null
+    pct: number | null
+    level: 'EE' | 'ME' | 'AE' | 'BE' | null
+  }>
   summary: {
     pass_rate: number | null
     mean_score: number | null
@@ -55,6 +67,7 @@ export function getReportSummary(
   if (filters.subjectId) params.set('subject_id', filters.subjectId)
   if (filters.term != null) params.set('term', String(filters.term))
   if (filters.assessmentName) params.set('assessment_name', filters.assessmentName)
+  if (filters.assessmentId) params.set('assessment_id', filters.assessmentId)
 
   return apiFetch(`/api/reports/summary?${params.toString()}`, { token }, fetchImpl)
 }
