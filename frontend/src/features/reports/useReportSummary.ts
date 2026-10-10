@@ -22,7 +22,8 @@ export function useReportSummary(filters: ReportSummaryFilters | null, token: st
   const subjectId = filters?.subjectId ?? null
   const term = filters?.term ?? null
   const assessmentName = filters?.assessmentName ?? null
-  const key = stream && year ? JSON.stringify([stream, year, subjectId, term, assessmentName]) : ''
+  const assessmentId = filters?.assessmentId ?? null
+  const key = stream && year ? JSON.stringify([stream, year, subjectId, term, assessmentName, assessmentId]) : ''
 
   useEffect(() => {
     if (!stream || !year || !key || !isOnline) return
@@ -36,7 +37,7 @@ export function useReportSummary(filters: ReportSummaryFilters | null, token: st
       error: null,
     }))
 
-    void getReportSummary({ stream, year, subjectId, term, assessmentName }, token).then((response) => {
+    void getReportSummary({ stream, year, subjectId, term, assessmentName, assessmentId }, token).then((response) => {
       if (cancelled) return
       completed.current = { key, attempt }
       setState({ key, response, loading: false, error: null })
@@ -53,7 +54,7 @@ export function useReportSummary(filters: ReportSummaryFilters | null, token: st
     return () => {
       cancelled = true
     }
-  }, [attempt, isOnline, key, stream, year, subjectId, term, assessmentName, token])
+  }, [attempt, isOnline, key, stream, year, subjectId, term, assessmentName, assessmentId, token])
 
   const current = state.key === key ? state : null
 

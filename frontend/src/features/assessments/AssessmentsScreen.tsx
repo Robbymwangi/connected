@@ -15,6 +15,7 @@ type View = 'queue' | 'browse'
 type AssessmentsScreenProps = {
   store: SessionStore
   directory: SchoolDirectoryState
+  token: string
   /* Set when the user is inside one assessment; undefined on the list. */
   assessmentId?: string
   view?: 'grid' | 'report'
@@ -30,6 +31,7 @@ type AssessmentsScreenProps = {
 export function AssessmentsScreen({
   store,
   directory,
+  token,
   assessmentId,
   view,
   creating: creatingOnArrival = false,
@@ -66,7 +68,7 @@ export function AssessmentsScreen({
     )
   }
   if (open && view === 'report') {
-    return <AssessmentReport assessment={open} store={store} onBack={onBackToList} onOpenStudent={onOpenStudent} />
+    return <AssessmentReport assessment={open} directory={directory} token={token} onBack={onBackToList} onOpenStudent={onOpenStudent} />
   }
 
   const shown = filterAssessments(list, filters).length

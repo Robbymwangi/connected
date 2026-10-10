@@ -11,5 +11,6 @@ final readonly class AnalyticsFilters
         public int $year,
         public ?int $term = null,
         public ?string $assessmentName = null,
+        public ?string $assessmentId = null,
     ) {}
 }
