@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AnalyticsSummaryController;
 use App\Http\Controllers\AssessmentsController;
 use App\Http\Controllers\ClassesController;
 use App\Http\Controllers\HealthController;
@@ -39,6 +40,7 @@ Route::post('/login', LoginController::class)->name('login')->middleware('thrott
 Route::middleware(['auth:sanctum', EnsureAccountIsActive::class])->group(function () {
     Route::post('/logout', LogoutController::class)->name('logout');
     Route::get('/me', MeController::class)->name('me');
+    Route::get('/reports/summary', AnalyticsSummaryController::class)->name('reports.summary');
 
     // Both sync verbs need the token's `sync` ability (docs/spec/access-model.md,
     // Tokens; docs/spec/sync-protocol.md, Authorization and scoping). A device
