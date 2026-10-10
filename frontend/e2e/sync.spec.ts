@@ -223,14 +223,49 @@ test.describe('settling a conflict', () => {
     await expect(page.getByRole('row', { name: /Amina Osei/ }).getByText('15', { exact: true }).first()).toBeVisible()
   })
 
-  test('someone who moderates a different subject can only watch', async ({ page, context }) => {
+  test('someone who moderates a different subject can only watch: the conflict is folded away and never counted', async ({ page, context }) => {
     const elsewhere = { ...E2E_USER, moderated_subject_ids: ['subject-other'] }
     await signIn(page, await conflictChanges({ a: 'teacher-akinyi', b: 'teacher-otieno' }), elsewhere)
     await context.setOffline(true)
 
     await page.goto('/sync')
 
+    await expect(page.getByText('All conflicts resolved').first()).toBeVisible()
+    await expect(page.getByText('Other conflicts (1)')).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Keep / })).toHaveCount(0)
+    await page.getByText('Other conflicts (1)').click()
+    await expect(page.getByRole('button', { name: /^Open in marking grid: Amina Osei, Comprehension/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /^Keep / })).toHaveCount(0)
     expect(await outboxEntries(page)).toHaveLength(0)
+  })
+})
+
+/* One definition of "needs you", used by the banner, the dashboard, and the top bar. */
+test.describe('counting what needs a person', () => {
+  const needsReview = (page: Page) => page.getByText('Needs Review', { exact: true }).locator('xpath=..')
+
+  test('a party sees the conflict in the banner, the dashboard, and the top bar', async ({ page }) => {
+    await signIn(page, await conflictChanges({ a: 'teacher-akinyi', b: E2E_USER.id }))
+
+    await expect(page.getByText('Needs attention')).toBeVisible()
+    await expect(needsReview(page)).toContainText('1')
+    await expect(page.getByTestId('sync-line')).toHaveAttribute('data-sync-category', 'attention')
+  })
+
+  test('someone who can only watch sees none of it', async ({ page }) => {
+    const elsewhere = { ...E2E_USER, moderated_subject_ids: ['subject-other'] }
+    await signIn(page, await conflictChanges({ a: 'teacher-akinyi', b: 'teacher-otieno' }), elsewhere)
+
+    await expect(page.getByText('Needs attention')).toHaveCount(0)
+    await expect(needsReview(page)).toContainText('0')
+    await expect(page.getByTestId('sync-line')).not.toHaveAttribute('data-sync-category', 'attention')
+  })
+
+  test('a moderator of the subject counts a cross-teacher conflict, which a party would not have to act on', async ({ page }) => {
+    const moderator = { ...E2E_USER, moderated_subject_ids: ['subject-1'] }
+    await signIn(page, await conflictChanges({ a: 'teacher-akinyi', b: 'teacher-otieno' }), moderator)
+
+    await expect(page.getByText('Needs attention')).toBeVisible()
+    await expect(needsReview(page)).toContainText('1')
   })
 })

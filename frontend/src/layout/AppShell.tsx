@@ -8,6 +8,8 @@ import { UpdateReady } from './UpdateReady'
 type AppShellProps = {
   active: NavId
   onNavigate: (id: NavId) => void
+  /* How many conflicts need this person, for the sync line in the top bar. */
+  conflictsNeedingYou: number
   children: ReactNode
 }
 
@@ -18,7 +20,7 @@ type AppShellProps = {
    The sidebar opens two ways. Hovering the left edge or the hamburger peeks it, and
    it retracts when the pointer leaves. Clicking the hamburger pins it until closed.
    Touch devices have no hover, so pinning is the path that must always work. */
-export function AppShell({ active, onNavigate, children }: AppShellProps) {
+export function AppShell({ active, onNavigate, conflictsNeedingYou, children }: AppShellProps) {
   const [pinned, setPinned] = useState(false)
   const [hovering, setHovering] = useState(false)
   const open = pinned || hovering
@@ -52,6 +54,7 @@ export function AppShell({ active, onNavigate, children }: AppShellProps) {
       <div className="min-w-0 flex-1 overflow-y-auto bg-background transition-colors duration-300">
         <UpdateReady />
         <TopBar
+          conflictsNeedingYou={conflictsNeedingYou}
           menuPinned={pinned}
           onMenuHover={() => setHovering(true)}
           onMenuClick={() => {

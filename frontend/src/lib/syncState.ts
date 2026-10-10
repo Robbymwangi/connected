@@ -12,7 +12,6 @@ import { formatRelative } from './time'
 export type SyncRows = {
   queued: number
   sent: number
-  conflict: number
   failed: number
   notices: SyncNotice[]
   lastSuccessAt: string | null
@@ -24,22 +23,11 @@ export function readSyncRows(database: LocalDatabase): Promise<SyncRows> {
   return database.transaction('r', [database.outbox, database.metadata], async () => {
     const count = (state: string) => database.outbox.where('state').equals(state).count()
     const [queued, sent, failed] = await Promise.all([count('queued'), count('sent'), count('failed')])
-
-    /* A mark edit retained for a conflict needs a person, until a resolution for that
-       conflict is on its way: then it needs only to arrive. */
-    const retained = await database.outbox.where('state').equals('conflict').toArray()
-    const resolving = new Set(
-      (await database.outbox.where('state').anyOf(['queued', 'sent', 'acked'])
-        .filter((entry) => entry.kind === 'command' && entry.fields.resolution !== undefined).toArray())
-        .map((entry) => entry.recordId),
-    )
-    const conflict = retained.filter((entry) => !(entry.conflictId && resolving.has(entry.conflictId))).length
     const notices = (await database.metadata.get(syncNoticesKey))?.value
     const lastSuccessAt = (await database.metadata.get(syncLastSuccessKey))?.value
     return {
       queued,
       sent,
-      conflict,
       failed,
       notices: Array.isArray(notices) ? notices as SyncNotice[] : [],
       lastSuccessAt: typeof lastSuccessAt === 'string' ? lastSuccessAt : null,
@@ -60,12 +48,16 @@ export type SyncState = {
   nextAttemptAt: Date | null
 }
 
-export function summarizeSync(rows: SyncRows | null, status: RunnerStatus): SyncState {
+/* `conflict` is how many conflicts need this person, worked out by the store from the
+   conflict rows and the policy (groupConflicts); the outbox does not know who may act on
+   what. It is passed in so the top bar, the dashboard, and the Sync screen count the same
+   thing. */
+export function summarizeSync(rows: SyncRows | null, status: RunnerStatus, conflict = 0): SyncState {
   const synced = rows?.lastSuccessAt ? new Date(rows.lastSuccessAt) : null
   return {
     status: rows ? 'ready' : 'loading',
     pending: rows ? rows.queued + rows.sent : 0,
-    conflict: rows?.conflict ?? 0,
+    conflict: rows ? conflict : 0,
     failed: rows?.failed ?? 0,
     notices: rows?.notices ?? [],
     lastSyncedAt: synced && !Number.isNaN(synced.getTime()) ? synced : null,

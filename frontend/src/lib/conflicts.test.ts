@@ -3,6 +3,8 @@ import type { ActiveConflict, Proposal } from '../fixtures/conflicts'
 import {
   abilityOf,
   canRefer,
+  describeConflictCounts,
+  groupConflicts,
   isValidChoice,
   isAutoResolvable,
   isSelfConflict,
@@ -260,5 +262,84 @@ describe('planCommand', () => {
       expect(plan(twoRounds, { action: 'refer' }, me)).not.toBeNull()
       expect(plan(twoRounds, { action: 'refer' }, her)).toBeNull()
     })
+  })
+})
+
+
+describe('groupConflicts', () => {
+  const her = { id: 'u-2', name: 'Ms. Akinyi', moderatedSubjects: [] as string[] }
+  const other = { id: 'u-9', name: 'Mr. Otieno', moderatedSubjects: [] as string[] }
+  const mineSide = { kind: 'side' as const, editId: 'e-m' }
+  const mineProposal: Proposal = { ...proposalByHer, byId: 'u-1', by: 'John Doe', choice: mineSide }
+  const idsOf = (conflicts: ActiveConflict[]) => conflicts.map((conflict) => conflict.id)
+  const withId = (id: string, over: Partial<ActiveConflict> = {}): ActiveConflict => ({ ...crossTeacher, id, ...over })
+
+  it('puts what a person can act on under needs you: settle their own edits, propose, or respond to a proposal', () => {
+    const groups = groupConflicts([
+      withId('own', { mine: ownEdits.mine, theirs: ownEdits.theirs }),
+      withId('open'),
+      withId('responds', { proposals: [proposalByHer] }),
+    ], me)
+
+    expect(idsOf(groups.needsYou)).toEqual(['own', 'open', 'responds'])
+    expect(groups.waiting).toEqual([])
+    expect(groups.others).toEqual([])
+  })
+
+  it('puts their own conflicts that only another person can move under waiting', () => {
+    const groups = groupConflicts([
+      withId('mine-waiting', { proposals: [mineProposal] }),
+      withId('referred', { referral: { reason: 'party', byId: 'u-2', by: 'Ms. Akinyi', at: 'x' } }),
+    ], me)
+
+    expect(idsOf(groups.waiting)).toEqual(['mine-waiting', 'referred'])
+    expect(groups.needsYou).toEqual([])
+  })
+
+  it('puts a moderator of the subject under needs you, referred or not, and anyone else under others', () => {
+    const referred = withId('referred', { referral: { reason: 'party', byId: 'u-1', by: 'John Doe', at: 'x' } })
+    const maths = { id: 'u-4', name: 'Ms. Wanjiru', moderatedSubjects: ['subject-maths'] }
+
+    expect(idsOf(groupConflicts([withId('c'), referred], hod).needsYou)).toEqual(['c', 'referred'])
+    expect(idsOf(groupConflicts([withId('c'), referred], other).others)).toEqual(['c', 'referred'])
+    expect(idsOf(groupConflicts([withId('c')], maths).others)).toEqual(['c'])
+  })
+
+  it('does not count someone else\'s own two-device edits for a moderator, who can only watch them', () => {
+    expect(idsOf(groupConflicts([ownEdits], hod).others)).toEqual(['c'])
+  })
+
+  it('counts a moderator who is also a party as a party', () => {
+    const partyAndHod = { id: 'u-1', name: 'John Doe', moderatedSubjects: [SUBJECT] }
+
+    expect(idsOf(groupConflicts([withId('c')], partyAndHod).needsYou)).toEqual(['c'])
+    expect(idsOf(groupConflicts([withId('c', { proposals: [mineProposal] })], partyAndHod).waiting)).toEqual(['c'])
+  })
+
+  it('keeps the order it was given within each group, and handles none', () => {
+    expect(groupConflicts([], me)).toEqual({ needsYou: [], waiting: [], others: [] })
+    const mixed = [withId('a'), withId('b', { proposals: [mineProposal] }), withId('c')]
+    expect(idsOf(groupConflicts(mixed, me).needsYou)).toEqual(['a', 'c'])
+    expect(idsOf(groupConflicts(mixed, her).needsYou)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('describeConflictCounts', () => {
+  const none = { needsYou: [], waiting: [], others: [] }
+  const some = (n: number) => Array.from({ length: n }, (_, i) => ({ ...crossTeacher, id: `c${i}` }))
+
+  it('says what is for the person to do', () => {
+    expect(describeConflictCounts({ ...none, needsYou: some(1) })).toBe('1 conflict to resolve')
+    expect(describeConflictCounts({ ...none, needsYou: some(3) })).toBe('3 conflicts to resolve')
+  })
+
+  it('says when the rest is waiting on other people, and when there is nothing to do', () => {
+    expect(describeConflictCounts({ ...none, needsYou: some(2), waiting: some(1) })).toBe('2 conflicts to resolve, 1 waiting on others')
+    expect(describeConflictCounts({ ...none, waiting: some(2) })).toBe('Nothing for you to do; 2 waiting on others')
+    expect(describeConflictCounts(none)).toBe('All conflicts resolved')
+  })
+
+  it('does not count what a person can only watch', () => {
+    expect(describeConflictCounts({ ...none, others: some(5) })).toBe('All conflicts resolved')
   })
 })

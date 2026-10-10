@@ -173,3 +173,35 @@ export function planCommand(
     }
   }
 }
+
+/* The one definition of what a conflict means to the person looking at it, used by the
+   top bar, the dashboard, and the Sync screen alike so they cannot disagree.
+   needsYou: they can act on it now (settle it, put forward a resolution, or answer one).
+   waiting:  theirs, but only another person can move it (their proposal is pending, or it
+             is with a moderator and they are not the moderator).
+   others:   neither a party nor a moderator of the subject. Anyone in the school may read
+             these (docs/spec/access-model.md); they are never counted. */
+export type ConflictGroups = { needsYou: ActiveConflict[]; waiting: ActiveConflict[]; others: ActiveConflict[] }
+
+export function groupConflicts(conflicts: readonly ActiveConflict[], user: Resolver): ConflictGroups {
+  const groups: ConflictGroups = { needsYou: [], waiting: [], others: [] }
+  for (const conflict of conflicts) {
+    const { kind } = abilityOf(conflict, user, conflict.subjectId)
+    if (kind === 'resolve' || kind === 'propose' || kind === 'respond') groups.needsYou.push(conflict)
+    else if (kind === 'awaiting' || kind === 'referred') groups.waiting.push(conflict)
+    else groups.others.push(conflict)
+  }
+  return groups
+}
+
+const countOf = (count: number) => `${count} ${count === 1 ? 'conflict' : 'conflicts'}`
+
+/* The line under the Sync heading. */
+export function describeConflictCounts({ needsYou, waiting }: ConflictGroups): string {
+  if (needsYou.length > 0) {
+    return waiting.length > 0
+      ? `${countOf(needsYou.length)} to resolve, ${waiting.length} waiting on others`
+      : `${countOf(needsYou.length)} to resolve`
+  }
+  return waiting.length > 0 ? `Nothing for you to do; ${waiting.length} waiting on others` : 'All conflicts resolved'
+}

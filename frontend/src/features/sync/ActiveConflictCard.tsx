@@ -55,7 +55,7 @@ export function ActiveConflictCard({ conflict, criterionMax, highlighted, onReso
       }`}
     >
       <ConflictHeader student={conflict.student} criterion={conflict.criterion} assessment={conflict.assessment}>
-        <Button onClick={onOpenGrid} aria-label="Open in marking grid" title="Open in marking grid">
+        <Button onClick={onOpenGrid} aria-label={`Open in marking grid: ${conflict.student}, ${conflict.criterion}`} title="Open in marking grid">
           <Grid3x3 className="size-4" />
         </Button>
       </ConflictHeader>

@@ -9,9 +9,14 @@ import { syncNoticesKey } from './syncPush'
 const NOW = new Date('2026-10-09T12:00:00.000Z')
 const idle: RunnerStatus = { phase: 'idle', failure: null, message: null, nextAttemptAt: null }
 const rows = (over: Partial<SyncRows> = {}): SyncRows => ({
-  queued: 0, sent: 0, conflict: 0, failed: 0, notices: [], lastSuccessAt: null, ...over,
+  queued: 0, sent: 0, failed: 0, notices: [], lastSuccessAt: null, ...over,
 })
-const describeOf = (over: Partial<SyncRows>, status: RunnerStatus = idle) => describeSync(summarizeSync(rows(over), status), NOW)
+/* `conflict` is how many conflicts need this person, which the store works out (groupConflicts)
+   and hands in; the outbox knows nothing about who may act on what. */
+const describeOf = (over: Partial<SyncRows> & { conflict?: number }, status: RunnerStatus = idle) => {
+  const { conflict = 0, ...rest } = over
+  return describeSync(summarizeSync(rows(rest), status, conflict), NOW)
+}
 
 describe('plural', () => {
   it('counts changes', () => {
@@ -24,12 +29,14 @@ describe('plural', () => {
 describe('summarizeSync', () => {
   it('is loading until the first read', () => {
     expect(summarizeSync(null, idle)).toMatchObject({ status: 'loading', pending: 0, conflict: 0, failed: 0, lastSyncedAt: null })
+    expect(summarizeSync(null, idle, 4).conflict).toBe(0)
   })
 
   it('counts queued and sent as pending, and reads the last success and the retry time', () => {
     const state = summarizeSync(
-      rows({ queued: 2, sent: 1, conflict: 1, failed: 2, lastSuccessAt: '2026-10-09T10:00:00.000Z' }),
+      rows({ queued: 2, sent: 1, failed: 2, lastSuccessAt: '2026-10-09T10:00:00.000Z' }),
       { phase: 'backoff', failure: 'retry', message: 'x', nextAttemptAt: NOW.getTime() + 5_000 },
+      1,
     )
 
     expect(state).toMatchObject({ status: 'ready', pending: 3, conflict: 1, failed: 2, phase: 'backoff', failure: 'retry' })
@@ -93,7 +100,7 @@ describe('describeSync', () => {
   })
 
   it('never mentions the connection', () => {
-    const everything: Partial<SyncRows>[] = [{}, { queued: 1 }, { conflict: 1 }, { lastSuccessAt: '2026-10-09T10:00:00.000Z' }]
+    const everything: Array<Partial<SyncRows> & { conflict?: number }> = [{}, { queued: 1 }, { conflict: 1 }, { lastSuccessAt: '2026-10-09T10:00:00.000Z' }]
     for (const over of everything) expect(describeOf(over).text).not.toMatch(/online|offline|connect|network/i)
   })
 })
@@ -123,48 +130,30 @@ describe('readSyncRows', () => {
     ])
 
     expect(await readSyncRows(database)).toEqual({
-      queued: 2, sent: 1, conflict: 1, failed: 1, notices: [notice], lastSuccessAt: '2026-10-09T10:00:00.000Z',
+      queued: 2, sent: 1, failed: 1, notices: [notice], lastSuccessAt: '2026-10-09T10:00:00.000Z',
     })
   })
 
-  describe('a mark conflict that a resolution is already on its way for', () => {
-    const conflictEntry = (conflictId: string, recordId: string): OutboxEntry => ({
-      ...entry('conflict', recordId), conflictId,
+  describe('conflict commands', () => {
+    const command = (state: OutboxEntry['state']): OutboxEntry => ({
+      id: crypto.randomUUID(), table: 'conflicts', recordId: 'c1', kind: 'command', baseVersion: 1,
+      fields: { resolution: { kind: 'self', byId: 'u1' } }, at: 'x', state,
     })
-    const command = (state: OutboxEntry['state'], fields: Record<string, unknown>, conflictId = 'c1'): OutboxEntry => ({
-      id: crypto.randomUUID(), table: 'conflicts', recordId: conflictId, kind: 'command', baseVersion: 1, fields, at: 'x', state,
-    })
-    const resolution = { resolution: { kind: 'self', byId: 'u1' } }
 
-    it.each([['queued'], ['sent'], ['acked']] as const)('no longer asks for review once a %s resolution exists', async (state) => {
+    it('counts a queued or sent command as pending and a refused one as failed, and an acknowledged one as neither', async () => {
       const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
       stores.push(database)
-      await database.outbox.bulkAdd([conflictEntry('c1', 'a'), conflictEntry('c2', 'b'), command(state, resolution)])
+      await database.outbox.bulkAdd([command('queued'), command('sent'), command('acked'), command('failed')])
 
-      const rows = await readSyncRows(database)
-
-      expect(rows.conflict).toBe(1)
+      expect(await readSyncRows(database)).toMatchObject({ queued: 1, sent: 1, failed: 1 })
     })
 
-    it('still asks for review when the command is only a proposal or a referral, or was refused', async () => {
+    it('does not count a mark edit retained for a conflict itself: whether that needs the person is the conflict\'s question', async () => {
       const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
       stores.push(database)
-      await database.outbox.bulkAdd([
-        conflictEntry('c1', 'a'),
-        command('queued', { proposal: { byId: 'u1' } }),
-        command('sent', { referral: { byId: 'u1' } }),
-        command('failed', resolution),
-      ])
+      await database.outbox.add({ ...entry('conflict', 'a'), conflictId: 'c1' })
 
-      expect((await readSyncRows(database)).conflict).toBe(1)
-    })
-
-    it('counts a queued or sent command as pending, and a refused one as needing review', async () => {
-      const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
-      stores.push(database)
-      await database.outbox.bulkAdd([command('queued', resolution), command('sent', resolution), command('acked', resolution), command('failed', resolution)])
-
-      expect(await readSyncRows(database)).toMatchObject({ queued: 1, sent: 1, failed: 1, conflict: 0 })
+      expect(await readSyncRows(database)).toMatchObject({ queued: 0, sent: 0, failed: 0 })
     })
   })
 
@@ -172,7 +161,7 @@ describe('readSyncRows', () => {
     const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
     stores.push(database)
 
-    expect(await readSyncRows(database)).toEqual({ queued: 0, sent: 0, conflict: 0, failed: 0, notices: [], lastSuccessAt: null })
+    expect(await readSyncRows(database)).toEqual({ queued: 0, sent: 0, failed: 0, notices: [], lastSuccessAt: null })
   })
 
   it('ignores stored values of the wrong shape', async () => {

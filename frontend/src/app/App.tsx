@@ -7,6 +7,7 @@ import { SyncScreen } from '../features/sync/SyncScreen'
 import type { Resolver } from '../lib/conflicts'
 import type { CurrentUser } from '../lib/session'
 import { AppShell } from '../layout/AppShell'
+import { StorageErrorBanner } from '../layout/StorageErrorBanner'
 import type { NavId } from '../layout/navigation'
 import { AuthProvider } from './AuthProvider'
 import { useAuthSession } from './useAuthSession'
@@ -50,10 +51,11 @@ function AuthenticatedApp({ user, onSignOut }: { user: CurrentUser; onSignOut: (
 
   return (
     <AuthProvider value={{ user, signOut: onSignOut }}>
-      <AppShell active={location.screen} onNavigate={navigate}>
+      <AppShell active={location.screen} onNavigate={navigate} conflictsNeedingYou={store.groups.needsYou.length}>
+        {store.loadFailed && <StorageErrorBanner />}
         {location.screen === 'dashboard' && (
           <Dashboard
-            conflicts={store.conflicts}
+            conflicts={store.groups.needsYou}
             onNavigate={navigate}
             onCreateAssessment={() => setLocation({ screen: 'assessments', creating: true })}
             onViewConflicts={(highlight) => setLocation({ screen: 'sync', highlight })}

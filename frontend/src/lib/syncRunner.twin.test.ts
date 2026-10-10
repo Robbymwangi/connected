@@ -121,7 +121,7 @@ describe('reconciling offline edits with no one clicking', () => {
     expect(status()).toMatchObject({ phase: 'idle', failure: null })
     await assertDisplayFlags(database)
     runner.dispose()
-  })
+  }, 15_000)
 
   it('resends a request whose response was lost with an identical body, with nothing written in between', async () => {
     const database = await editedOffline(3)

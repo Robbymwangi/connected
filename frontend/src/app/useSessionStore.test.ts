@@ -22,6 +22,7 @@ const seed: Parameters<typeof reduce>[0] = {
   history: resolvedConflicts,
   criteriaBySubject: Object.fromEntries(subjects.map((subject) => [subject, rubricFor(subject)])),
   resultRecords: [],
+  loadFailed: false,
 }
 
 describe('addAssessments', () => {
@@ -118,5 +119,30 @@ describe('mergeSyncedState', () => {
     const hydrated = reduce(local, { type: 'hydrate', state: remote })
 
     expect(hydrated.assessments.find((assessment) => assessment.id === assessmentId)?.name).toBe('Updated remotely')
+  })
+})
+
+
+describe('a failed read of the database', () => {
+  it('is remembered, and keeps what was already shown rather than blanking it', () => {
+    const failed = reduce(seed, { type: 'loadFailed' })
+
+    expect(failed.loadFailed).toBe(true)
+    expect(failed.conflicts).toBe(seed.conflicts)
+    expect(failed.assessments).toBe(seed.assessments)
+  })
+
+  it('clears itself when a later read succeeds', () => {
+    const failed = reduce(seed, { type: 'loadFailed' })
+
+    const recovered = reduce(failed, { type: 'hydrate', state: seed })
+
+    expect(recovered.loadFailed).toBe(false)
+  })
+
+  it('does not carry the flag in from a snapshot', () => {
+    const snapshot = { ...seed, loadFailed: true }
+
+    expect(reduce(seed, { type: 'hydrate', state: snapshot }).loadFailed).toBe(false)
   })
 })

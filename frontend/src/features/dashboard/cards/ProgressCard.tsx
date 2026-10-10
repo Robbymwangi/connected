@@ -6,11 +6,13 @@ import { formatRelative } from '../../../lib/time'
 import { useSyncState } from '../../../lib/useSyncState'
 
 type ProgressCardProps = {
+  /* Conflicts this person can act on; the same count as the top bar and the banner. */
+  needsYou: number
   onExpand: () => void
 }
 
-export function ProgressCard({ onExpand }: ProgressCardProps) {
-  const sync = useSyncState(useCurrentUser().id)
+export function ProgressCard({ needsYou, onExpand }: ProgressCardProps) {
+  const sync = useSyncState(useCurrentUser().id, needsYou)
 
   return (
     <Card title="My Progress" onExpand={onExpand} expandLabel="Open assessments">
@@ -23,7 +25,7 @@ export function ProgressCard({ onExpand }: ProgressCardProps) {
         </div>
         <div className="flex gap-2.5">
           <KpiTile label="Pending Sync" value={sync.status === 'ready' ? sync.pending : '-'} />
-          <KpiTile label="Needs Review" value={progress.needsReview} />
+          <KpiTile label="Needs Review" value={sync.status === 'ready' ? sync.conflict + sync.failed : '-'} />
           <KpiTile label="Entered Today" value={progress.enteredToday} />
         </div>
         <p className="text-xs text-muted-foreground">
