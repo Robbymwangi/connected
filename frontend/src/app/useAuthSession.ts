@@ -13,7 +13,7 @@ export type AuthState =
       error: string | null
       signIn: (email: string, password: string) => Promise<void>
     }
-  | { status: 'signedIn'; user: CurrentUser; signOut: () => Promise<void> }
+  | { status: 'signedIn'; user: CurrentUser; token: string; signOut: () => Promise<void> }
 
 /* One stable adapter for the app's real usage; Dexie manages its database
   connection, so there is no per-instance state worth recreating on every
@@ -133,5 +133,5 @@ export function useAuthSession(
 
   if (session === undefined) return { status: 'loading' }
   if (session === null) return { status: 'signedOut', signingIn, error, signIn }
-  return { status: 'signedIn', user: session.user, signOut }
+  return { status: 'signedIn', user: session.user, token: session.token, signOut }
 }

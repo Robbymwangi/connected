@@ -27,14 +27,14 @@ export default function App() {
     return <SignIn onSignIn={auth.signIn} signingIn={auth.signingIn} error={auth.error} />
   }
 
-  return <AuthenticatedApp user={auth.user} onSignOut={auth.signOut} />
+  return <AuthenticatedApp user={auth.user} token={auth.token} onSignOut={auth.signOut} />
 }
 
 /* Split out from App so its hooks (useLocation, useSessionStore) are only
    ever called once a user exists to call them with: App itself branches on
    auth.status before either hook runs, and that branch must not change how
    many hooks the same component instance calls across renders. */
-function AuthenticatedApp({ user, onSignOut }: { user: CurrentUser; onSignOut: () => Promise<void> }) {
+function AuthenticatedApp({ user, token, onSignOut }: { user: CurrentUser; token: string; onSignOut: () => Promise<void> }) {
   /* The URL is the source of truth for where the user is (ADR 0005). */
   const [location, setLocation] = useLocation()
   const directory = useSchoolDirectory(user.id)
@@ -99,7 +99,8 @@ function AuthenticatedApp({ user, onSignOut }: { user: CurrentUser; onSignOut: (
         )}
         {location.screen === 'reports' && (
           <ReportsScreen
-            store={store}
+            directory={directory}
+            token={token}
             onOpenStudent={(classId, studentId) => setLocation({ screen: 'classes', classId, studentId })}
           />
         )}

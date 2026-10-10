@@ -1,5 +1,5 @@
 import type { Student } from '../fixtures/students'
-import { PASS_MARK_PCT, type Summary } from './analytics'
+import { PASS_MARK_PCT } from './analytics'
 
 /* A stand-in for the report assistant. The real one is a server-side call and
    arrives with the API; until then, answers are sentences templated from the
@@ -8,7 +8,12 @@ import { PASS_MARK_PCT, type Summary } from './analytics'
 
 export type AssistantReport = {
   scopeLabel: string
-  summary: Summary
+  summary: {
+    scored: number
+    passRate: number | null
+    meanPct: number | null
+    levels: Record<'EE' | 'ME' | 'AE' | 'BE', number>
+  }
   criteria: Array<{ name: string; pct: number }>
   trend: Array<{ label: string; passRate: number | null; meanPct: number | null }>
   attention: Array<{ studentId: string; meanPct: number; latestPct: number }>
@@ -35,7 +40,7 @@ function summarise(r: AssistantReport): Answer {
   if (s.scored === 0) return { text: `There are no marked results in ${r.scopeLabel} yet, so there is nothing to summarise.` }
   const meeting = s.levels.EE + s.levels.ME
   return {
-    text: `${r.scopeLabel}: ${pct(s.passRate)} of ${s.scored} results are at or above the ${PASS_MARK_PCT}% pass mark, with a mean of ${pct(s.meanPct)}. ${meeting} are meeting or exceeding expectations, ${s.levels.AE} approaching, ${s.levels.BE} below.${s.absent ? ` ${s.absent} absence${s.absent === 1 ? '' : 's'} excluded.` : ''}`,
+    text: `${r.scopeLabel}: ${pct(s.passRate)} of ${s.scored} results are at or above the ${PASS_MARK_PCT}% pass mark, with a mean of ${pct(s.meanPct)}. ${meeting} are meeting or exceeding expectations, ${s.levels.AE} approaching, ${s.levels.BE} below.`,
     chart: r.trend.length >= 2 ? 'trend' : undefined,
   }
 }

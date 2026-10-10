@@ -1,4 +1,4 @@
-type Side = { value: string; sub?: string; n: number }
+type Side = { value: string; sub?: string; n?: number }
 
 type ReportKpiTileProps = {
   label: string
@@ -16,9 +16,9 @@ export function ReportKpiTile({ label, primary, compare, primaryLabel, compareLa
     <div className="min-w-0 flex-1">
       {name && <p className="mb-1 truncate text-[10px] font-semibold text-muted-foreground">{name}</p>}
       <p className={`font-display text-2xl leading-none font-bold tabular ${warn ? 'text-warning' : 'text-foreground'}`}>{side.value}</p>
-      <p className="mt-1 text-[11px] text-muted-foreground">
-        {side.sub ? `${side.sub} · ` : ''}n = {side.n}
-      </p>
+      {(side.sub || side.n !== undefined) && <p className="mt-1 text-[11px] text-muted-foreground">
+        {side.sub ? `${side.sub}${side.n !== undefined ? ' · ' : ''}` : ''}{side.n !== undefined ? `n = ${side.n}` : ''}
+      </p>}
     </div>
   )
   return (

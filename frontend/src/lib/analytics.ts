@@ -16,7 +16,7 @@ export const PASS_MARK_PCT = 50
 
 export type Scope = {
   stream: string
-  subject: Subject | 'Overall'
+  subject: string | 'Overall'
 }
 
 export type ReportFilters = {

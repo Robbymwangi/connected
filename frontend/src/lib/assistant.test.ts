@@ -23,7 +23,7 @@ describe('answer', () => {
     expect(a.text).toContain('75% of 20 results')
     expect(a.text).toContain('mean of 61%')
     expect(a.text).toContain('15 are meeting or exceeding')
-    expect(a.text).toContain('1 absence excluded')
+    expect(a.text).not.toContain('absence')
     expect(a.chart).toBe('trend')
   })
   it('names the students needing support, lowest first', () => {
