@@ -36,6 +36,7 @@ final class AssessmentPushHandler extends PushHandler
             'term' => 'term',
             'year' => 'year',
             'date' => 'date',
+            'deletedAt' => 'deleted_at',
             'status' => 'status',
             'finalizedBy' => 'finalized_by',
             'finalizedAt' => 'finalized_at',
@@ -59,15 +60,23 @@ final class AssessmentPushHandler extends PushHandler
             return ['status' => 'finalized'];
         }
 
-        $this->validateTypes($entry->fields);
+        $fields = $entry->fields;
+        $this->validateTypes($fields);
+        if (array_key_exists('deletedAt', $fields)) {
+            $fields['deletedAt'] = true;
+        }
 
-        return $entry->fields;
+        return $fields;
     }
 
     /* finalized and reports-generated are one fact for comparison: the assessment is finalized. A late
        finalize against one that has since moved on to reports-generated is the no-op, not a conflict. */
     public function currentValue(Model $record, string $wire): mixed
     {
+        if ($wire === 'deletedAt') {
+            return $record->trashed();
+        }
+
         if ($wire === 'status' && in_array($record->status, self::FINALIZED, true)) {
             return 'finalized';
         }
@@ -82,6 +91,10 @@ final class AssessmentPushHandler extends PushHandler
     public function check(PushEntry $entry, ?Model $record): void
     {
         if (! $this->isFinalize($entry->fields)) {
+            if (array_key_exists('deletedAt', $entry->fields)) {
+                $this->checkDelete($entry, $record);
+            }
+
             return;
         }
 
@@ -106,7 +119,7 @@ final class AssessmentPushHandler extends PushHandler
 
     public function refused(): array
     {
-        return ['deletedAt' => 'an assessment cannot be deleted'];
+        return [];
     }
 
     public function find(string $recordId, bool $lock = false): ?Model
@@ -157,6 +170,34 @@ final class AssessmentPushHandler extends PushHandler
         return array_intersect(array_keys($fields), self::FINALIZE_NAMES) !== [];
     }
 
+    private function checkDelete(PushEntry $entry, ?Model $record): void
+    {
+        if (count($entry->fields) !== 1) {
+            throw SyncRejection::invalid('an assessment delete carries deletedAt only');
+        }
+
+        $intent = $entry->fields['deletedAt'];
+        if (! is_string($intent) || trim($intent) === '') {
+            throw SyncRejection::invalid('deletedAt must be a non-empty delete intent');
+        }
+
+        if ($record === null) {
+            throw SyncRejection::invalid('an assessment cannot be deleted before it is created');
+        }
+
+        if ($record->trashed()) {
+            throw SyncRejection::invalid('the assessment has already been deleted');
+        }
+
+        if ($record->status !== 'scheduled') {
+            throw SyncRejection::invalid('only a scheduled assessment can be deleted');
+        }
+
+        if ($record->marks()->exists()) {
+            throw SyncRejection::invalid('an assessment with marks cannot be deleted');
+        }
+    }
+
     private function creation(PushEntry $entry): Assessment
     {
         $fields = $entry->fields;
@@ -200,6 +241,11 @@ final class AssessmentPushHandler extends PushHandler
         $fields = $entry->fields;
 
         $this->validateTypes($fields);
+
+        if (array_key_exists('deletedAt', $fields)) {
+            $record->setAttribute('deleted_at', now());
+            unset($fields['deletedAt']);
+        }
 
         $classId = $fields['classId'] ?? (string) $record->class_id;
         $subjectId = $fields['subjectId'] ?? (string) $record->subject_id;

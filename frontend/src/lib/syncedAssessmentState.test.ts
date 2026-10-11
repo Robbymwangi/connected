@@ -22,7 +22,7 @@ describe('mapSyncedAssessmentState', () => {
       directory,
       assessments: [{
         id: 'assessment-1', version: 2, classId: 'class-1', subjectId: 'subject-1', name: 'CAT 1',
-        term: 'Term 1', year: 2026, date: '2026-05-12', status: 'scheduled',
+        term: 1, year: 2026, date: '2026-05-12', status: 'scheduled',
       }],
       marks: [
         { id: 'mark-1', version: 1, assessmentId: 'assessment-1', studentId: 'student-1', criterionId: 'criterion-1', markKind: 'absent', score: null, lastEditedBy: 'teacher-1' },

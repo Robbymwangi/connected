@@ -64,6 +64,61 @@ export class OpenConflictsError extends Error {
   }
 }
 
+export class AssessmentDeleteError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AssessmentDeleteError'
+  }
+}
+
+export type AssessmentDeleteResult = 'cancelled-create' | 'queued-delete'
+
+export function deleteAssessmentRecord(
+  database: LocalDatabase,
+  id: string,
+  at: string,
+): Promise<AssessmentDeleteResult> {
+  return database.transaction('rw', [database.assessments, database.marks, database.outbox], async () => {
+    const current = await database.assessments.get(id)
+    if (!current || current.deletedAt != null) throw new AssessmentDeleteError('Assessment is not available on this device')
+    if (current.status !== 'scheduled') throw new AssessmentDeleteError('Only a scheduled assessment can be deleted')
+
+    const liveMarks = await database.marks.where('assessmentId').equals(id).filter((mark) => mark.deletedAt == null).count()
+    if (liveMarks > 0) throw new AssessmentDeleteError('An assessment with marks cannot be deleted')
+
+    const entries = await entriesForRecord(database, 'assessments', id)
+    const create = entries.find((entry) => entry.kind === 'patch' && entry.baseVersion === 0)
+    if (current.version === 0 && create?.state === 'queued' && entries.length === 1) {
+      await database.outbox.delete(create.seq as number)
+      await database.assessments.delete(id)
+      return 'cancelled-create'
+    }
+
+    if (entries.some((entry) => entry.state === 'conflict' || entry.state === 'failed')) {
+      throw new AssessmentDeleteError('Resolve the existing assessment changes before deleting it')
+    }
+    if (current.version === 0) {
+      throw new AssessmentDeleteError('Wait for this assessment to sync before deleting it')
+    }
+    if (entries.length > 0) {
+      throw new AssessmentDeleteError('Wait for pending assessment changes to sync before deleting it')
+    }
+
+    const shadow = shadowFor(current, ['deletedAt'], entries)
+    await database.assessments.put({ ...current, deletedAt: at, sync: 'pending', ...shadow })
+    await enqueue(database, {
+      table: 'assessments',
+      recordId: id,
+      kind: 'patch',
+      baseVersion: current.version,
+      fields: { deletedAt: at },
+      at,
+    })
+
+    return 'queued-delete'
+  })
+}
+
 /* How many conflicts on this assessment's marks are still open, counting a conflict this
    device has already resolved (the command is queued, sent, or answered) as settled: the
    push sends that command ahead of the finalize, so the server will see it settled too. */

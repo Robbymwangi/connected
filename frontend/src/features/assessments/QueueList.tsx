@@ -24,10 +24,11 @@ type QueueListProps = {
   onFiltersChange: (update: (f: QueueFilters) => QueueFilters) => void
   onOpenGrid: (id: string) => void
   onOpenReport: (id: string) => void
+  onDelete: (id: string) => void
 }
 
 /* Filters live in the screen so the header can report how many rows they left. */
-export function QueueList({ assessments, subjects, filters, onFiltersChange: setFilters, onOpenGrid, onOpenReport }: QueueListProps) {
+export function QueueList({ assessments, subjects, filters, onFiltersChange: setFilters, onOpenGrid, onOpenReport, onDelete }: QueueListProps) {
   const rows = sortQueue(filterAssessments(assessments, filters))
   const subjectOptions = [ALL_SUBJECTS, ...subjects] as const
 
@@ -72,6 +73,7 @@ export function QueueList({ assessments, subjects, filters, onFiltersChange: set
             assessment={a}
             onOpenGrid={() => onOpenGrid(a.id)}
             onOpenReport={() => onOpenReport(a.id)}
+            onDelete={() => onDelete(a.id)}
           />
         ))}
       </div>

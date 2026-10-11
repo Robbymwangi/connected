@@ -47,6 +47,21 @@ function json(body: unknown): Response {
 }
 
 describe('pullSync', () => {
+  describe('with a slow server response', () => {
+    it('does not abort a slow sync request before the extended timeout', async () => {
+      const store = createDatabase()
+      let finished = false
+      const fetchMock = vi.fn(() => new Promise<Response>((resolve) => {
+        setTimeout(() => resolve(json({ changes: [], cursor: 0, more: false })), 12_000)
+      }))
+      const result = pullSync('token', 'user-1', fetchMock as unknown as typeof fetch, store.database)
+        .finally(() => { finished = true })
+
+      await expect(result).resolves.toMatchObject({ pages: 1, changesApplied: 0, cursor: 0 })
+      expect(finished).toBe(true)
+    }, 20_000)
+  })
+
   it('applies paged bootstrap rows and commits each page cursor with its records', async () => {
     const store = createDatabase()
     const fetchMock = vi

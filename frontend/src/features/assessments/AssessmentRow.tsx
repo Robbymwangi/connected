@@ -1,3 +1,4 @@
+import { Trash2 } from 'lucide-react'
 import { CompletionBar } from '../../components/CompletionBar'
 import { SyncDot } from '../../components/SyncDot'
 import type { Assessment } from '../../fixtures/assessments'
@@ -9,10 +10,11 @@ type AssessmentRowProps = {
   compact?: boolean
   onOpenGrid: () => void
   onOpenReport: () => void
+  onDelete?: () => void
 }
 
 /* One assessment in a list, with the single action its status calls for. */
-export function AssessmentRow({ assessment: a, compact = false, onOpenGrid, onOpenReport }: AssessmentRowProps) {
+export function AssessmentRow({ assessment: a, compact = false, onOpenGrid, onOpenReport, onDelete }: AssessmentRowProps) {
   const needsAction = a.status === 'complete'
 
   return (
@@ -44,16 +46,17 @@ export function AssessmentRow({ assessment: a, compact = false, onOpenGrid, onOp
           <span className="text-xs text-muted-foreground">{STATUS_META[a.status].label}</span>
         </div>
       </div>
-      <RowAction assessment={a} onOpenGrid={onOpenGrid} onOpenReport={onOpenReport} />
+      <RowAction assessment={a} onOpenGrid={onOpenGrid} onOpenReport={onOpenReport} onDelete={onDelete} />
     </div>
   )
 }
 
-function RowAction({ assessment: a, onOpenGrid, onOpenReport }: Omit<AssessmentRowProps, 'compact'>) {
+function RowAction({ assessment: a, onOpenGrid, onOpenReport, onDelete }: Omit<AssessmentRowProps, 'compact'>) {
   const base = 'shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold transition-colors'
+  let action
 
   if (a.status === 'reports-generated') {
-    return (
+    action = (
       <button
         type="button"
         onClick={onOpenReport}
@@ -63,8 +66,8 @@ function RowAction({ assessment: a, onOpenGrid, onOpenReport }: Omit<AssessmentR
       </button>
     )
   }
-  if (a.status === 'complete') {
-    return (
+  else if (a.status === 'complete') {
+    action = (
       <button
         type="button"
         onClick={onOpenGrid}
@@ -73,14 +76,32 @@ function RowAction({ assessment: a, onOpenGrid, onOpenReport }: Omit<AssessmentR
         Finalize
       </button>
     )
+  } else {
+    action = (
+      <button
+        type="button"
+        onClick={onOpenGrid}
+        className={`${base} border border-primary/25 bg-primary/10 text-primary hover:bg-primary/20`}
+      >
+        {a.status === 'in-progress' ? 'Continue' : 'Open'}
+      </button>
+    )
   }
+
   return (
-    <button
-      type="button"
-      onClick={onOpenGrid}
-      className={`${base} border border-primary/25 bg-primary/10 text-primary hover:bg-primary/20`}
-    >
-      {a.status === 'in-progress' ? 'Continue' : 'Open'}
-    </button>
+    <div className="flex shrink-0 items-center gap-2">
+      {action}
+      {a.status === 'scheduled' && a.entered === 0 && onDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`Delete ${a.subject} ${a.name} for Stream ${a.stream}`}
+          title="Delete scheduled assessment"
+          className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
+        >
+          <Trash2 className="size-4" aria-hidden="true" />
+        </button>
+      )}
+    </div>
   )
 }

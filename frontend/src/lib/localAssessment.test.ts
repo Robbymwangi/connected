@@ -26,8 +26,18 @@ describe('createLocalAssessmentRecord', () => {
         id: 'assessment-1', version: 0, classId: 'class-1', subjectId: 'subject-1',
         name: 'CAT 1', term: 'Term 1', year: 2025, date: '2025-05-12', status: 'scheduled', sync: 'pending',
       },
-      createFields: { classId: 'class-1', subjectId: 'subject-1', name: 'CAT 1', term: 'Term 1', year: 2025, date: '2025-05-12' },
+      createFields: { classId: 'class-1', subjectId: 'subject-1', name: 'CAT 1', term: 1, year: 2025, date: '2025-05-12' },
     })
+  })
+
+  it.each([['Term 1', 1], ['Term 2', 2], ['Term 3', 3]])('sends %s as numeric term %i', (term, termNumber) => {
+    const record = createLocalAssessmentRecord({
+      subject: 'English', stream: '4W', name: 'CAT 1', term, year: 2025,
+      date: '2025-05-12', entered: 0, total: 1, status: 'scheduled', sync: 'pending',
+    }, 'assessment-1', directory)
+
+    expect(record.record.term).toBe(term)
+    expect(record.createFields.term).toBe(termNumber)
   })
 
   it('refuses a class or subject that is no longer offered locally', () => {

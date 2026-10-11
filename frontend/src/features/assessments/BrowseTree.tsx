@@ -13,12 +13,13 @@ type BrowseTreeProps = {
   grades: string[]
   onOpenGrid: (id: string) => void
   onOpenReport: (id: string) => void
+  onDelete: (id: string) => void
 }
 
 /* Grade, then stream, then that stream's assessments. This is a scoped filter with
    a breadcrumb, inside the Assessments level; the grid beneath is the second and
    last navigation level. */
-export function BrowseTree({ assessments, classes, grades, onOpenGrid, onOpenReport }: BrowseTreeProps) {
+export function BrowseTree({ assessments, classes, grades, onOpenGrid, onOpenReport, onDelete }: BrowseTreeProps) {
   const [grade, setGrade] = useState<string | null>(null)
   const [stream, setStream] = useState<string | null>(null)
 
@@ -90,6 +91,7 @@ export function BrowseTree({ assessments, classes, grades, onOpenGrid, onOpenRep
               compact
               onOpenGrid={() => onOpenGrid(a.id)}
               onOpenReport={() => onOpenReport(a.id)}
+              onDelete={() => onDelete(a.id)}
             />
           ))}
         </div>

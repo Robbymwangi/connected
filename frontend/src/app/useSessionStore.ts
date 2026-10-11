@@ -9,7 +9,7 @@ import { groupConflicts, type CommandRequest, type Resolver } from '../lib/confl
 import { localDatabaseFor } from '../lib/localDatabase'
 import { createLocalAssessmentRecord } from '../lib/localAssessment'
 import { changedGridCells, emptyGrid, gridFromMarkRows, mergePendingMarkCells, type GridCellChange } from '../lib/localMarks'
-import { createAssessments, finalizeAssessmentRecord, writeMarkCells } from '../lib/localWrites'
+import { createAssessments, deleteAssessmentRecord, finalizeAssessmentRecord, writeMarkCells } from '../lib/localWrites'
 import { markIdFor } from '../lib/markIdentity'
 import { mapSyncedAssessmentState, type SyncedAssessmentState } from '../lib/syncedAssessmentState'
 import type { SchoolDirectoryState } from './useSchoolDirectory'
@@ -216,6 +216,7 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
       await createAssessments(database, items, new Date().toISOString())
       commit({ type: 'addAssessments', drafts, ids: items.map((item) => item.record.id) })
     },
+    deleteAssessment: (id: string) => deleteAssessmentRecord(database, id, new Date().toISOString()),
     finalizeAssessment: async (id: string) => {
       const assessment = state.assessments.find((item) => item.id === id)
       if (!assessment) throw new Error('Assessment is not available on this device')

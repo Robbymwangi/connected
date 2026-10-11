@@ -36,6 +36,11 @@ function text(record: Record<string, unknown>, key: string): string {
   return typeof record[key] === 'string' ? record[key] as string : ''
 }
 
+function termLabel(value: unknown): string {
+  if (Number.isSafeInteger(value) && typeof value === 'number' && value >= 1 && value <= 3) return `Term ${value}`
+  return typeof value === 'string' ? value : ''
+}
+
 function integer(record: Record<string, unknown>, key: string): number | null {
   return Number.isSafeInteger(record[key]) ? record[key] as number : null
 }
@@ -239,7 +244,7 @@ export function mapSyncedAssessmentState(source: Source): SyncedAssessmentState 
       subject,
       stream: classRecord.stream,
       name: text(row, 'name'),
-      term: text(row, 'term'),
+      term: termLabel(row.term),
       year,
       date: text(row, 'date'),
       version,
