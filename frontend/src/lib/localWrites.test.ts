@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { score } from './grading'
 import { assertDisplayFlags } from './displayFlags.testing'
 import { LocalDatabase, type LocalRecord } from './localDatabase'
-import { createAssessments, deleteAssessmentRecord, finalizeAssessmentRecord, OpenConflictsError, writeMarkCells } from './localWrites'
+import { createAssessments, deleteAssessmentRecord, finalizeAssessmentRecord, LAST_EDITED_ASSESSMENT_KEY, OpenConflictsError, writeMarkCells } from './localWrites'
 import { entriesForRecord, type OutboxEntry } from './outbox'
 
 const AT = '2026-10-09T08:00:00.000Z'
@@ -195,6 +195,7 @@ describe('writeMarkCells', () => {
     expect(saved).toEqual([{
       studentId: 's1', criterionId: 'k1', cell: { mark: score(9), sync: 'local', baseVersion: 0, author: 'Teacher' },
     }])
+    expect(await database.metadata.get(LAST_EDITED_ASSESSMENT_KEY)).toEqual({ key: LAST_EDITED_ASSESSMENT_KEY, value: 'a1' })
     await assertDisplayFlags(database)
   })
 

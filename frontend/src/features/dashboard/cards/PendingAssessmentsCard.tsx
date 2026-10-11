@@ -1,14 +1,18 @@
 import { Check, Plus } from 'lucide-react'
 import { Card } from '../../../components/Card'
 import { ChevronRow } from '../../../components/ChevronRow'
-import { pendingAssessments } from '../../../fixtures/dashboard'
+import type { Assessment } from '../../../fixtures/assessments'
+import { pendingAssessmentsForDashboard } from '../../../lib/dashboardData'
 
 type PendingAssessmentsCardProps = {
+  assessments: Assessment[]
   onExpand: () => void
   onCreate: () => void
+  onOpenAssessment: (assessmentId: string) => void
 }
 
-export function PendingAssessmentsCard({ onExpand, onCreate }: PendingAssessmentsCardProps) {
+export function PendingAssessmentsCard({ assessments, onExpand, onCreate, onOpenAssessment }: PendingAssessmentsCardProps) {
+  const pending = pendingAssessmentsForDashboard(assessments).slice(0, 4)
   return (
     <Card
       title="Pending Assessments"
@@ -24,9 +28,14 @@ export function PendingAssessmentsCard({ onExpand, onCreate }: PendingAssessment
         </button>
       }
     >
-      {pendingAssessments.length > 0 ? (
-        pendingAssessments.map((item) => (
-          <ChevronRow key={item.primary} primary={item.primary} secondary={item.secondary} />
+      {pending.length > 0 ? (
+        pending.map((assessment) => (
+          <ChevronRow
+            key={assessment.id}
+            primary={`${assessment.subject}: ${assessment.name}`}
+            secondary={`Stream ${assessment.stream} · ${assessment.term} · ${assessment.status === 'complete' ? 'Ready to finalize' : assessment.status === 'in-progress' ? 'In progress' : 'Scheduled'}`}
+            onClick={() => onOpenAssessment(assessment.id)}
+          />
         ))
       ) : (
         <div className="flex h-full flex-col items-center justify-center gap-4 py-10">

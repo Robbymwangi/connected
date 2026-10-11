@@ -13,6 +13,7 @@ export type NewAssessment = { record: LocalRecord; createFields: Record<string, 
 export type MarkCellWrite = GridCellChange & { id: string }
 
 const OPEN_STATES = ['queued', 'sent', 'conflict']
+export const LAST_EDITED_ASSESSMENT_KEY = 'lastEditedAssessmentId'
 
 function isOpen(entry: OutboxEntry): boolean {
   return entry.kind !== 'command' && OPEN_STATES.includes(entry.state)
@@ -161,7 +162,7 @@ export function writeMarkCells(
   author: string,
   at: string,
 ): Promise<GridCellChange[]> {
-  return database.transaction('rw', [database.marks, database.assessments, database.outbox], async () => {
+  return database.transaction('rw', [database.marks, database.assessments, database.outbox, database.metadata], async () => {
     const assessment = await database.assessments.get(assessmentId)
     if (!assessment || assessment.deletedAt != null) throw new Error('Assessment is not available on this device')
     if (assessment.status === 'finalized' || assessment.status === 'reports-generated') {
@@ -211,6 +212,9 @@ export function writeMarkCells(
         criterionId: change.criterionId,
         cell: { ...change.cell, sync: 'local', baseVersion: record.version, author },
       })
+    }
+    if (saved.length > 0) {
+      await database.metadata.put({ key: LAST_EDITED_ASSESSMENT_KEY, value: assessmentId })
     }
     return saved
   })
