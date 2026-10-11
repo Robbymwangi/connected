@@ -21,17 +21,21 @@ export function createLocalAssessmentRecord(
     throw new Error('Assessment class or subject is not available in the local directory')
   }
 
+  const termNumber: Record<string, number> = { 'Term 1': 1, 'Term 2': 2, 'Term 3': 3 }
+  const wireTerm = termNumber[draft.term]
+  if (wireTerm === undefined) throw new Error('Assessment term must be Term 1, Term 2, or Term 3')
+
   const createFields = {
     classId: schoolClass.id,
     subjectId,
     name: draft.name,
-    term: draft.term,
+    term: wireTerm,
     year: draft.year,
     date: draft.date,
   }
 
   return {
-    record: { id, version: 0, ...createFields, status: 'scheduled', sync: 'pending' },
+    record: { id, version: 0, ...createFields, term: draft.term, status: 'scheduled', sync: 'pending' },
     createFields,
   }
 }

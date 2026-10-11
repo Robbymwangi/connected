@@ -8,7 +8,7 @@
    injected, so the whole schedule is unit-tested without a DOM. */
 
 export const HEALTH_URL = '/api/health'
-export const PROBE_TIMEOUT_MS = 5_000
+export const PROBE_TIMEOUT_MS = 20_000
 /* While the API answers, a light check; while it does not, a faster one, so the
    pill recovers soon after the network returns instead of up to a full interval. */
 export const POLL_INTERVAL_MS = 30_000

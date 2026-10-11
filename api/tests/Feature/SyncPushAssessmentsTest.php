@@ -208,6 +208,80 @@ test('an update to a soft-deleted assessment at the current version is invalid, 
     expect(DB::table('assessments')->where('id', $g['assessment']->id)->value('name'))->toBe('CAT 1');
 });
 
+test('a creator can soft-delete a scheduled assessment with no marks and the server timestamp is logged', function () {
+    $g = buildGraph('School A', '-asm-delete-scheduled');
+    $assessment = Assessment::create([
+        'institution_id' => $g['institution']->id,
+        'class_id' => $g['class']->id,
+        'subject_id' => $g['subject']->id,
+        'name' => 'Unused CAT',
+        'term' => 1,
+        'year' => 2026,
+        'date' => '2026-03-01',
+        'status' => 'scheduled',
+        'created_by' => $g['teacher']->id,
+    ]);
+    $entry = pushEntry('assessments', $assessment->id, 1, ['deletedAt' => 'device-claimed-time']);
+
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
+
+    expect($result)->toBe(['id' => $entry['id'], 'status' => 'accepted', 'version' => 2]);
+    $deletedAt = DB::table('assessments')->where('id', $assessment->id)->value('deleted_at');
+    expect($deletedAt)->not->toBeNull()->not->toBe('device-claimed-time');
+    expect(DB::table('assessments')->where('id', $assessment->id)->value('version'))->toBe(2);
+
+    $logged = DB::table('sync_changes')->where('record_id', $assessment->id)->where('version', 2)->first();
+    $loggedFields = json_decode($logged->fields, true);
+    expect(array_keys($loggedFields))->toBe(['deleted_at'])
+        ->and($loggedFields['deleted_at'])->not->toBeNull()
+        ->and($loggedFields['deleted_at'])->not->toBe('device-claimed-time');
+});
+
+test('assessment deletion is refused when marks exist or the assessment is not scheduled', function (string $state) {
+    $g = buildGraph('School A', '-asm-delete-ineligible-'.$state);
+    if ($state === 'finalized') {
+        $g['assessment']->update(['status' => 'finalized']);
+    }
+    $entry = pushEntry('assessments', $g['assessment']->id, 1, ['deletedAt' => 'delete-request']);
+
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
+
+    expect($result['status'])->toBe('invalid')
+        ->and($result['reason'])->toBe($state === 'finalized'
+            ? 'only a scheduled assessment can be deleted'
+            : 'an assessment with marks cannot be deleted');
+    expect(DB::table('assessments')->where('id', $g['assessment']->id)->value('deleted_at'))->toBeNull();
+})->with(['marks', 'finalized']);
+
+test('assessment deletion requires a non-empty intent and cannot restore an assessment', function (mixed $deletedAt) {
+    $g = buildGraph('School A', '-asm-delete-intent');
+    $entry = pushEntry('assessments', $g['assessment']->id, 1, ['deletedAt' => $deletedAt]);
+
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
+
+    expect($result['status'])->toBe('invalid')
+        ->and($result['reason'])->toBe('deletedAt must be a non-empty delete intent');
+    expect(DB::table('assessments')->where('id', $g['assessment']->id)->value('deleted_at'))->toBeNull();
+})->with([null, true, '']);
+
+test('assessment deletion cannot be combined with another field update', function () {
+    $g = buildGraph('School A', '-asm-delete-with-edit');
+    $g['mark']->delete();
+    $entry = pushEntry('assessments', $g['assessment']->id, 2, [
+        'deletedAt' => 'delete-request',
+        'name' => 'Renamed while deleting',
+    ]);
+
+    $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
+
+    expect($result)->toBe([
+        'id' => $entry['id'],
+        'status' => 'invalid',
+        'reason' => 'an assessment delete carries deletedAt only',
+    ]);
+    expect(DB::table('assessments')->where('id', $g['assessment']->id)->value('deleted_at'))->toBeNull();
+});
+
 /* Rule 4, on a real assessment: what the entry touches against what moved since its base. */
 
 test('name and date edited from two devices merge silently, and both survive', function () {

@@ -239,14 +239,26 @@ happens inside its transaction, after the lock.
    sides at this moment. This refines ADR 0001 rule 3, which described the
    device raising the conflict but didn't say where the record lives.
 5. **A soft delete is `deletedAt` in `fields`, nothing else.** Where a table
-   allows a delete, a non-null value deletes with the server's own timestamp
-   and null restores; it is an intent, compared as null or non-null, so
-   deleting an already-deleted row is not a conflict over two timestamps. As
-   an outgoing edit it follows rules 2 through 4 like any other field; it's
-   only an *incoming* edit arriving against an already-deleted record that
-   rule 4's delete case catches. No pushable table allows a delete today:
-   `deletedAt` on a mark is `invalid` (a cleared cell is `markKind: empty`),
-   and on an assessment it is `invalid` until something sends one.
+  allows a delete, a non-null value is a delete intent and the server stamps
+  its own timestamp. A null value is a restore intent only where that table's
+  rules allow restore. The intent is compared as null or non-null, so deleting
+  an already-deleted row is not a conflict over two timestamps. As an outgoing
+  edit it follows rules 2 through 4 like any other field; it is only an *incoming*
+  edit arriving against an already-deleted record that rule 4's delete case
+  catches. Assessment is the one pushable record that allows a bounded delete:
+  the device sends a standalone mutation containing only a non-empty
+  `deletedAt` intent, and the server ignores that value and stamps its own timestamp.
+  It is valid only while the assessment is `scheduled` and has no live marks, and only
+  for a user authorized to update that assessment (its creator or an assigned
+  class/subject teacher). A finalized or otherwise non-scheduled assessment, an
+  assessment with marks, an already-deleted assessment, an empty intent, a restore
+  (`deletedAt: null`), or a mutation that combines `deletedAt` with another field is
+  `invalid`. The soft delete is saved through the model, so it increments the version
+  and appends `deletedAt` to `sync_changes` in the same transaction. A device may cancel
+  a scheduled assessment create while that create is still queued and unsent; once the
+  create has been sent, it waits for that write and any other assessment edits to settle
+  before sending a separate delete mutation. `deletedAt` on a mark remains `invalid`;
+  a cleared cell is `markKind: empty`.
 6. **Authorization failure** (the acting user can't write this table, or
    the record doesn't resolve within their institution) → `forbidden`.
    **Validation failure** (a score over the criterion's max, a status

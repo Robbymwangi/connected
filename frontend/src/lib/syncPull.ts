@@ -10,6 +10,7 @@ import { reconcileWithinTransaction } from './reconcileConflicts'
 import { mapOf, withShadow } from './shadow'
 
 const PAGE_LIMIT = 500
+const PULL_TIMEOUT_MS = 30_000
 
 export type SyncChange = {
   table: SyncTableName
@@ -212,7 +213,7 @@ async function performPull(
     if (cursor !== undefined) query.set('since', String(cursor))
 
     const response = parsePage(
-      await apiFetch<unknown>(`/api/sync?${query.toString()}`, { token }, fetchImpl),
+      await apiFetch<unknown>(`/api/sync?${query.toString()}`, { token, timeoutMs: PULL_TIMEOUT_MS }, fetchImpl),
     )
     if (isBootstrap && response.more && typeof response.cursor !== 'string') {
       throw new Error('GET /sync bootstrap continuation cursor must be opaque')

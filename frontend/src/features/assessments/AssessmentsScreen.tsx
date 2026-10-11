@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import type { SessionStore } from '../../app/useSessionStore'
 import type { SchoolDirectoryState } from '../../app/useSchoolDirectory'
+import { Modal } from '../../components/Modal'
 import type { Assessment } from '../../fixtures/assessments'
 import { DEFAULT_FILTERS, filterAssessments, type QueueFilters } from '../../lib/assessmentQueue'
 import { MarkingGrid } from './grid/MarkingGrid'
@@ -44,6 +45,9 @@ export function AssessmentsScreen({
   const [listView, setListView] = useState<View>('queue')
   const [filters, setFilters] = useState<QueueFilters>(DEFAULT_FILTERS)
   const [creating, setCreating] = useState(creatingOnArrival)
+  const [deleteCandidate, setDeleteCandidate] = useState<Assessment | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const school = directory.status === 'ready' ? directory.data : null
   const referenceYear = school?.years[0] ?? new Date().getFullYear()
   const referenceClasses = school?.classesForYear(referenceYear) ?? []
@@ -101,6 +105,20 @@ export function AssessmentsScreen({
     setFilters((f) => ({ ...f, year: Number(draft.date.slice(0, 4)) }))
   }
 
+  const confirmDelete = async () => {
+    if (!deleteCandidate) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await store.deleteAssessment(deleteCandidate.id)
+      setDeleteCandidate(null)
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Could not delete this assessment on this device.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="px-5 pt-6 pb-12 lg:px-8">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
@@ -145,6 +163,7 @@ export function AssessmentsScreen({
           onFiltersChange={setFilters}
           onOpenGrid={(id) => onOpen(id, 'grid')}
           onOpenReport={(id) => onOpen(id, 'report')}
+          onDelete={(id) => { setDeleteError(null); setDeleteCandidate(list.find((item) => item.id === id) ?? null) }}
         />
       ) : (
         <BrowseTree
@@ -153,8 +172,28 @@ export function AssessmentsScreen({
           grades={referenceGrades}
           onOpenGrid={(id) => onOpen(id, 'grid')}
           onOpenReport={(id) => onOpen(id, 'report')}
+          onDelete={(id) => { setDeleteError(null); setDeleteCandidate(list.find((item) => item.id === id) ?? null) }}
         />
       )}
+
+      <Modal
+        open={deleteCandidate !== null}
+        onClose={() => { if (!deleting) setDeleteCandidate(null) }}
+        title="Delete scheduled assessment?"
+        size="sm"
+        footer={(
+          <>
+            <button type="button" onClick={() => setDeleteCandidate(null)} disabled={deleting} className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50">Cancel</button>
+            <button type="button" onClick={() => void confirmDelete()} disabled={deleting} className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-2.5 text-sm font-semibold text-danger transition-colors hover:bg-danger/15 disabled:opacity-50">{deleting ? 'Deleting…' : 'Delete assessment'}</button>
+          </>
+        )}
+      >
+        {deleteCandidate && <div className="space-y-3 text-sm text-foreground">
+          <p><strong>{deleteCandidate.subject}: {deleteCandidate.name}</strong> · Stream {deleteCandidate.stream}</p>
+          <p>This scheduled assessment has no marks. Deletion syncs to this school’s devices; its history is retained.</p>
+          {deleteError && <p className="text-danger" role="alert">{deleteError}</p>}
+        </div>}
+      </Modal>
 
       <CreateAssessmentDialog
         open={creating}

@@ -1,4 +1,5 @@
 import type { LocalDatabase } from './localDatabase'
+import type { OutboxEntry } from './outbox'
 import type { SyncNotice } from './syncPush'
 import { syncLastSuccessKey, type Phase, type RunnerStatus } from './syncRunner'
 import { syncNoticesKey } from './syncPush'
@@ -13,6 +14,7 @@ export type SyncRows = {
   queued: number
   sent: number
   failed: number
+  failedEntries: OutboxEntry[]
   notices: SyncNotice[]
   lastSuccessAt: string | null
 }
@@ -22,13 +24,18 @@ export type SyncRows = {
 export function readSyncRows(database: LocalDatabase): Promise<SyncRows> {
   return database.transaction('r', [database.outbox, database.metadata], async () => {
     const count = (state: string) => database.outbox.where('state').equals(state).count()
-    const [queued, sent, failed] = await Promise.all([count('queued'), count('sent'), count('failed')])
+    const [queued, sent, failedEntries] = await Promise.all([
+      count('queued'),
+      count('sent'),
+      database.outbox.where('state').equals('failed').sortBy('seq'),
+    ])
     const notices = (await database.metadata.get(syncNoticesKey))?.value
     const lastSuccessAt = (await database.metadata.get(syncLastSuccessKey))?.value
     return {
       queued,
       sent,
-      failed,
+      failed: failedEntries.length,
+      failedEntries,
       notices: Array.isArray(notices) ? notices as SyncNotice[] : [],
       lastSuccessAt: typeof lastSuccessAt === 'string' ? lastSuccessAt : null,
     }
@@ -41,6 +48,7 @@ export type SyncState = {
   pending: number
   conflict: number
   failed: number
+  failedEntries: OutboxEntry[]
   notices: SyncNotice[]
   lastSyncedAt: Date | null
   phase: Phase
@@ -59,11 +67,36 @@ export function summarizeSync(rows: SyncRows | null, status: RunnerStatus, confl
     pending: rows ? rows.queued + rows.sent : 0,
     conflict: rows ? conflict : 0,
     failed: rows?.failed ?? 0,
+    failedEntries: rows?.failedEntries ?? [],
     notices: rows?.notices ?? [],
     lastSyncedAt: synced && !Number.isNaN(synced.getTime()) ? synced : null,
     phase: status.phase,
     failure: status.failure,
     nextAttemptAt: status.nextAttemptAt === null ? null : new Date(status.nextAttemptAt),
+  }
+}
+
+export function dismissFailedEntry(database: LocalDatabase, seq: number): Promise<boolean> {
+  return database.transaction('rw', database.outbox, async () => {
+    const entry = await database.outbox.get(seq)
+    if (!entry || entry.state !== 'failed') return false
+    await database.outbox.delete(seq)
+    return true
+  })
+}
+
+export function describeFailedEntry(entry: OutboxEntry): { reason: string; action: string } {
+  if (entry.table === 'assessments' && entry.reason === 'term must be 1, 2, or 3') {
+    const term = typeof entry.fields.term === 'string' ? ` (${entry.fields.term})` : ''
+    return {
+      reason: `Your selected term${term} was valid, but this older assessment request sent it as text instead of a number.`,
+      action: 'Dismiss this failed request and recreate the assessment. New assessments send the term in the correct format.',
+    }
+  }
+
+  return {
+    reason: entry.reason ?? 'The server refused this change.',
+    action: 'This request was not applied and will not be retried. Use the reason above to decide what to do, or dismiss this failed attempt.',
   }
 }
 
@@ -88,7 +121,13 @@ export function describeSync(state: SyncState, now: Date): { category: SyncCateg
 
   const review = state.conflict + state.failed
   if (review > 0) {
-    const text = `${plural(review)} ${review === 1 ? 'needs' : 'need'} review`
+    const conflicts = `${state.conflict} conflict${state.conflict === 1 ? '' : 's'}`
+    const failed = `${state.failed} failed ${state.failed === 1 ? 'change' : 'changes'}`
+    const text = state.conflict > 0 && state.failed > 0
+      ? `${conflicts} and ${failed} need review`
+      : state.failed > 0
+        ? `${failed} ${state.failed === 1 ? 'needs' : 'need'} review`
+        : `${conflicts} ${state.conflict === 1 ? 'needs' : 'need'} review`
     return { category: 'attention', text, announcement: text }
   }
 

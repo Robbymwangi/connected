@@ -2,14 +2,14 @@ import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it } from 'vitest'
 import { LocalDatabase } from './localDatabase'
 import type { OutboxEntry } from './outbox'
-import { describeSync, plural, readSyncRows, summarizeSync, type SyncRows } from './syncState'
+import { describeFailedEntry, describeSync, dismissFailedEntry, plural, readSyncRows, summarizeSync, type SyncRows } from './syncState'
 import { syncLastSuccessKey, type RunnerStatus } from './syncRunner'
 import { syncNoticesKey } from './syncPush'
 
 const NOW = new Date('2026-10-09T12:00:00.000Z')
 const idle: RunnerStatus = { phase: 'idle', failure: null, message: null, nextAttemptAt: null }
 const rows = (over: Partial<SyncRows> = {}): SyncRows => ({
-  queued: 0, sent: 0, failed: 0, notices: [], lastSuccessAt: null, ...over,
+  queued: 0, sent: 0, failed: 0, failedEntries: [], notices: [], lastSuccessAt: null, ...over,
 })
 /* `conflict` is how many conflicts need this person, which the store works out (groupConflicts)
    and hands in; the outbox knows nothing about who may act on what. */
@@ -46,6 +46,32 @@ describe('summarizeSync', () => {
 
   it('treats an unreadable last-success value as never synced', () => {
     expect(summarizeSync(rows({ lastSuccessAt: 'not a date' }), idle).lastSyncedAt).toBeNull()
+  })
+})
+
+describe('describeFailedEntry', () => {
+  it('explains the old assessment term payload without blaming the teacher', () => {
+    const entry: OutboxEntry = {
+      id: 'failed-create', table: 'assessments', recordId: 'assessment-1', kind: 'patch', baseVersion: 0,
+      fields: { term: 'Term 1' }, at: 'x', state: 'failed', reason: 'term must be 1, 2, or 3',
+    }
+
+    expect(describeFailedEntry(entry)).toEqual({
+      reason: 'Your selected term (Term 1) was valid, but this older assessment request sent it as text instead of a number.',
+      action: 'Dismiss this failed request and recreate the assessment. New assessments send the term in the correct format.',
+    })
+  })
+
+  it('keeps other server rejection reasons visible', () => {
+    const entry: OutboxEntry = {
+      id: 'failed-mark', table: 'marks', recordId: 'mark-1', kind: 'patch', baseVersion: 1,
+      fields: { score: 99 }, at: 'x', state: 'failed', reason: 'score exceeds criterion maximum',
+    }
+
+    expect(describeFailedEntry(entry)).toEqual({
+      reason: 'score exceeds criterion maximum',
+      action: 'This request was not applied and will not be retried. Use the reason above to decide what to do, or dismiss this failed attempt.',
+    })
   })
 })
 
@@ -86,9 +112,11 @@ describe('describeSync', () => {
   })
 
   it('asks for review when a conflict or a refused change needs a person, ahead of waiting', () => {
-    expect(describeOf({ conflict: 1, queued: 4 })).toMatchObject({ category: 'attention', text: '1 change needs review' })
-    expect(describeOf({ conflict: 1, failed: 2 })).toMatchObject({ category: 'attention', text: '3 changes need review', announcement: '3 changes need review' })
-    expect(describeOf({ failed: 1 }).category).toBe('attention')
+    expect(describeOf({ conflict: 1, queued: 4 })).toMatchObject({ category: 'attention', text: '1 conflict needs review' })
+    expect(describeOf({ conflict: 1, failed: 2 })).toMatchObject({
+      category: 'attention', text: '1 conflict and 2 failed changes need review', announcement: '1 conflict and 2 failed changes need review',
+    })
+    expect(describeOf({ failed: 1 })).toMatchObject({ category: 'attention', text: '1 failed change needs review' })
   })
 
   it('says sync stopped for a defect or a lapsed sign-in, ahead of everything', () => {
@@ -120,8 +148,9 @@ describe('readSyncRows', () => {
   it('counts the outbox by state and reads the notices and the last success', async () => {
     const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
     stores.push(database)
+    const failed = { ...entry('failed', 'e'), reason: 'invalid' }
     await database.outbox.bulkAdd([
-      entry('queued', 'a'), entry('queued', 'b'), entry('sent', 'c'), entry('conflict', 'd'), entry('failed', 'e'), entry('acked', 'f'),
+      entry('queued', 'a'), entry('queued', 'b'), entry('sent', 'c'), entry('conflict', 'd'), failed, entry('acked', 'f'),
     ])
     const notice = { id: 'n1', table: 'assessments', recordId: 'x', kind: 'conflict', sent: {}, current: null, at: 'x' }
     await database.metadata.bulkPut([
@@ -130,7 +159,8 @@ describe('readSyncRows', () => {
     ])
 
     expect(await readSyncRows(database)).toEqual({
-      queued: 2, sent: 1, failed: 1, notices: [notice], lastSuccessAt: '2026-10-09T10:00:00.000Z',
+      queued: 2, sent: 1, failed: 1, failedEntries: [expect.objectContaining({ ...failed, seq: expect.any(Number) })],
+      notices: [notice], lastSuccessAt: '2026-10-09T10:00:00.000Z',
     })
   })
 
@@ -161,7 +191,7 @@ describe('readSyncRows', () => {
     const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
     stores.push(database)
 
-    expect(await readSyncRows(database)).toEqual({ queued: 0, sent: 0, failed: 0, notices: [], lastSuccessAt: null })
+    expect(await readSyncRows(database)).toEqual({ queued: 0, sent: 0, failed: 0, failedEntries: [], notices: [], lastSuccessAt: null })
   })
 
   it('ignores stored values of the wrong shape', async () => {
@@ -170,5 +200,17 @@ describe('readSyncRows', () => {
     await database.metadata.bulkPut([{ key: syncNoticesKey, value: 'nope' }, { key: syncLastSuccessKey, value: 42 }])
 
     expect(await readSyncRows(database)).toMatchObject({ notices: [], lastSuccessAt: null })
+  })
+
+  it('dismisses only a failed entry, leaving pending entries untouched', async () => {
+    const database = new LocalDatabase(`connected-test-${crypto.randomUUID()}`)
+    stores.push(database)
+    const failedSeq = await database.outbox.add(entry('failed', 'assessment-1'))
+    const queuedSeq = await database.outbox.add(entry('queued', 'assessment-2'))
+
+    expect(await dismissFailedEntry(database, failedSeq as number)).toBe(true)
+    expect(await dismissFailedEntry(database, queuedSeq as number)).toBe(false)
+    expect(await database.outbox.get(failedSeq as number)).toBeUndefined()
+    expect(await database.outbox.get(queuedSeq as number)).toMatchObject({ state: 'queued' })
   })
 })

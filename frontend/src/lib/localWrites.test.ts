@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { score } from './grading'
 import { assertDisplayFlags } from './displayFlags.testing'
 import { LocalDatabase, type LocalRecord } from './localDatabase'
-import { createAssessments, finalizeAssessmentRecord, OpenConflictsError, writeMarkCells } from './localWrites'
+import { createAssessments, deleteAssessmentRecord, finalizeAssessmentRecord, OpenConflictsError, writeMarkCells } from './localWrites'
 import { entriesForRecord, type OutboxEntry } from './outbox'
 
 const AT = '2026-10-09T08:00:00.000Z'
@@ -109,6 +109,69 @@ describe('finalizeAssessmentRecord', () => {
     expect(await finalizeAssessmentRecord(database, 'a1', 'u1', LATER)).toBe(false)
 
     expect(await entries('assessments', 'a1')).toHaveLength(1)
+  })
+})
+
+describe('deleteAssessmentRecord', () => {
+  it('cancels an unsent assessment create without leaving an outbox entry', async () => {
+    await createAssessments(database, [newAssessment('a1')], AT)
+
+    await expect(deleteAssessmentRecord(database, 'a1', LATER)).resolves.toBe('cancelled-create')
+
+    expect(await database.assessments.get('a1')).toBeUndefined()
+    expect(await entries('assessments', 'a1')).toEqual([])
+  })
+
+  it('soft-deletes a synced scheduled assessment and queues a versioned delete intent', async () => {
+    await database.assessments.put({ id: 'a1', version: 4, ...CREATE, status: 'scheduled' })
+
+    await expect(deleteAssessmentRecord(database, 'a1', AT)).resolves.toBe('queued-delete')
+
+    expect(await database.assessments.get('a1')).toMatchObject({
+      version: 4, status: 'scheduled', deletedAt: AT, sync: 'pending',
+      serverShadow: { deletedAt: null }, serverShadowAt: { deletedAt: 4 },
+    })
+    expect(await entries('assessments', 'a1')).toMatchObject([
+      { kind: 'patch', baseVersion: 4, fields: { deletedAt: AT }, state: 'queued' },
+    ])
+    await assertDisplayFlags(database)
+  })
+
+  it('queues a delete behind a sent create at a null base', async () => {
+    await createAssessments(database, [newAssessment('a1')], AT)
+    const [create] = await entries('assessments', 'a1')
+    await database.outbox.update(create.seq as number, { state: 'sent' })
+
+    await expect(deleteAssessmentRecord(database, 'a1', LATER)).rejects.toThrow('Wait for this assessment to sync before deleting it')
+
+    expect(await entries('assessments', 'a1')).toMatchObject([
+      { kind: 'patch', baseVersion: 0, state: 'sent' },
+    ])
+  })
+
+  it('waits for a pending assessment edit instead of coalescing it with the delete intent', async () => {
+    await database.assessments.put({ id: 'a1', version: 4, ...CREATE, status: 'scheduled' })
+    await database.outbox.add({
+      id: crypto.randomUUID(), table: 'assessments', recordId: 'a1', kind: 'patch', baseVersion: 4,
+      fields: { name: 'Updated CAT' }, at: AT, state: 'queued',
+    })
+
+    await expect(deleteAssessmentRecord(database, 'a1', LATER)).rejects.toThrow('Wait for pending assessment changes to sync before deleting it')
+
+    expect(await database.assessments.get('a1')).not.toHaveProperty('deletedAt')
+    expect(await entries('assessments', 'a1')).toMatchObject([{ fields: { name: 'Updated CAT' }, state: 'queued' }])
+  })
+
+  it('refuses deletion after a mark exists or after the assessment leaves scheduled state', async () => {
+    await database.assessments.put({ id: 'a1', version: 2, ...CREATE, status: 'scheduled' })
+    await database.marks.put({ id: 'mark-1', version: 1, assessmentId: 'a1', markKind: 'empty' })
+
+    await expect(deleteAssessmentRecord(database, 'a1', AT)).rejects.toThrow('An assessment with marks cannot be deleted')
+
+    await database.marks.clear()
+    await database.assessments.update('a1', { status: 'finalized' })
+    await expect(deleteAssessmentRecord(database, 'a1', AT)).rejects.toThrow('Only a scheduled assessment can be deleted')
+    expect(await database.outbox.count()).toBe(0)
   })
 })
 

@@ -49,6 +49,17 @@ describe('probeHealth', () => {
     beforeEach(() => vi.useFakeTimers())
     afterEach(() => vi.useRealTimers())
 
+    it('accepts a slow health response that finishes within the local probe window', async () => {
+      const fetchMock = vi.fn(() => new Promise<Response>((resolve) => {
+        setTimeout(() => resolve(json({ ok: true })), 12_000)
+      }))
+      const result = probeHealth(fetchMock as unknown as typeof fetch)
+
+      await vi.advanceTimersByTimeAsync(12_000)
+
+      await expect(result).resolves.toBe(true)
+    })
+
     it('gives up after the timeout by aborting the request', async () => {
       const hangs = vi.fn(
         (_url: string, init?: RequestInit) =>
