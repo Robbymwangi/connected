@@ -1,13 +1,11 @@
 # Analytics
 
-Every figure here is already computed and tested in `frontend/src/lib/analytics.ts`,
-today's only implementation, since there is no API yet. That code is this file's
-source for what each figure means, but not for where it's computed going forward:
-`docs/build-plan.md` item 4.1 is explicit that these are server-side SQL
-aggregates, "do not compute these on the client or in PHP memory," and this file
-now holds to that literally (see Where figures are computed). The TypeScript
-retires once item 4.2 wires the real screens to the API; until then it remains
-the definitions' one working reference.
+Every figure here is computed server-side, once, as a SQL aggregate over `marks`
+(`api/app/Support/AnalyticsQueryService.php`, build plan 4.1), and served by
+`GET /api/reports/summary` (4.2). This file is the source for what each figure
+means; the service and its tests are the source for how it is computed. The
+client holds no second implementation: `frontend/src/lib/analytics.ts` keeps only
+shared vocabulary (the pass mark, histogram bins, scope and filter types).
 
 ## Definitions
 
@@ -136,15 +134,10 @@ back at the row or rows before it, ordered by date per student.
 
 ## Where figures are computed
 
-This is target architecture, not today's state: right now `lib/analytics.ts`
-is the only implementation, because there is no API client, no sync engine,
-and no server yet (AGENTS.md's current-stage note). Once item 4.2 wires the
-real screens to the API, every figure in this file will be computed once,
-server-side, as a SQL aggregate over `marks` and `results`, per
-`docs/build-plan.md` item 4.1: "the relational store is the reason the
-backend was chosen." There will be no client implementation to keep equal
-to it, no shared case file, and no ongoing second source of these numbers
-to drift from the first.
+Every figure in this file is computed once, server-side, as a SQL aggregate over
+`marks`, per `docs/build-plan.md` item 4.1: "the relational store is the reason
+the backend was chosen." There is no client implementation to keep equal to it
+and no second source of these numbers to drift from the first.
 
 Reports will be an online-only screen: `GET /api/reports/summary` called on
 demand. This is a named, deliberate exception to AGENTS.md's zero-connectivity
@@ -173,11 +166,10 @@ screen, and it's deliberate: a report is a retrospective view of work
 already recorded, not a surface that needs to keep working while a teacher
 is mid-entry with no signal, the way the marking grid does.
 
-`lib/analytics.ts` is today's only implementation, since the API doesn't
-exist yet, and every screen that reads it, `ReportsScreen`, `AssessmentReport`,
-`AiDialog`, `ScopePicker`, `useReport`, retires that dependency once item
-4.2 wires them to the real endpoint. Nothing in `features/dashboard` reads
-this module, so the dashboard's own stat tiles are unaffected either way.
+`ReportsScreen` and `AssessmentReport` read the endpoint through
+`useReportSummary`, and `reportModel.ts` only maps the server's fields into chart
+shapes without recomputing anything. Nothing in `features/dashboard` reads this
+endpoint, so the dashboard's own stat tiles are unaffected.
 
 ## The assistant
 
@@ -185,7 +177,7 @@ this module, so the dashboard's own stat tiles are unaffected either way.
 as a prop, handed down from whatever the screen already holds
 (`features/reports/AiDialog.tsx`). That's what lets its stand-in survive
 this section's decision with no client analytics code at all: it never
-needs to derive anything from `lib/analytics.ts`, only to read a
+needs to derive anything, only to read a
 `Summary`-shaped object already sitting in the screen's own state.
 
 The dialog itself still needs a *current* connection to open, per
@@ -202,11 +194,8 @@ Letting the stand-in work offline off a cached report now would teach a
 habit the real assistant can't keep, so it doesn't get that habit to
 begin with.
 
-The dialog's current copy, "Marking and reports keep working offline,"
-becomes false the moment 4.2 lands, since reports no longer work offline
-from a cold start. Item 4.2 changes it to: "The assistant runs on the
-server, and needs one to answer. Marking keeps working offline; reports
-and this dialog need a connection." Decided here, not deferred.
+The dialog's offline copy says so plainly: "The assistant runs on the server.
+Marking keeps working offline; reports and this dialog need a connection."
 
 ## Explicit exclusions
 
