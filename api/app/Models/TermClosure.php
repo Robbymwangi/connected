@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Jobs\SubmitCommentBatch;
 use App\Models\Concerns\BelongsToInstitution;
 use App\Models\Concerns\Syncable;
 use App\Support\SyncLog;
@@ -64,10 +65,11 @@ class TermClosure extends Model
        institution's advisory lock like every sync write, the stream's assessments for the year and
        term are locked in id order and rechecked under the lock: the same lock order as finalize and
        unlock (advisory lock, then assessments), so neither can commit an open assessment into a
-       closed term. An already closed term is the no-op. Otherwise it writes the closure and one
+       closed term. An already closed term is the no-op. Otherwise it writes the closure, one
        pending comment, with no author and no body, per student with a live enrolment in the stream
        that year; a student who already has a live comment for the term (closed from another stream
-       they were in earlier) is skipped and counted, since a comment is one per student per term.
+       they were in earlier) is skipped and counted, since a comment is one per student per term. It
+       then queues their generation, after commit.
 
        @return array{closure: self, created: bool, comments: int, skipped: int} */
     public static function close(User $user, SchoolClass $schoolClass, int $year, int $term): array
@@ -135,6 +137,12 @@ class TermClosure extends Model
                     'term' => $term,
                     'state' => 'pending',
                 ]);
+            }
+
+            // Generation starts once this transaction commits, so the job never reads a closure or
+            // a comment that is not there yet (ADR 0007, decision 2).
+            if ($pending->isNotEmpty()) {
+                SubmitCommentBatch::dispatch($closure->id, $schoolClass->institution_id)->afterCommit();
             }
 
             return ['closure' => $closure, 'created' => true, 'comments' => $pending->count(), 'skipped' => $taken->count()];

@@ -110,7 +110,8 @@ and refers to "the student". The name is put back on our side when the card is
 rendered. This is the first boundary to revisit if the privacy position changes,
 and it lives in one place, a prompt builder. Without an API key (development, CI),
 drafts are templated from the same figures and labelled as stand-ins, as the
-assistant's are.
+assistant's are: the body starts with `[Stand-in]`, so the label travels with the
+text wherever it appears.
 
 Any authenticated user may edit, accept, or regenerate a comment that is not yet
 accepted, not only a particular teacher, consistent with grading itself being
@@ -143,7 +144,10 @@ online; nothing about the PDF is cached ahead of a request.
 The card shows, for each subject, the performance level for Terms 1, 2, and
 3 of the year so far, a term not yet closed being blank. A term's level is the level of
 the subject's mean for that term, worked out from the mean percentage, which is not
-shown. The card also carries a compact history of earlier
+shown. That mean is of the term's assessment percentages (each result's total over
+its max), so every sitting weighs the same whatever its maximum; a sitting the student
+missed entirely has no result and does not count. The comment prompt reads the same
+levels, so the remark and the card cannot disagree. The card also carries a compact history of earlier
 years drawn from the student's enrolments, the teacher's remark, and the
 school and student identifiers. It never shows a percentage, a class position, a
 rank, or a class size. Position and percentages remain on the teacher's screens only.
