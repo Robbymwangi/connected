@@ -1,2 +1,2 @@
-2
-rows now start at version 1 (ADR 0001, #97); existing dev rows were created at 0 and would match a device base version of 0
+3
+finalize now writes results (#58); assessments finalized through the app before this have none

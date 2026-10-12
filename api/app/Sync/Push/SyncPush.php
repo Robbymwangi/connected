@@ -241,12 +241,15 @@ final class SyncPush
 
     /* Disjoint fields: applied through the model like any write, so the version bumps, the
        log row is appended, and the version-guarded UPDATE runs. A merge always has at least
-       one differing field, so it always writes a log row. */
+       one differing field, so it always writes a log row. A merged write is still a write, so the
+       handler's written() runs as it does for an accepted one: a finalize that merges past a rename
+       must write its results all the same. */
     private function merge(PushEntry $entry, PushHandler $handler, Model $record): PushOutcome
     {
         $before = $record->version;
         $model = $handler->resulting($entry, $record);
         $model->save();
+        $handler->written($entry, $model);
 
         $outcome = PushOutcome::merged($entry->id, $model->version);
         $this->record($entry, $outcome, $model->version, $this->changeSeqOf($model, $before));
