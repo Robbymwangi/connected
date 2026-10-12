@@ -6,8 +6,7 @@ type CardProps = {
   title: string
   /* Right-hand slot in the header, before the expand control. */
   action?: ReactNode
-  /* Dashboard cards are static; the one way out is the expand control, which
-     leads to the section that owns the card's data. */
+  /* The expand control leads to the section that owns the card's data. */
   onExpand?: () => void
   expandLabel?: string
   children: ReactNode

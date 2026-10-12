@@ -13,7 +13,9 @@ import { AuthProvider } from './AuthProvider'
 import { useAuthSession } from './useAuthSession'
 import { useSchoolDirectory } from './useSchoolDirectory'
 import { useLocation } from './useLocation'
+import { useRecentAccesses } from './useRecentAccesses'
 import { useSessionStore } from './useSessionStore'
+import { recentAccessForLocation } from '../lib/recentAccess'
 
 export default function App() {
   const auth = useAuthSession()
@@ -47,7 +49,13 @@ function AuthenticatedApp({ user, token, onSignOut }: { user: CurrentUser; token
     )
   const me: Resolver = { id: user.id, name: user.fullName, moderatedSubjects: user.moderatedSubjectIds }
   const store = useSessionStore(me, directory)
+  const recentAccesses = useRecentAccesses(
+    user.id,
+    recentAccessForLocation(location, directory.status === 'ready' ? directory.data : null, store.assessments),
+  )
   if (!store.ready) return null
+  const dashboardYear = directory.status === 'ready' ? directory.data.years[0] ?? new Date().getFullYear() : new Date().getFullYear()
+  const dashboardClasses = directory.status === 'ready' ? directory.data.classesForYear(dashboardYear) : []
 
   return (
     <AuthProvider value={{ user, signOut: onSignOut }}>
@@ -56,7 +64,20 @@ function AuthenticatedApp({ user, token, onSignOut }: { user: CurrentUser; token
         {location.screen === 'dashboard' && (
           <Dashboard
             conflicts={store.groups.needsYou}
+            assessments={store.assessments}
+            classes={dashboardClasses}
+            year={dashboardYear}
+            lastEditedAssessment={store.assessments.find((assessment) => assessment.id === store.lastEditedAssessmentId) ?? null}
+            lastEditedLoading={store.lastEditedAssessmentId === undefined}
             onNavigate={navigate}
+            onContinueAssessment={() => {
+              const assessment = store.assessments.find((item) => item.id === store.lastEditedAssessmentId)
+              if (assessment) setLocation({ screen: 'assessments', assessmentId: assessment.id, view: 'grid' })
+              else navigate('assessments')
+            }}
+            recentAccesses={recentAccesses}
+            onOpenRecent={(item) => setLocation(item.destination)}
+            onOpenAssessment={(assessmentId) => setLocation({ screen: 'assessments', assessmentId, view: 'grid' })}
             onCreateAssessment={() => setLocation({ screen: 'assessments', creating: true })}
             onViewConflicts={(highlight) => setLocation({ screen: 'sync', highlight })}
           />

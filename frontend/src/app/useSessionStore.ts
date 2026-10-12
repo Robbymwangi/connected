@@ -9,7 +9,7 @@ import { groupConflicts, type CommandRequest, type Resolver } from '../lib/confl
 import { localDatabaseFor } from '../lib/localDatabase'
 import { createLocalAssessmentRecord } from '../lib/localAssessment'
 import { changedGridCells, emptyGrid, gridFromMarkRows, mergePendingMarkCells, type GridCellChange } from '../lib/localMarks'
-import { createAssessments, deleteAssessmentRecord, finalizeAssessmentRecord, writeMarkCells } from '../lib/localWrites'
+import { createAssessments, deleteAssessmentRecord, finalizeAssessmentRecord, LAST_EDITED_ASSESSMENT_KEY, writeMarkCells } from '../lib/localWrites'
 import { markIdFor } from '../lib/markIdentity'
 import { mapSyncedAssessmentState, type SyncedAssessmentState } from '../lib/syncedAssessmentState'
 import type { SchoolDirectoryState } from './useSchoolDirectory'
@@ -141,6 +141,7 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
   const [state, dispatch] = useReducer(reduce, emptyState)
   const stateRef = useRef(state)
   const [hasHydrated, setHasHydrated] = useState(false)
+  const [lastEditedAssessmentId, setLastEditedAssessmentId] = useState<string | null | undefined>(undefined)
   const markWriteQueue = useRef(Promise.resolve())
   const ready = hasHydrated || directory.status === 'error'
 
@@ -148,6 +149,15 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
     stateRef.current = reduce(stateRef.current, action)
     dispatch(action)
   }
+
+  useEffect(() => {
+    const subscription = liveQuery(() => database.metadata.get(LAST_EDITED_ASSESSMENT_KEY)).subscribe({
+      next: (record) => setLastEditedAssessmentId(typeof record?.value === 'string' ? record.value : null),
+      error: () => setLastEditedAssessmentId(null),
+    })
+
+    return () => subscription.unsubscribe()
+  }, [database])
 
   useEffect(() => {
     if (directory.status !== 'ready') return
@@ -204,6 +214,7 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
     conflicts: state.conflicts,
     groups,
     history: state.history,
+    lastEditedAssessmentId,
     criteriaBySubject: state.criteriaBySubject,
     resultRecords: state.resultRecords,
     loadFailed: state.loadFailed,

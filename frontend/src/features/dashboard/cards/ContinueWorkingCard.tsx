@@ -1,14 +1,16 @@
 import { ChevronRight, Grid3x3 } from 'lucide-react'
-import { lastSession } from '../../../fixtures/dashboard'
+import type { Assessment } from '../../../fixtures/assessments'
 import './ContinueWorkingCard.css'
 
 type ContinueWorkingCardProps = {
+  assessment: Assessment
   onContinue: () => void
 }
 
 /* Full-width brand panel. Everything on it is primary-foreground at some opacity so
    the card reads the same in both themes. */
-export function ContinueWorkingCard({ onContinue }: ContinueWorkingCardProps) {
+export function ContinueWorkingCard({ assessment, onContinue }: ContinueWorkingCardProps) {
+  const label = `Stream ${assessment.stream}: ${assessment.subject} ${assessment.name}, ${assessment.term}`
   return (
     <div className="continue-card relative overflow-hidden rounded-2xl border border-primary-foreground/18 shadow-lg">
       <div className="relative flex items-center gap-5 px-6 py-6">
@@ -21,7 +23,7 @@ export function ContinueWorkingCard({ onContinue }: ContinueWorkingCardProps) {
             Continue where you left off
           </p>
           <p className="truncate font-display text-lg leading-snug font-bold text-primary-foreground">
-            {lastSession.label}
+            {label}
           </p>
         </div>
 
@@ -30,7 +32,7 @@ export function ContinueWorkingCard({ onContinue }: ContinueWorkingCardProps) {
           onClick={onContinue}
           className="flex shrink-0 items-center gap-1.5 rounded-xl border border-primary-foreground/32 bg-primary-foreground/22 px-4 py-2.5 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary-foreground/32"
         >
-          Open
+          Open grid
           <ChevronRight className="size-4" />
         </button>
       </div>
