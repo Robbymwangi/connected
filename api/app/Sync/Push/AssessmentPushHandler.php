@@ -122,6 +122,15 @@ final class AssessmentPushHandler extends PushHandler
         return [];
     }
 
+    /* The finalize's results, in the push's transaction, only when this save is what finalized it: a
+       finalize against an already finalized assessment saved nothing and writes nothing. */
+    public function written(PushEntry $entry, Model $saved): void
+    {
+        if ($saved->wasChanged('status') && $saved->status === 'finalized') {
+            $saved->writeResults();
+        }
+    }
+
     public function find(string $recordId, bool $lock = false): ?Model
     {
         $query = Assessment::withTrashed();

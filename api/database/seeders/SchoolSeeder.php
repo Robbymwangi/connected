@@ -15,6 +15,7 @@ use App\Models\Subject;
 use App\Models\SubjectModeration;
 use App\Models\TeacherAssignment;
 use App\Models\User;
+use App\Support\PerformanceLevel;
 use Database\Seeders\Support\SeededRandom;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -418,21 +419,11 @@ class SchoolSeeder extends Seeder
                             'student_id' => $student->id,
                             'total' => $total,
                             'max' => $maxTotal,
-                            'level' => $this->levelFor($total / $maxTotal * 100),
+                            'level' => PerformanceLevel::fromShare($total, $maxTotal)->value,
                         ]);
                     }
                 }
             }
         }
-    }
-
-    private function levelFor(float $percentage): string
-    {
-        return match (true) {
-            $percentage >= 80 => 'EE',
-            $percentage >= 60 => 'ME',
-            $percentage >= 40 => 'AE',
-            default => 'BE',
-        };
     }
 }

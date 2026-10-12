@@ -381,6 +381,13 @@ final class AnalyticsQueryService
 
         $assessmentRows = $this->scopedAssessments($filters);
 
+        // A row is levelled when nothing in it is absent and either its grid is complete or a result
+        // answers for it; the share is then of whichever of the two supplied the total.
+        $complete = 'grid.score_count = rubric.criterion_count and rubric.criterion_count > 0';
+        $counted = "coalesce(grid.absent_count, 0) = 0 and ({$complete} or result.id is not null)";
+        $share = "(case when {$complete} then grid.score_total else result.total end)::double precision ".
+            "/ nullif(case when {$complete} then rubric.max_score else result.max end, 0)";
+
         return DB::query()->fromSub($assessmentRows, 'a')
             ->join('enrolments as e', function ($join) use ($filters): void {
                 $join->on('e.class_id', '=', 'a.class_id')
@@ -439,14 +446,8 @@ final class AnalyticsQueryService
                 '/ nullif(case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then rubric.max_score else result.max end, 0) * 100 end as pct'
             )
             ->selectRaw(
-                'case when coalesce(grid.absent_count, 0) = 0 and (grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 or result.id is not null) then '.
-                'case when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then rubric.max_score else result.max end, 0) >= 0.8 then \'EE\' '.
-                'when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then rubric.max_score else result.max end, 0) >= 0.6 then \'ME\' '.
-                'when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then rubric.max_score else result.max end, 0) >= 0.4 then \'AE\' else \'BE\' end end as level, '.
-                'case when coalesce(grid.absent_count, 0) = 0 and (grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 or result.id is not null) then '.
-                'case when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then rubric.max_score else result.max end, 0) >= 0.8 then 3 '.
-                'when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then rubric.max_score else result.max end, 0) >= 0.6 then 2 '.
-                'when (case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then grid.score_total else result.total end)::double precision / nullif(case when grid.score_count = rubric.criterion_count and rubric.criterion_count > 0 then rubric.max_score else result.max end, 0) >= 0.4 then 1 else 0 end end as level_rank'
+                "case when {$counted} then ".PerformanceLevel::sqlCase($share).' end as level, '.
+                "case when {$counted} then ".PerformanceLevel::sqlRank($share).' end as level_rank'
             );
     }
 

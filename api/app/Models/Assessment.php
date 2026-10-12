@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToInstitution;
 use App\Models\Concerns\Syncable;
+use App\Support\PerformanceLevel;
 use App\Support\SyncLog;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -42,6 +43,7 @@ class Assessment extends Model
 
             $assessment->prepareFinalize($user);
             $assessment->save();
+            $assessment->writeResults();
 
             return $assessment;
         });
@@ -82,6 +84,44 @@ class Assessment extends Model
         ]);
     }
 
+    /* A results row for every student with at least one scored mark, written by both finalize paths
+       after the status is saved and inside the same transaction, so the marks are still locked by
+       prepareFinalize. Only live marks on live criteria of the subject count, as in analytics. total
+       is the sum of the scores. max is the rubric's maximum less the criteria marked absent for that
+       student: absence stays out of the denominator, while an empty cell still counts against it,
+       since finalizing past gaps was the teacher's decision. A student absent in every cell, or with
+       nothing scored, gets no row. docs/spec/workflow.md (Finalize), docs/spec/data-model.md. */
+    public function writeResults(): void
+    {
+        $criteria = Criterion::query()->where('subject_id', $this->subject_id)->pluck('max_score', 'id');
+
+        $marksByStudent = $this->marks()
+            ->whereIn('criterion_id', $criteria->keys())
+            ->orderBy('student_id')
+            ->get()
+            ->groupBy('student_id');
+
+        foreach ($marksByStudent as $studentId => $marks) {
+            $scored = $marks->where('mark_kind', 'score');
+
+            if ($scored->isEmpty()) {
+                continue;
+            }
+
+            $absentMax = $marks->where('mark_kind', 'absent')->sum(fn (Mark $mark) => $criteria[$mark->criterion_id]);
+            $total = (int) $scored->sum('score');
+            $max = (int) $criteria->sum() - (int) $absentMax;
+
+            $this->results()->create([
+                'institution_id' => $this->institution_id,
+                'student_id' => $studentId,
+                'total' => $total,
+                'max' => $max,
+                'level' => PerformanceLevel::fromShare($total, $max)->value,
+            ]);
+        }
+    }
+
     public function unlock(User $user, ?string $note = null): void
     {
         $assessment = SyncLog::transaction($this->institution_id, function () use ($user, $note): self {
@@ -110,6 +150,10 @@ class Assessment extends Model
                     'user_id' => $user->id,
                     'note' => $note,
                 ]);
+            }
+
+            foreach ($assessment->results()->orderBy('id')->lockForUpdate()->get() as $result) {
+                $result->delete();
             }
 
             foreach ($assessment->comments()->orderBy('id')->lockForUpdate()->get() as $comment) {

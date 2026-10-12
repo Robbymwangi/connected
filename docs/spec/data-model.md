@@ -138,7 +138,11 @@ something #36 requires.
   `fixtures/results.ts`'s `ResultRecord` exactly; this grain isn't open.
   Written by the server when an assessment finalizes, only for a student with
   at least one scored mark: a student absent in every cell has no row, since
-  absence is an explicit mark kind and `total` is never null. Soft deleted when
+  absence is an explicit mark kind and `total` is never null. `total` is the sum
+  of the scores; `max` is the rubric maximum less the criteria marked absent for
+  that student, so absence stays out of the denominator, while an empty or
+  unentered cell still counts against it, since finalizing past gaps is the
+  teacher's decision. Only live marks on live criteria count. Soft deleted when
   the assessment is unlocked.
 - **`comments`**: `id`, `institution_id`, `student_id`, `year`, `term`,
   `author_id` (nullable until a person edits or accepts), `body` (nullable
