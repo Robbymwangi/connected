@@ -2,8 +2,8 @@
 
 ## The lifecycle
 
-`scheduled → in-progress → complete → finalized → reports-generated`,
-forward-only except through unlock (below).
+`scheduled → in-progress → complete → finalized`, forward-only except through
+unlock (below).
 
 `complete` isn't a teacher action; it's derived, the same way `entered` and
 `total` already are on `frontend/src/fixtures/assessments.ts`. An assessment
@@ -12,16 +12,12 @@ counts against it, and `in-progress` when some but not all are. Nothing sets
 this field directly; it's recomputed from the grid every time it's read.
 
 `finalized` is the one deliberate, one-way gate in the lifecycle: a teacher
-action, not a description of grading progress. This is the hinge the build
-plan means: everything downstream, comments and reports, waits for it, and
-nothing upstream of it (`complete`, `in-progress`) triggers anything on its
-own.
+action, not a description of grading progress. It locks the assessment's marks
+and writes its results (Finalize, below). Nothing upstream of it (`complete`,
+`in-progress`) triggers anything on its own.
 
-`reports-generated` means every student in the assessment now has an
-accepted comment and a generated report. Reports arrive per student, one at
-a time (Report generation, below), so an assessment sits at `finalized`
-while some students are done and others aren't, and only advances to
-`reports-generated` once the last one finishes.
+Comments and report cards are not part of an assessment's lifecycle. They belong
+to a student's term and wait for the term close (below), per ADR 0012.
 
 ## Finalize
 
@@ -46,55 +42,112 @@ handling: both mutations set `status` to the identical value `"finalized"`,
 so `sync-protocol.md`'s rule 4 auto-resolves it (equal values on both sides
 of an overlapping field) rather than raising a conflict over an agreement.
 
-On acceptance, the server dispatches comment generation for every student on
-the roster (Comments, below) as a side effect of that one accepted write, not
-a separate request the device makes afterward. On the device, the grid locks
-the moment the pending `status: "finalized"` fields apply locally, the same
-as any other accepted write showing up immediately, optimistic before
-confirmation.
+On acceptance, in the same transaction, the server writes a `results` row for
+every student who has at least one scored mark on the assessment: `total`, `max`,
+and `level`, computed with the same level thresholds the analytics service uses,
+never a second copy of the rule. A student marked absent in every cell gets no
+result: absence is an explicit mark kind, not a null total. Finalize dispatches
+nothing else; comments wait for the term close. On the device, the grid locks the
+moment the pending `status: "finalized"` fields apply locally, the same as any
+other accepted write showing up immediately, optimistic before confirmation.
+
+## Term close
+
+The act that makes report cards possible, and the trigger for 4.3. It is an
+online-only action on one stream's term, like unlock, outside the mutation path
+entirely: it needs a cross-assessment check and has server-side effects, and it
+happens once a term, so the offline-first cost of requiring a connection is
+negligible. It is accepted only when:
+
+- The acting user is the class's `class_teacher_id` or an admin. Otherwise
+  `forbidden`.
+- The stream has at least one assessment in that year and term, and every one is
+  `finalized`. Otherwise `invalid`, naming the assessments still open. A card built
+  on a term with an unlocked assessment would show figures that can still move.
+
+On acceptance, in one transaction, the server writes a `term_closures` row
+(`docs/spec/data-model.md`), creates one `comments` row per student enrolled in
+the stream that year, in state `pending`, and dispatches generation after commit
+(ADR 0007). Closing a term that is already closed is the no-op.
 
 ## Comments
 
-One `comments` row per student per assessment (`docs/spec/data-model.md`,
-#34), created in `draft` state when finalize is accepted, submitted in
-batch to the Anthropic batch API per `docs/build-plan.md` item 4.3, never
-generated synchronously on a request.
+One `comments` row per student per term (`docs/spec/data-model.md`), the remark on
+that student's report card, never one per assessment (ADR 0012). It is created
+`pending` by the term close and submitted in batch to the Anthropic batch API per
+`docs/build-plan.md` item 4.3, never generated synchronously on a request.
 
-Any authenticated user may edit, accept, or regenerate a draft, not only the
-teacher who finalized the assessment, consistent with grading itself being
-unrestricted. Whoever accepts or edits a comment is recorded as its
-`author_id`; authorship follows the action, not the finalize event.
-Regenerating discards the current draft's text and requests a fresh one;
-editing keeps and changes it. Accepting moves the row from `draft` to
-`accepted` and is what triggers that student's report (Report generation,
-below); there's no batched "accept all."
+States: `pending` (generation is in flight), `draft` (text is there, a human has
+not accepted it), `accepted`, and `failed` (generation errored or expired; the
+teacher writes their own). `author_id` is null until a person acts: a generated
+draft has no author, and whoever edits or accepts it is recorded as its author.
+Authorship follows the action, not the term close.
 
-## Report generation
+**What the model is sent.** Never a name, an admission number, the school, a
+percentage, or a class position. The prompt carries the subject, the term, the
+performance level and mean for each subject, and the trend against earlier terms,
+and refers to "the student". The name is put back on our side when the card is
+rendered. This is the first boundary to revisit if the privacy position changes,
+and it lives in one place, a prompt builder. Without an API key (development, CI),
+drafts are templated from the same figures and labelled as stand-ins, as the
+assistant's are.
 
-Triggered per student, on that student's comment being accepted, per
-`docs/build-plan.md` item 4.4, not batched at the assessment level and not
-waiting for the rest of the class. The job renders the PDF, writes it to
-S3, and records `generatedAt` and the S3 key on that student's `reports`
-row. The device downloads it through a presigned URL when online; nothing
-about the PDF itself is cached ahead of a request.
+Any authenticated user may edit, accept, or regenerate a comment that is not yet
+accepted, not only the class teacher, consistent with grading itself being
+unrestricted. These are commands, not field patches, so that a stale `accepted`
+can never merge over a body the acceptor did not see. Editing keeps and changes the
+text and supersedes any generation in flight; it is allowed on a `failed` comment
+too. Regenerating discards the text and requests a new one. Accepting moves the
+row to `accepted` and is what triggers that student's report card (below); there is
+no batched "accept all".
 
-When a student's report finishes and every other student on the assessment
-already has one, that same job also advances the assessment's own status to
-`reports-generated`. This is the only place that status is set, and it's a
-consequence of the last report landing, not a separate action anyone takes.
+An accepted comment is final until unlock. It cannot be edited or regenerated,
+which keeps the card a closed record of what was issued and keeps one comment from
+silently forcing a re-render of a PDF that may already be with a family.
+
+A generation result is applied only if it is the comment's latest generation, the
+comment is live, and its state is still `pending`. That one rule covers a
+regenerate while a batch is in flight, an edit that overtakes generation, an unlock
+mid-batch, and a duplicate submit after a crash. A failed or expired generation
+sets the comment `failed` and writes one notification per class teacher.
+
+## Report cards
+
+Per student per term (ADR 0012), triggered on that student's comment being
+accepted, not batched and not waiting for the rest of the class. The job renders
+the PDF with Dompdf, writes it to S3, and records `generated_at` and the S3 key on
+that student's `reports` row. The device downloads it through a presigned URL when
+online; nothing about the PDF is cached ahead of a request.
+
+The card shows, for each subject, the mean and performance level for Terms 1, 2, and
+3 of the year so far (a term not yet closed is blank), a compact history of earlier
+years drawn from the student's enrolments, the class teacher's remark, and the
+school and student identifiers. It never shows a percentage, a class position, a
+rank, or a class size. Position and percentages remain on the teacher's screens only.
+
+A report job carries the identity of the comment it was queued for and checks it
+at its final write: the comment must still be live and `accepted`, and the term
+closure for that stream and term must still be live. A job that finds either
+missing, because an unlock unwound the cycle after the comment was accepted, writes
+nothing and ends. Otherwise a stale job could produce a report for a cycle that no
+longer exists, beside the new cycle's own.
+
+When the last student of the stream's term has a report, the server writes a
+`report-ready` notification to the class teacher. A card is cumulative: a later
+term's card is a new row, never an edit of an earlier one.
 
 ## Unlock
 
 An ADMIN action (#36), always online, outside the mutation path entirely
 (#35): it writes an `unlock_notes` row and the assessment's status directly,
 never through the outbox. A note is required only once a report exists for
-at least one student on the assessment; unlocking a `finalized` assessment
-that has no reports yet needs no note, since nothing downstream has
-happened yet to explain unwinding. This matches `docs/build-plan.md` 0.7:
+at least one student of the assessment's stream in its term; unlocking a
+`finalized` assessment in a term that is not closed needs no note, since nothing
+downstream has happened yet to explain unwinding. This matches `docs/build-plan.md` 0.7:
 "unlock requires a resolution note only where reports already exist, and is
 silent otherwise."
 
-Unlocking clears the `finalized` (or `reports-generated`) status; nothing
+Unlocking clears the `finalized` status and soft deletes that assessment's `results`; nothing
 about it clears any mark, so the assessment's status is simply whatever the
 grid's own completeness derives to afterward, per the same rule as
 everywhere else in this file: `complete` if every cell is scored or marked
@@ -103,13 +156,17 @@ assessment finalized with empty cells still in it, since finalizing was
 never a precondition of completeness, and unlocking doesn't retroactively
 make it one.
 
-Every `comments` and `reports` row from the cycle being unwound is soft
-deleted, not overwritten: history stays queryable, and a fresh cycle, new
-draft comments, new reports, begins the next time finalize is accepted, as
-if for the first time. This is what `docs/spec/access-model.md` means by
-"re-finalizing the assessment retriggers comment and report generation as
-if it were being finalized for the first time": that's the mechanism, a new
-cycle over soft-deleted history, not the same rows reused.
+If the assessment's term is closed, unlocking unwinds the close: the
+`term_closures` row and every `comments` and `reports` row of that stream and term
+are soft deleted, not overwritten, and any generation in flight is superseded.
+History stays queryable, and a fresh cycle begins the next time the term is
+closed, over soft-deleted history rather than the same rows reused. Every table
+in the cycle (`results`, `term_closures`, `comments`, `reports`) allows one live row
+per identity, enforced by a partial unique index where `deleted_at` is null, so the
+new cycle inserts new rows with new ids beside the retained history. This is what
+`docs/spec/access-model.md` means by "re-finalizing the assessment retriggers
+comment and report generation as if it were being finalized for the first time":
+the term must be closed again.
 
 ## Conflicts across the hinge
 
@@ -134,7 +191,7 @@ shape of problem, is the reverse: a mark edit that was made offline before
 an assessment finalized, and only reaches the server after. This needs a
 rule `sync-protocol.md` doesn't state, because it's specific to this hinge,
 not a general property of the sync protocol: a mark mutation is rejected
-`invalid` if its assessment's status is `finalized` or `reports-generated`
+`invalid` if its assessment's status is `finalized`
 at the moment the push is processed, checked before the mark's own
 `baseVersion` is even considered, since an accepted write here would
 silently defeat the lock finalize is supposed to be, regardless of what

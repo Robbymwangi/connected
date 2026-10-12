@@ -12,13 +12,15 @@ check repeated in every controller instead of once. Online-only concerns
 (analytics summaries, report PDFs, the assistant) stay ordinary REST and are
 out of scope here.
 
-Marks, assessments, and conflicts are pushed and pulled. A notification's
+Marks, assessments, conflicts, and comments are pushed and pulled. A comment is
+pushed only as a command (edit, accept, regenerate), never as a field patch; the
+command's rules are in `docs/spec/workflow.md`, Comments. A notification's
 `unread` field is the one pushed field on an otherwise pull-only table. Every
 other synchronisable table in `docs/spec/data-model.md` (#34), classes,
 `class_subjects`, subjects, criteria, students, `enrolments`,
-`teacher_assignments`, `subject_moderations`, users, results, comments,
-reports, is pull-only: a device reads it and never proposes a change.
-`institutions` and `unlock_notes` aren't synchronisable at all (#34's
+`teacher_assignments`, `subject_moderations`, users, results,
+`term_closures`, reports, is pull-only: a device reads it and never proposes a change.
+`institutions`, `unlock_notes`, and `comment_generations` aren't synchronisable at all (#34's
 Conventions) and never appear on either verb.
 
 Pull is institution-wide, not scoped to a teacher's assignments, with one
@@ -381,7 +383,7 @@ going would hide it. (Proposed.)
   user), with `finalizedAt` ignored. It runs the online finalize's checks through one shared rule
   (authorize, require the stored status `scheduled`, since `in-progress` and `complete` are derived and never stored, lock the marks, refuse while a mark conflict is open). Mixed with
   another field, missing a half, a status other than `finalized`, or on a create is `invalid`. Two devices
-  finalizing is the no-op, with the credit kept by the first; an already finalized or reports-generated
+  finalizing is the no-op, with the credit kept by the first; an already finalized
   assessment is the no-op too; a finalize queued before an unlock is a conflict. Unlock stays an online
   administrator action and is never a mutation.
 - Server-written notifications. A mark edit refused because its assessment is finalized writes
