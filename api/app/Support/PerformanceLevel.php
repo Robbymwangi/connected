@@ -25,6 +25,17 @@ enum PerformanceLevel: string
         };
     }
 
+    /** The CBC wording, as frontend/src/lib/grading.ts has it. */
+    public function label(): string
+    {
+        return match ($this) {
+            self::EE => 'Exceeding Expectations',
+            self::ME => 'Meeting Expectations',
+            self::AE => 'Approaching Expectations',
+            self::BE => 'Below Expectations',
+        };
+    }
+
     /** Ordinal for movement between levels: BE is 0, EE is 3. */
     public function rank(): int
     {
@@ -42,8 +53,12 @@ enum PerformanceLevel: string
             throw new \InvalidArgumentException('a performance level needs a positive maximum');
         }
 
-        $share = $total / $max;
+        return self::forShare($total / $max);
+    }
 
+    /** The level of a share already worked out, such as a term's mean of assessment shares. */
+    public static function forShare(float $share): self
+    {
         foreach (self::cases() as $level) {
             if ($share >= $level->minShare()) {
                 return $level;

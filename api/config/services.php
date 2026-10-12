@@ -28,6 +28,18 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /* The Anthropic batch API, for report-card comments (ADR 0007, build plan 4.3). Without a
+       key, as in development and CI, comment drafts are templated and labelled [Stand-in],
+       and nothing is sent anywhere. The key lives in the environment, never in the repo or
+       the frontend. */
+    'anthropic' => [
+        'key' => env('ANTHROPIC_API_KEY'),
+        'base_url' => env('ANTHROPIC_BASE_URL', 'https://api.anthropic.com'),
+        'version' => '2023-06-01',
+        'comment_model' => env('ANTHROPIC_COMMENT_MODEL', 'claude-haiku-5-5'),
+        'comment_max_tokens' => 1024,
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

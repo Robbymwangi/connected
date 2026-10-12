@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\SubmitCommentBatch;
 use App\Models\Assessment;
 use App\Models\ClassSubject;
 use App\Models\Conflict;
@@ -17,6 +18,7 @@ use App\Models\TeacherAssignment;
 use App\Models\TermClosure;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -357,9 +359,13 @@ function conflictsFor(string $markId): array
 }
 
 /* Term close helpers (ADR 0012). The graph's teacher is assigned to its stream, so may close it. The
-   assessment is set finalized directly, as setup, so a test may hold an open conflict or skip results. */
+   assessment is set finalized directly, as setup, so a test may hold an open conflict or skip results.
+   Generation is faked, so the close leaves its comments pending; tests of generation run the jobs
+   themselves (CommentGenerationTest). */
 function closeGraphTerm(array $graph): TermClosure
 {
+    Bus::fake([SubmitCommentBatch::class]);
+
     if (! in_array($graph['assessment']->fresh()->status, Assessment::FINALIZED, true)) {
         $graph['assessment']->update(['status' => 'finalized', 'finalized_at' => now(), 'finalized_by' => $graph['teacher']->id]);
     }
