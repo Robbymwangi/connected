@@ -176,7 +176,9 @@ test.describe('settling a conflict', () => {
       [['conflicts', 'referral', 2]],
     ])
     expect(rounds[0][0].fields).toEqual({ proposal: { byId: E2E_USER.id, choice: { kind: 'side', editId: 'edit-a' }, note: 'Re-marked against the rubric' } })
-    expect(await outboxEntries(page)).toHaveLength(0)
+    /* Synced means nothing is waiting to be sent. The answered commands go a moment later,
+       when the pull that follows the push brings the conflict up to their version. */
+    await expect.poll(async () => (await outboxEntries(page)).length, { timeout: 15_000 }).toBe(0)
 
     /* Once the pull has caught up, the server's row says the same, so it stays settled: the
        conflict is with a moderator now, and nothing is left for this teacher to do. */
@@ -248,15 +250,17 @@ test.describe('settling a conflict', () => {
   })
 })
 
-/* One definition of "needs you", used by the banner, the dashboard, and the top bar. */
+/* One definition of "needs you", used by the dashboard's banner and the top bar. The
+   dashboard's own "Needs Review" figure went with #145's rework; the banner, which names
+   the one conflict and says "+N more" past it, is where the dashboard counts now. */
 test.describe('counting what needs a person', () => {
-  const needsReview = (page: Page) => page.getByText('Needs Review', { exact: true }).locator('xpath=..')
+  const banner = (page: Page) => page.getByRole('button', { name: /Needs attention/ })
 
-  test('a party sees the conflict in the banner, the dashboard, and the top bar', async ({ page }) => {
+  test('a party sees the conflict in the banner and the top bar', async ({ page }) => {
     await signIn(page, await conflictChanges({ a: 'teacher-akinyi', b: E2E_USER.id }))
 
-    await expect(page.getByText('Needs attention')).toBeVisible()
-    await expect(needsReview(page)).toContainText('1')
+    await expect(banner(page)).toBeVisible()
+    await expect(banner(page)).not.toContainText('more')
     await expect(page.getByTestId('sync-line')).toHaveAttribute('data-sync-category', 'attention')
   })
 
@@ -264,8 +268,8 @@ test.describe('counting what needs a person', () => {
     const elsewhere = { ...E2E_USER, moderated_subject_ids: ['subject-other'] }
     await signIn(page, await conflictChanges({ a: 'teacher-akinyi', b: 'teacher-otieno' }), elsewhere)
 
-    await expect(page.getByText('Needs attention')).toHaveCount(0)
-    await expect(needsReview(page)).toContainText('0')
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await expect(banner(page)).toHaveCount(0)
     await expect(page.getByTestId('sync-line')).not.toHaveAttribute('data-sync-category', 'attention')
   })
 
@@ -273,8 +277,8 @@ test.describe('counting what needs a person', () => {
     const moderator = { ...E2E_USER, moderated_subject_ids: ['subject-1'] }
     await signIn(page, await conflictChanges({ a: 'teacher-akinyi', b: 'teacher-otieno' }), moderator)
 
-    await expect(page.getByText('Needs attention')).toBeVisible()
-    await expect(needsReview(page)).toContainText('1')
+    await expect(banner(page)).toBeVisible()
+    await expect(banner(page)).not.toContainText('more')
   })
 })
 
