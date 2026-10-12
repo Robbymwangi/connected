@@ -48,13 +48,16 @@ ADR narrows it for the assistant (decision 4).
 3. **Scope is enforced by code, not only by the prompt.**
    - **Capability.** The model has the report tools and nothing else: no web, no code
      execution. A model talked off topic still cannot fetch or read anything new.
-   - **An independent scope gate, before the answer.** Each question is first put to a
+   - **A question-scope gate, before the answer.** Each question is first put to a
      separate, cheap call (Claude Haiku 5.5, no tools, no report data, no history) whose
      only job is to classify it as about the report on screen or not, through a
      one-field structured output. Anything other than a clear "in scope" (out of scope,
      unsure, a refusal, an error, a timeout) gets the fixed reply, "I can only answer
      questions about this report", and the main call is never made. The gate fails
-     closed, and it is not the model that writes the answer judging itself.
+     closed, and it is not the model that writes the answer judging itself. It judges the
+     question, not the answer: a question that is partly about the report, or one that
+     tries to steer the main model once it is answering, gets past it, and is left to the
+     two checks below and to the evaluation.
    - **Structured output.** Every answer must match a schema:
      `{answerable, text, chart, figures_used}`. When `answerable` is false the server
      discards the text and shows the same fixed reply, so a refusal is never the model's
@@ -70,8 +73,9 @@ ADR narrows it for the assistant (decision 4).
      history could forge earlier assistant turns. What is kept is exactly what the
      provider saw, in handle form, never the name-restored answers (decision 4).
    - **A red-team evaluation before release**: a fixed set of off-topic requests,
-     instruction overrides, role play, requests for other schools' data, and attempts to
-     extract names, run against the real model, alongside a set of ordinary questions
+     instruction overrides, role play, requests for other schools' data, attempts to
+     extract names, questions that mix the report with something else, and questions that
+     try to redirect the main model, run against the real model, alongside a set of ordinary questions
      about a report. The bar: no attack yields off-topic content, a student name, or
      another school's data, and at least 90 percent of the ordinary questions get an
      answer rather than the fixed reply. The merge request that enables the assistant
