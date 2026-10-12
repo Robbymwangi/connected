@@ -4,6 +4,7 @@ use App\Http\Middleware\ResolveInstitution;
 use App\Models\Assessment;
 use App\Models\ClassSubject;
 use App\Models\Comment;
+use App\Models\CommentGeneration;
 use App\Models\Conflict;
 use App\Models\Criterion;
 use App\Models\Enrolment;
@@ -17,6 +18,7 @@ use App\Models\Student;
 use App\Models\Subject;
 use App\Models\SubjectModeration;
 use App\Models\TeacherAssignment;
+use App\Models\TermClosure;
 use App\Models\UnlockNote;
 use App\Models\User;
 use App\Support\CurrentInstitution;
@@ -111,11 +113,17 @@ test('authenticated as a user of school A, every model is scoped to A and sees n
     $resultA = Result::create(['institution_id' => $a['institution']->id, 'assessment_id' => $a['assessment']->id, 'student_id' => $a['student']->id, 'total' => 8, 'max' => 10, 'level' => 'ME']);
     $resultB = Result::create(['institution_id' => $b['institution']->id, 'assessment_id' => $b['assessment']->id, 'student_id' => $b['student']->id, 'total' => 8, 'max' => 10, 'level' => 'ME']);
 
-    $commentA = Comment::create(['institution_id' => $a['institution']->id, 'assessment_id' => $a['assessment']->id, 'student_id' => $a['student']->id, 'author_id' => $a['teacher']->id, 'body' => 'Good.', 'state' => 'draft']);
-    $commentB = Comment::create(['institution_id' => $b['institution']->id, 'assessment_id' => $b['assessment']->id, 'student_id' => $b['student']->id, 'author_id' => $b['teacher']->id, 'body' => 'Good.', 'state' => 'draft']);
+    $closureA = closeGraphTerm($a);
+    $closureB = closeGraphTerm($b);
 
-    $reportA = Report::create(['institution_id' => $a['institution']->id, 'assessment_id' => $a['assessment']->id, 'student_id' => $a['student']->id, 'generated_at' => now(), 's3_key' => 'a.pdf']);
-    $reportB = Report::create(['institution_id' => $b['institution']->id, 'assessment_id' => $b['assessment']->id, 'student_id' => $b['student']->id, 'generated_at' => now(), 's3_key' => 'b.pdf']);
+    $commentA = $closureA->comments()->sole();
+    $commentB = $closureB->comments()->sole();
+
+    $generationA = CommentGeneration::create(['institution_id' => $a['institution']->id, 'comment_id' => $commentA->id, 'status' => 'submitted']);
+    $generationB = CommentGeneration::create(['institution_id' => $b['institution']->id, 'comment_id' => $commentB->id, 'status' => 'submitted']);
+
+    $reportA = issuedReport($a);
+    $reportB = issuedReport($b);
 
     $notificationA = Notification::create(['institution_id' => $a['institution']->id, 'user_id' => $a['teacher']->id, 'kind' => 'sync-conflict', 'tone' => 'warning', 'title' => 'A', 'body' => 'A', 'unread' => true]);
     $notificationB = Notification::create(['institution_id' => $b['institution']->id, 'user_id' => $b['teacher']->id, 'kind' => 'sync-conflict', 'tone' => 'warning', 'title' => 'B', 'body' => 'B', 'unread' => true]);
@@ -154,7 +162,9 @@ test('authenticated as a user of school A, every model is scoped to A and sees n
     $remaining = [
         Conflict::class => [$conflictA, $conflictB],
         Result::class => [$resultA, $resultB],
+        TermClosure::class => [$closureA, $closureB],
         Comment::class => [$commentA, $commentB],
+        CommentGeneration::class => [$generationA, $generationB],
         Report::class => [$reportA, $reportB],
         Notification::class => [$notificationA, $notificationB],
         UnlockNote::class => [$unlockNoteA, $unlockNoteB],

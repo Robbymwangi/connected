@@ -12,6 +12,7 @@ use App\Http\Controllers\SubjectsController;
 use App\Http\Controllers\SyncController;
 use App\Http\Controllers\SyncPushController;
 use App\Http\Controllers\TeachersController;
+use App\Http\Controllers\TermClosuresController;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\ResolveInstitution;
 use Illuminate\Support\Facades\Route;
@@ -62,6 +63,8 @@ Route::middleware(['auth:sanctum', EnsureAccountIsActive::class])->group(functio
     Route::post('/students', [StudentsController::class, 'store'])->name('students.store');
     Route::put('/students/{student}', [StudentsController::class, 'update'])->name('students.update');
     Route::post('/assessments/{assessment}/unlock', [AssessmentsController::class, 'unlock'])->name('assessments.unlock');
+    // Closing a stream's term is online only too, like unlock (docs/spec/workflow.md, Term close).
+    Route::post('/term-closures', [TermClosuresController::class, 'store'])->name('term-closures.store');
     Route::post('/classes', [ClassesController::class, 'store'])->name('classes.store');
     Route::put('/classes/{schoolClass}', [ClassesController::class, 'update'])->name('classes.update');
     Route::post('/teachers', [TeachersController::class, 'store'])->name('teachers.store');

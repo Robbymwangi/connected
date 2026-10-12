@@ -145,10 +145,13 @@ something #36 requires.
   teacher's decision. Only live marks on live criteria count. Soft deleted when
   the assessment is unlocked.
 - **`comments`**: `id`, `institution_id`, `student_id`, `year`, `term`,
-  `author_id` (nullable until a person edits or accepts), `body` (nullable
-  until generated), `state` (`pending`, `draft`, `accepted`, `failed`). One per
+  `term_closure_id` (the close that created it), `author_id` (nullable until a
+  person edits or accepts), `body` (nullable until generated; required once
+  `draft` or `accepted`), `state` (`pending`, `draft`, `accepted`, `failed`). One per
   student per term, the remark on that student's report card, created `pending`
-  by the term close (`docs/spec/workflow.md`, ADR 0012). It has no
+  by the term close (`docs/spec/workflow.md`, ADR 0012). `term_closure_id` is how
+  an unlock finds exactly that close's comments, including a student whose
+  enrolment has since moved to another stream. It has no
   `assessment_id`: a comment is about a term, not a test. Pull-only for the
   fields a device reads; edit, accept, and regenerate are commands
   (`docs/spec/sync-protocol.md`).

@@ -19,6 +19,7 @@ export const SYNC_TABLES = [
   'subjects',
   'subject_moderations',
   'teacher_assignments',
+  'term_closures',
   'users',
 ] as const
 
@@ -53,6 +54,7 @@ export class LocalDatabase extends Dexie {
   subjects!: EntityTable<LocalRecord, 'id'>
   subject_moderations!: EntityTable<LocalRecord, 'id'>
   teacher_assignments!: EntityTable<LocalRecord, 'id'>
+  term_closures!: EntityTable<LocalRecord, 'id'>
   users!: EntityTable<LocalRecord, 'id'>
   metadata!: EntityTable<MetadataRecord, 'key'>
   sessions!: EntityTable<SessionRecord, 'key'>
@@ -99,6 +101,15 @@ export class LocalDatabase extends Dexie {
       await transaction.table('outbox').bulkAdd(entries)
       await transaction.table('assessments').bulkPut(records.assessments)
       await transaction.table('marks').bulkPut(records.marks)
+    })
+
+    /* Comments and report cards are per student per term, not per assessment, and a term close is
+       its own synced table (ADR 0012). A pull that met a table this list lacks would be refused, so
+       term_closures ships before the server writes any. No device holds a comment or report yet. */
+    this.version(4).stores({
+      comments: '&id, studentId, termClosureId, authorId, [studentId+year+term]',
+      reports: '&id, studentId, [studentId+year+term]',
+      term_closures: '&id, classId, [classId+year+term]',
     })
   }
 }

@@ -1,2 +1,2 @@
-3
-finalize now writes results (#58); assessments finalized through the app before this have none
+4
+comments and reports reshaped per student per term, term_closures and comment_generations added (ADR 0012, #58); a non-additive migration

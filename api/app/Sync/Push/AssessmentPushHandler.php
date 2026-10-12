@@ -6,6 +6,7 @@ use App\Models\Assessment;
 use App\Models\ClassSubject;
 use App\Models\SchoolClass;
 use App\Models\Subject;
+use App\Models\TermClosure;
 use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
@@ -24,8 +25,6 @@ final class AssessmentPushHandler extends PushHandler
 
     /** The three names a finalize entry may carry. */
     private const FINALIZE_NAMES = ['status', 'finalizedBy', 'finalizedAt'];
-
-    private const FINALIZED = ['finalized', 'reports-generated'];
 
     public function columns(): array
     {
@@ -77,7 +76,7 @@ final class AssessmentPushHandler extends PushHandler
             return $record->trashed();
         }
 
-        if ($wire === 'status' && in_array($record->status, self::FINALIZED, true)) {
+        if ($wire === 'status' && in_array($record->status, Assessment::FINALIZED, true)) {
             return 'finalized';
         }
 
@@ -162,7 +161,7 @@ final class AssessmentPushHandler extends PushHandler
             throw SyncRejection::invalid('the assessment has been deleted');
         }
 
-        if (in_array($record->status, self::FINALIZED, true)) {
+        if (in_array($record->status, Assessment::FINALIZED, true)) {
             return $record;
         }
 
@@ -219,6 +218,7 @@ final class AssessmentPushHandler extends PushHandler
 
         $this->validateTypes($fields);
         $this->assertClassOffersSubject($fields['classId'], $fields['subjectId']);
+        $this->assertTermOpen($fields['classId'], $fields['year'], $fields['term']);
 
         return new Assessment([
             'id' => $entry->recordId,
@@ -272,9 +272,28 @@ final class AssessmentPushHandler extends PushHandler
             $this->assertClassOffersSubject($classId, $subjectId);
         }
 
+        // A closed term's cards are already issued: nothing moves into it, and nothing moves out.
+        $term = $fields['term'] ?? (int) $record->term;
+
+        if ($classId !== (string) $record->class_id || $year !== (int) $record->year || $term !== (int) $record->term) {
+            $this->assertTermOpen((string) $record->class_id, (int) $record->year, (int) $record->term);
+            $this->assertTermOpen($classId, $year, $term);
+        }
+
         $record->fill(collect($fields)->mapWithKeys(fn ($value, $name) => [$this->columns()[$name] => $value])->all());
 
         return $record;
+    }
+
+    /* While a stream's term is closed its cards stand on the assessments it closed over, so an
+       assessment cannot be created in it or moved in or out (docs/spec/workflow.md, Term close). The
+       way back is an admin's unlock, which unwinds the close. The term close takes the same
+       institution lock as this push, so the check cannot race it. */
+    private function assertTermOpen(string $classId, int $year, int $term): void
+    {
+        if (TermClosure::isClosed($classId, $year, $term)) {
+            throw SyncRejection::invalid('The term is closed for this stream; an administrator must unlock it first.');
+        }
     }
 
     private function assertClassOffersSubject(string $classId, string $subjectId): void

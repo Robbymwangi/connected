@@ -432,6 +432,27 @@ describe('pullSync', () => {
     expect(store.transaction).not.toHaveBeenCalled()
   })
 
+  it('stores a term closure and the pending comments it created (ADR 0012)', async () => {
+    const store = createDatabase()
+    await store.setCursor('user-1', 30)
+    const fetchMock = vi.fn().mockResolvedValue(
+      json({
+        changes: [
+          { table: 'term_closures', recordId: 'tc1', version: 1, fields: { classId: 'class-4w', year: 2026, term: 1, closedBy: 'u1', closedAt: '2026-04-01T09:00:00Z' } },
+          { table: 'comments', recordId: 'cm1', version: 1, fields: { studentId: 's1', year: 2026, term: 1, termClosureId: 'tc1', state: 'pending', authorId: null, body: null } },
+        ],
+        cursor: 32,
+        more: false,
+      }),
+    )
+
+    const result = await pullSync('token', 'user-1', asFetch(fetchMock), store.database)
+
+    expect(result).toMatchObject({ changesApplied: 2, cursor: 32 })
+    expect(await store.row('term_closures', 'tc1')).toMatchObject({ id: 'tc1', version: 1, classId: 'class-4w', term: 1 })
+    expect(await store.database.comments.where('[studentId+year+term]').equals(['s1', 2026, 1]).first()).toMatchObject({ id: 'cm1', state: 'pending' })
+  })
+
   it('rejects unknown tables without advancing the cursor', async () => {
     const store = createDatabase()
     const fetchMock = vi.fn().mockResolvedValue(

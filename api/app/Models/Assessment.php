@@ -28,6 +28,9 @@ class Assessment extends Model
 {
     use BelongsToInstitution, Syncable;
 
+    /** The statuses that mean finalized; reports-generated is retired by ADR 0012 and leaves with the frontend's reading of it. */
+    public const FINALIZED = ['finalized', 'reports-generated'];
+
     protected function casts(): array
     {
         return [
@@ -129,22 +132,25 @@ class Assessment extends Model
 
             Gate::forUser($user)->authorize('unlock', $assessment);
 
-            if (! in_array($assessment->status, ['finalized', 'reports-generated'], true)) {
+            if (! in_array($assessment->status, self::FINALIZED, true)) {
                 throw ValidationException::withMessages([
                     'status' => 'Only a finalized assessment can be unlocked.',
                 ]);
             }
 
-            $reports = $assessment->reports()->orderBy('id')->lockForUpdate()->get();
+            // A closed term is unwound by unlocking any of its assessments; a note is required only
+            // once a report card has been issued under that close (docs/spec/workflow.md, Unlock).
+            $closure = TermClosure::liveFor($assessment->class_id, $assessment->year, $assessment->term)->lockForUpdate()->first();
+            $reportsExist = $closure !== null && $closure->reports()->exists();
             $note = trim($note ?? '');
 
-            if ($reports->isNotEmpty() && $note === '') {
+            if ($reportsExist && $note === '') {
                 throw ValidationException::withMessages([
                     'note' => 'A resolution note is required when reports exist.',
                 ]);
             }
 
-            if ($reports->isNotEmpty()) {
+            if ($reportsExist) {
                 $assessment->unlockNotes()->create([
                     'institution_id' => $assessment->institution_id,
                     'user_id' => $user->id,
@@ -156,13 +162,7 @@ class Assessment extends Model
                 $result->delete();
             }
 
-            foreach ($assessment->comments()->orderBy('id')->lockForUpdate()->get() as $comment) {
-                $comment->delete();
-            }
-
-            foreach ($reports as $report) {
-                $report->delete();
-            }
+            $closure?->unwind();
 
             $assessment->fill([
                 'status' => 'scheduled',
@@ -210,16 +210,6 @@ class Assessment extends Model
     public function results(): HasMany
     {
         return $this->hasMany(Result::class);
-    }
-
-    public function comments(): HasMany
-    {
-        return $this->hasMany(Comment::class);
-    }
-
-    public function reports(): HasMany
-    {
-        return $this->hasMany(Report::class);
     }
 
     public function unlockNotes(): HasMany

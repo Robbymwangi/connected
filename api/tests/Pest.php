@@ -8,11 +8,13 @@ use App\Models\Enrolment;
 use App\Models\Institution;
 use App\Models\Mark;
 use App\Models\Notification;
+use App\Models\Report;
 use App\Models\SchoolClass;
 use App\Models\Student;
 use App\Models\Subject;
 use App\Models\SubjectModeration;
 use App\Models\TeacherAssignment;
+use App\Models\TermClosure;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -352,4 +354,28 @@ function conflictsFor(string $markId): array
         'proposals' => json_decode($row->proposals, true),
         'resolution' => $row->resolution === null ? null : json_decode($row->resolution, true),
     ])->all();
+}
+
+/* Term close helpers (ADR 0012). The graph's teacher is assigned to its stream, so may close it. The
+   assessment is set finalized directly, as setup, so a test may hold an open conflict or skip results. */
+function closeGraphTerm(array $graph): TermClosure
+{
+    if (! in_array($graph['assessment']->fresh()->status, Assessment::FINALIZED, true)) {
+        $graph['assessment']->update(['status' => 'finalized', 'finalized_at' => now(), 'finalized_by' => $graph['teacher']->id]);
+    }
+
+    return TermClosure::close($graph['teacher'], $graph['class'], $graph['assessment']->year, $graph['assessment']->term)['closure'];
+}
+
+/** A report card issued for a student of the graph's term. */
+function issuedReport(array $graph, ?Student $student = null): Report
+{
+    return Report::create([
+        'institution_id' => $graph['institution']->id,
+        'student_id' => ($student ?? $graph['student'])->id,
+        'year' => $graph['assessment']->year,
+        'term' => $graph['assessment']->term,
+        'generated_at' => '2026-10-05 11:00:00',
+        's3_key' => 'reports/student.pdf',
+    ]);
 }
