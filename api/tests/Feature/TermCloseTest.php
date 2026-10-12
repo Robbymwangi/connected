@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\SubmitCommentBatch;
 use App\Models\Assessment;
 use App\Models\Comment;
 use App\Models\CommentGeneration;
@@ -7,6 +8,7 @@ use App\Models\Enrolment;
 use App\Models\SchoolClass;
 use App\Models\TeacherAssignment;
 use App\Models\TermClosure;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -14,6 +16,9 @@ use Illuminate\Support\Str;
    assessment of it is finalized, writing the closure and one pending comment per enrolled student;
    while closed, no assessment enters or leaves the term; an unlock unwinds it.
    docs/spec/workflow.md (Term close, Unlock). */
+
+// Generation is MR 3's concern and has its own tests; here a close is followed by a queued job, not a draft.
+beforeEach(fn () => Bus::fake([SubmitCommentBatch::class]));
 
 function closeTermRequest(mixed $test, array $graph, mixed $user, array $overrides = [])
 {
@@ -53,6 +58,18 @@ test('an assigned teacher closes the term: a logged closure and one pending comm
         ])->all());
     expect(DB::table('sync_changes')->where('table', 'term_closures')->where('record_id', $closure->id)->exists())->toBeTrue();
     expect(DB::table('sync_changes')->where('table', 'comments')->count())->toBe(2);
+});
+
+test('the close queues generation for its closure once, and a no-op close queues nothing', function () {
+    $g = buildGraph();
+    finalizeGraph($g);
+
+    $closureId = closeTermRequest($this, $g, $g['teacher'])->assertCreated()->json('data.id');
+    closeTermRequest($this, $g, $g['teacher'])->assertOk();
+
+    Bus::assertDispatchedTimes(SubmitCommentBatch::class, 1);
+    Bus::assertDispatched(SubmitCommentBatch::class, fn (SubmitCommentBatch $job) => $job->termClosureId === $closureId
+        && $job->institutionId === $g['institution']->id);
 });
 
 test('an admin closes a term without teaching the stream', function () {

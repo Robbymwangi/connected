@@ -27,4 +27,47 @@ class CommentGeneration extends Model
     {
         return $this->belongsTo(Comment::class)->withTrashed();
     }
+
+    /* The one rule for a generation's outcome (docs/spec/workflow.md, Comments): it applies only if
+       this is the comment's latest generation and still submitted, and the comment is live and
+       still pending. That covers a regenerate while a batch is in flight, an edit that overtook
+       generation, an unlock mid-batch, and a duplicate submit after a crash. Applying text makes
+       the comment a draft with no author; applying a failure makes it failed. Otherwise the
+       generation is superseded and the comment is untouched. The comment is written through
+       Syncable, so its version moves and a device sees the change by pull.
+
+       Call inside SyncLog::transaction, and never across an HTTP call (ADR 0007): the comment row
+       is locked first, then this one, the order unwind() uses. Returns whether it applied. */
+    public function settle(string $status, ?string $text = null, ?string $error = null): bool
+    {
+        $comment = Comment::withTrashed()->lockForUpdate()->find($this->comment_id);
+        $generation = self::query()->lockForUpdate()->findOrFail($this->getKey());
+
+        if ($generation->status !== 'submitted') {
+            return false;
+        }
+
+        $latest = self::query()
+            ->where('comment_id', $generation->comment_id)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->value('id');
+
+        if ($comment === null || $comment->trashed() || $comment->state !== 'pending' || $latest !== $generation->id) {
+            $generation->update(['status' => 'superseded']);
+
+            return false;
+        }
+
+        if ($status === 'succeeded') {
+            $comment->update(['body' => $text, 'state' => 'draft', 'author_id' => null]);
+        } else {
+            $comment->update(['state' => 'failed']);
+        }
+
+        $generation->update(['status' => $status, 'error' => $error]);
+        $this->setRawAttributes($generation->getAttributes(), true);
+
+        return true;
+    }
 }

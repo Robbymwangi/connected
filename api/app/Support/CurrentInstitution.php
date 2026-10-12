@@ -38,6 +38,21 @@ class CurrentInstitution
         $this->http = false;
     }
 
+    /* Runs a queued job's work as one institution, then restores whatever was there. On a worker
+       the binding is fresh per job anyway; on the sync queue a job runs inside the request that
+       dispatched it, and must not leave that request scoped to another institution. */
+    public function actingFor(string $id, \Closure $callback): mixed
+    {
+        $previous = $this->id;
+        $this->id = $id;
+
+        try {
+            return $callback();
+        } finally {
+            $this->id = $previous;
+        }
+    }
+
     public function beginRequest(?string $id): void
     {
         $this->http = true;
