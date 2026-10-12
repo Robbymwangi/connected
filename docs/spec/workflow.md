@@ -59,16 +59,26 @@ entirely: it needs a cross-assessment check and has server-side effects, and it
 happens once a term, so the offline-first cost of requiring a connection is
 negligible. It is accepted only when:
 
-- The acting user is the class's `class_teacher_id` or an admin. Otherwise
-  `forbidden`.
+- The acting user is a teacher assigned to any subject of the stream
+  (`teacher_assignments`), or an admin. Otherwise `forbidden`. Being the class
+  teacher is not a capability (`docs/spec/access-model.md`).
 - The stream has at least one assessment in that year and term, and every one is
   `finalized`. Otherwise `invalid`, naming the assessments still open. A card built
   on a term with an unlocked assessment would show figures that can still move.
+  The check runs under the same lock as finalize: the transaction locks the
+  stream's assessment rows for that year and term (`SELECT ... FOR UPDATE`) and
+  rechecks under the lock, so an unlock or finalize that commits between the check
+  and the closure cannot leave an open assessment inside a closed term.
 
 On acceptance, in one transaction, the server writes a `term_closures` row
 (`docs/spec/data-model.md`), creates one `comments` row per student enrolled in
 the stream that year, in state `pending`, and dispatches generation after commit
 (ADR 0007). Closing a term that is already closed is the no-op.
+
+While a term is closed, creating an assessment for that stream, year, and term is
+`invalid`: its marks would not be on the cards already issued. The way back is an
+admin's unlock of any assessment of that term, which unwinds the close (Unlock,
+below), after which the term is closed again once the new assessment is finalized.
 
 ## Comments
 
@@ -93,7 +103,7 @@ drafts are templated from the same figures and labelled as stand-ins, as the
 assistant's are.
 
 Any authenticated user may edit, accept, or regenerate a comment that is not yet
-accepted, not only the class teacher, consistent with grading itself being
+accepted, not only a particular teacher, consistent with grading itself being
 unrestricted. These are commands, not field patches, so that a stale `accepted`
 can never merge over a body the acceptor did not see. Editing keeps and changes the
 text and supersedes any generation in flight; it is allowed on a `failed` comment
@@ -109,7 +119,8 @@ A generation result is applied only if it is the comment's latest generation, th
 comment is live, and its state is still `pending`. That one rule covers a
 regenerate while a batch is in flight, an edit that overtakes generation, an unlock
 mid-batch, and a duplicate submit after a crash. A failed or expired generation
-sets the comment `failed` and writes one notification per class teacher.
+sets the comment `failed` and writes a `comments-failed` notification to the user
+who closed the term, once per term close.
 
 ## Report cards
 
@@ -121,7 +132,7 @@ online; nothing about the PDF is cached ahead of a request.
 
 The card shows, for each subject, the mean and performance level for Terms 1, 2, and
 3 of the year so far (a term not yet closed is blank), a compact history of earlier
-years drawn from the student's enrolments, the class teacher's remark, and the
+years drawn from the student's enrolments, the teacher's remark, and the
 school and student identifiers. It never shows a percentage, a class position, a
 rank, or a class size. Position and percentages remain on the teacher's screens only.
 
@@ -133,7 +144,7 @@ nothing and ends. Otherwise a stale job could produce a report for a cycle that 
 longer exists, beside the new cycle's own.
 
 When the last student of the stream's term has a report, the server writes a
-`report-ready` notification to the class teacher. A card is cumulative: a later
+`report-ready` notification to the user who closed the term. A card is cumulative: a later
 term's card is a new row, never an edit of an earlier one.
 
 ## Unlock

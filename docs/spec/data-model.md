@@ -12,8 +12,9 @@ nothing to enforce here because the thing it protects against, one tenant
 reading another's data, can't occur on the tenant table itself.
 
 A table is synchronisable if a device ever needs its rows: that covers
-everything below except `institutions` itself, `unlock_notes`, and
-`comment_generations`. A
+everything below except `institutions` itself, `unlock_notes`,
+`comment_generations`, and the server-only log tables `sync_changes` and
+`sync_mutations`. A
 synchronisable table carries a UUID primary key, an integer `version`
 incremented server-side, and `deleted_at` for a soft delete, per ADR 0001.
 `created_at` and `updated_at` are informational only and are never compared to
@@ -151,9 +152,11 @@ something #36 requires.
   (nullable until submitted), `status` (`submitted`, `succeeded`, `errored`,
   `expired`, `superseded`), `error`, timestamps. Server bookkeeping for one
   request to the batch API, with `id` as the request's `custom_id`. Not
-  synchronisable, like `unlock_notes`: a batch write must never bump a comment's
-  `version` or reach a device, or a teacher's edit would go stale for a reason
-  they cannot see.
+  synchronisable, like `unlock_notes`: its own writes (submitting, polling) never
+  touch a comment. Applying a result is a separate update of the `comments` row,
+  under the one rule in `docs/spec/workflow.md`, through the ordinary `Syncable`
+  save: it bumps `version` and logs a `sync_changes` entry, which is how a device
+  sees `pending` become `draft` or `failed`.
 - **`term_closures`**: `id`, `institution_id`, `class_id`, `year`, `term`,
   `closed_by`, `closed_at`. One live row per stream per term, written by the term
   close (`docs/spec/workflow.md`), soft deleted by an unlock. Synchronisable and
@@ -165,7 +168,10 @@ something #36 requires.
   a rank, or a class size.
 - **`notifications`**: `id`, `institution_id`, `user_id`, `assessment_id` (nullable: the
   assessment a notice concerns, for a link and so a recipient gets one unread notice per kind and
-  assessment, not one per cell; it reaches a device as `assessmentId`), `kind`
+  assessment, not one per cell; it reaches a device as `assessmentId`),
+  `term_closure_id` (nullable: the term close a `comments-failed` or `report-ready`
+  notice concerns, so a recipient gets one unread notice per kind and term close, and
+  the notice can link to it; it reaches a device as `termClosureId`), `kind`
   (`sync-conflict`, `submission`, `report-ready`, `enrolment`,
   `edit-blocked`, `comments-failed`), `tone`, `title`, `body`, `unread` (boolean). Written by
   the server (a conflict raised, a report ready), read by a device by pull;

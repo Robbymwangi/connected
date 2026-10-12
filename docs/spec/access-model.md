@@ -23,7 +23,9 @@ signed-in teacher is.
 
 Once an assessment exists, its lifecycle is not unrestricted. Editing its name or
 date, finalizing it, and unlocking it are scoped to whoever created it, or to a
-teacher who teaches that class and that subject. Grading and creation are about
+teacher who teaches that class and that subject. Closing a term for a stream
+(`docs/spec/workflow.md`) is scoped to a teacher assigned to any subject of that
+stream, or to an admin; being the class teacher grants nothing here either. Grading and creation are about
 doing the work of examining a class; the lifecycle actions are decisions about
 whether a sitting is complete and correct, and those belong to whoever is
 answerable for that assessment, not to anyone with a login. ADMIN's unlock power

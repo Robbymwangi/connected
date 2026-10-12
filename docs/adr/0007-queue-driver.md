@@ -10,7 +10,7 @@ Proposed.
 
 Two things are queued: comment generation (build-plan 4.3), which submits to the
 Anthropic batch API and collects the answers hours later, and report rendering (4.4),
-which writes a PDF to S3. Job volume is single digits per class per term. Everything a
+which writes a PDF to S3. Job volume is one comment batch per class per term and one report job per student, a few hundred small jobs per class per term, arriving over days as comments are accepted. Everything a
 job needs is already in Postgres, and a job that arrives late costs a teacher a wait,
 never a wrong figure.
 
