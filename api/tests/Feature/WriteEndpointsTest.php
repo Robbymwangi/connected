@@ -1,9 +1,7 @@
 <?php
 
 use App\Models\Assessment;
-use App\Models\Comment;
 use App\Models\Mark;
-use App\Models\Report;
 use App\Models\SchoolClass;
 use App\Models\Student;
 use App\Models\User;
@@ -46,22 +44,8 @@ test('unlock with a report records the authenticated admin rather than client-su
         'institution_id' => $graph['institution']->id,
         'is_admin' => true,
     ]);
-    $graph['assessment']->finalize($graph['teacher']);
-    $report = Report::create([
-        'institution_id' => $graph['institution']->id,
-        'assessment_id' => $graph['assessment']->id,
-        'student_id' => $graph['student']->id,
-        'generated_at' => '2026-10-05 11:00:00',
-        's3_key' => 'reports/student.pdf',
-    ]);
-    $comment = Comment::create([
-        'institution_id' => $graph['institution']->id,
-        'assessment_id' => $graph['assessment']->id,
-        'student_id' => $graph['student']->id,
-        'author_id' => $graph['teacher']->id,
-        'body' => 'Well done.',
-        'state' => 'accepted',
-    ]);
+    $comment = closeGraphTerm($graph)->comments()->sole();
+    $report = issuedReport($graph);
 
     $response = $this->withToken(tokenFor($admin))->postJson(
         '/api/assessments/'.$graph['assessment']->id.'/unlock',
@@ -96,14 +80,8 @@ test('unlock with a report records the authenticated admin rather than client-su
 test('unlock returns 422 with a resolution-note error when reports exist', function () {
     $graph = buildGraph();
     $graph['teacher']->update(['is_admin' => true]);
-    $graph['assessment']->finalize($graph['teacher']);
-    $report = Report::create([
-        'institution_id' => $graph['institution']->id,
-        'assessment_id' => $graph['assessment']->id,
-        'student_id' => $graph['student']->id,
-        'generated_at' => '2026-10-05 11:00:00',
-        's3_key' => 'reports/student.pdf',
-    ]);
+    closeGraphTerm($graph);
+    $report = issuedReport($graph);
 
     $response = $this->withToken(tokenFor($graph['teacher']))->postJson(
         '/api/assessments/'.$graph['assessment']->id.'/unlock',

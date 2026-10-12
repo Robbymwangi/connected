@@ -2,13 +2,12 @@
 
 use App\Exceptions\StaleVersionException;
 use App\Models\ClassSubject;
-use App\Models\Comment;
+use App\Models\CommentGeneration;
 use App\Models\Conflict;
 use App\Models\Criterion;
 use App\Models\Institution;
 use App\Models\Mark;
 use App\Models\Notification;
-use App\Models\Report;
 use App\Models\Result;
 use App\Models\SchoolClass;
 use App\Models\Student;
@@ -209,7 +208,7 @@ test('institutions and unlock_notes carry no version and no soft delete, the two
     expect($institution->version ?? null)->toBeNull();
 });
 
-test('the remaining tables (conflicts, results, comments, reports, notifications, unlock notes) relate correctly', function () {
+test('the remaining tables (conflicts, results, term closures, comments, generations, reports, notifications, unlock notes) relate correctly', function () {
     $g = buildGraph();
 
     $conflict = Conflict::create([
@@ -234,24 +233,27 @@ test('the remaining tables (conflicts, results, comments, reports, notifications
     expect($result->assessment->is($g['assessment']))->toBeTrue();
     expect($result->student->is($g['student']))->toBeTrue();
 
-    $comment = Comment::create([
-        'institution_id' => $g['institution']->id,
-        'assessment_id' => $g['assessment']->id,
-        'student_id' => $g['student']->id,
-        'author_id' => $g['teacher']->id,
-        'body' => 'Good progress this term.',
-        'state' => 'draft',
-    ]);
-    expect($comment->author->is($g['teacher']))->toBeTrue();
+    $closure = closeGraphTerm($g);
+    expect($closure->schoolClass->is($g['class']))->toBeTrue();
+    expect($closure->closedBy->is($g['teacher']))->toBeTrue();
 
-    $report = Report::create([
+    $comment = $closure->comments()->sole();
+    $comment->update(['author_id' => $g['teacher']->id, 'body' => 'Good progress this term.', 'state' => 'draft']);
+    expect($comment->author->is($g['teacher']))->toBeTrue();
+    expect($comment->student->is($g['student']))->toBeTrue();
+    expect($comment->termClosure->is($closure))->toBeTrue();
+
+    $generation = CommentGeneration::create([
         'institution_id' => $g['institution']->id,
-        'assessment_id' => $g['assessment']->id,
-        'student_id' => $g['student']->id,
-        'generated_at' => now(),
-        's3_key' => 'reports/test.pdf',
+        'comment_id' => $comment->id,
+        'status' => 'submitted',
     ]);
+    expect($generation->comment->is($comment))->toBeTrue();
+    expect($comment->generations()->sole()->is($generation))->toBeTrue();
+
+    $report = issuedReport($g);
     expect($report->student->is($g['student']))->toBeTrue();
+    expect($closure->reports()->sole()->is($report))->toBeTrue();
 
     $notification = Notification::create([
         'institution_id' => $g['institution']->id,

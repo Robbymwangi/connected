@@ -1,8 +1,6 @@
 <?php
 
-use App\Models\Comment;
 use App\Models\Conflict;
-use App\Models\Report;
 use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -177,13 +175,8 @@ test('unlock with a report rejects a missing or blank note without changing reco
         'finalized_at' => '2026-10-05 10:00:00',
         'finalized_by' => $admin->id,
     ]);
-    $report = Report::create([
-        'institution_id' => $graph['institution']->id,
-        'assessment_id' => $assessment->id,
-        'student_id' => $graph['student']->id,
-        'generated_at' => '2026-10-05 11:00:00',
-        's3_key' => 'reports/student.pdf',
-    ]);
+    $closure = closeGraphTerm($graph);
+    $report = issuedReport($graph);
 
     expect(fn () => $assessment->unlock($admin, $note))
         ->toThrow(ValidationException::class, 'A resolution note is required when reports exist.');
@@ -200,6 +193,7 @@ test('unlock with a report rejects a missing or blank note without changing reco
         'deleted_at' => null,
         'version' => 1,
     ]);
+    $this->assertDatabaseHas('term_closures', ['id' => $closure->id, 'deleted_at' => null]);
     $this->assertDatabaseCount('unlock_notes', 0);
 })->with([
     'missing' => [null],
@@ -207,7 +201,7 @@ test('unlock with a report rejects a missing or blank note without changing reco
     'whitespace' => [" \t\n "],
 ]);
 
-test('unlock with reports records the admin note and soft deletes the cycle while preserving marks', function (string $status) {
+test('unlock with reports records the admin note and unwinds the closed term while preserving marks', function (string $status) {
     $graph = buildGraph();
     $admin = User::factory()->create([
         'institution_id' => $graph['institution']->id,
@@ -219,21 +213,9 @@ test('unlock with reports records the admin note and soft deletes the cycle whil
         'finalized_at' => '2026-10-05 10:00:00',
         'finalized_by' => $graph['teacher']->id,
     ]);
-    $comment = Comment::create([
-        'institution_id' => $graph['institution']->id,
-        'assessment_id' => $assessment->id,
-        'student_id' => $graph['student']->id,
-        'author_id' => $graph['teacher']->id,
-        'body' => 'Well done.',
-        'state' => 'accepted',
-    ]);
-    $report = Report::create([
-        'institution_id' => $graph['institution']->id,
-        'assessment_id' => $assessment->id,
-        'student_id' => $graph['student']->id,
-        'generated_at' => '2026-10-05 11:00:00',
-        's3_key' => 'reports/student.pdf',
-    ]);
+    $closure = closeGraphTerm($graph);
+    $comment = $closure->comments()->sole();
+    $report = issuedReport($graph);
 
     $assessment->unlock($admin, '  Correct the recorded score.  ');
 
@@ -244,8 +226,10 @@ test('unlock with reports records the admin note and soft deletes the cycle whil
         'note' => 'Correct the recorded score.',
     ]);
     $this->assertDatabaseCount('unlock_notes', 1);
+    $this->assertSoftDeleted($closure);
     $this->assertSoftDeleted($comment);
     $this->assertSoftDeleted($report);
+    $this->assertDatabaseHas('term_closures', ['id' => $closure->id, 'version' => 2]);
     $this->assertDatabaseHas('comments', ['id' => $comment->id, 'version' => 2]);
     $this->assertDatabaseHas('reports', ['id' => $report->id, 'version' => 2]);
     $this->assertDatabaseHas('marks', [
@@ -262,23 +246,17 @@ test('unlock with reports records the admin note and soft deletes the cycle whil
         'version' => 3,
     ]);
     expect($assessment->status)->toBe('scheduled');
-})->with(['finalized with a partial report cycle' => ['finalized'], 'reports-generated' => ['reports-generated']]);
+})->with(['finalized' => ['finalized'], 'reports-generated' => ['reports-generated']]);
 
-test('unlock without reports still soft deletes draft comments', function () {
+test('unlock of a closed term with no reports yet unwinds the close without a note', function () {
     $graph = buildGraph();
     $graph['teacher']->update(['is_admin' => true]);
-    $graph['assessment']->finalize($graph['teacher']);
-    $comment = Comment::create([
-        'institution_id' => $graph['institution']->id,
-        'assessment_id' => $graph['assessment']->id,
-        'student_id' => $graph['student']->id,
-        'author_id' => $graph['teacher']->id,
-        'body' => 'Draft comment.',
-        'state' => 'draft',
-    ]);
+    $closure = closeGraphTerm($graph);
+    $comment = $closure->comments()->sole();
 
     $graph['assessment']->unlock($graph['teacher']);
 
+    $this->assertSoftDeleted($closure);
     $this->assertSoftDeleted($comment);
     $this->assertDatabaseCount('unlock_notes', 0);
 });
@@ -287,14 +265,8 @@ test('an assessment can be finalized again after unlock and historical reports d
     $graph = buildGraph();
     $graph['teacher']->update(['is_admin' => true]);
     $assessment = $graph['assessment'];
-    $assessment->finalize($graph['teacher']);
-    $report = Report::create([
-        'institution_id' => $graph['institution']->id,
-        'assessment_id' => $assessment->id,
-        'student_id' => $graph['student']->id,
-        'generated_at' => '2026-10-05 11:00:00',
-        's3_key' => 'reports/old-cycle.pdf',
-    ]);
+    closeGraphTerm($graph);
+    $report = issuedReport($graph);
     $assessment->unlock($graph['teacher'], 'Correct the recorded score.');
 
     $assessment->finalize($graph['teacher']);

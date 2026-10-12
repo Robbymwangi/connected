@@ -23,9 +23,11 @@ $tables = [
     'marks' => ['id', 'institution_id', 'assessment_id', 'student_id', 'criterion_id', 'mark_kind', 'score', 'last_edited_by', 'version', 'deleted_at'],
     'conflicts' => ['id', 'institution_id', 'mark_id', 'base_version', 'mark_version', 'side_a', 'side_b', 'proposals', 'referral', 'resolution', 'resolved_at', 'version', 'deleted_at'],
     'results' => ['id', 'institution_id', 'assessment_id', 'student_id', 'total', 'max', 'level', 'version', 'deleted_at'],
-    'comments' => ['id', 'institution_id', 'assessment_id', 'student_id', 'author_id', 'body', 'state', 'version', 'deleted_at'],
-    'reports' => ['id', 'institution_id', 'assessment_id', 'student_id', 'generated_at', 's3_key', 'version', 'deleted_at'],
-    'notifications' => ['id', 'institution_id', 'user_id', 'assessment_id', 'kind', 'tone', 'title', 'body', 'unread', 'version', 'deleted_at'],
+    'comments' => ['id', 'institution_id', 'student_id', 'year', 'term', 'term_closure_id', 'author_id', 'body', 'state', 'version', 'deleted_at'],
+    'reports' => ['id', 'institution_id', 'student_id', 'year', 'term', 'generated_at', 's3_key', 'version', 'deleted_at'],
+    'term_closures' => ['id', 'institution_id', 'class_id', 'year', 'term', 'closed_by', 'closed_at', 'version', 'deleted_at'],
+    'comment_generations' => ['id', 'institution_id', 'comment_id', 'batch_id', 'status', 'error', 'created_at', 'updated_at'],
+    'notifications' => ['id', 'institution_id', 'user_id', 'assessment_id', 'term_closure_id', 'kind', 'tone', 'title', 'body', 'unread', 'version', 'deleted_at'],
     'unlock_notes' => ['id', 'institution_id', 'assessment_id', 'user_id', 'note', 'created_at'],
 ];
 
@@ -213,7 +215,7 @@ test('a soft-deleted row does not block re-creating the same combination', funct
     expect(DB::table('teacher_assignments')->whereNull('deleted_at')->count())->toBe(1);
 });
 
-test('results, comments, and reports are each unique per assessment per student', function () {
+test('a result is unique per assessment per student, and a comment, a report, and a term closure per term', function () {
     $institutionId = seedInstitution();
     $subjectId = Str::uuid7()->toString();
     DB::table('subjects')->insert(['id' => $subjectId, 'institution_id' => $institutionId, 'name' => 'English', 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
@@ -232,18 +234,45 @@ test('results, comments, and reports are each unique per assessment per student'
         'student_id' => $studentId, 'total' => 10, 'max' => 20, 'level' => 'AE', 'version' => 1, 'created_at' => now(), 'updated_at' => now(),
     ])))->toThrow(Exception::class);
 
-    DB::table('comments')->insert(['id' => Str::uuid7()->toString(), 'institution_id' => $institutionId, 'assessment_id' => $assessmentId, 'student_id' => $studentId, 'author_id' => $userId, 'body' => 'Good work.', 'state' => 'draft', 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
-    expect(fn () => DB::transaction(fn () => DB::table('comments')->insert([
-        'id' => Str::uuid7()->toString(), 'institution_id' => $institutionId, 'assessment_id' => $assessmentId,
-        'student_id' => $studentId, 'author_id' => $userId, 'body' => 'Again.', 'state' => 'draft', 'version' => 1, 'created_at' => now(), 'updated_at' => now(),
-    ])))->toThrow(Exception::class);
+    $closureId = Str::uuid7()->toString();
+    $closure = ['institution_id' => $institutionId, 'class_id' => $classId, 'year' => 2026, 'term' => 1, 'closed_by' => $userId, 'closed_at' => now(), 'version' => 1, 'created_at' => now(), 'updated_at' => now()];
+    DB::table('term_closures')->insert(['id' => $closureId, ...$closure]);
+    expect(fn () => DB::transaction(fn () => DB::table('term_closures')->insert(['id' => Str::uuid7()->toString(), ...$closure])))->toThrow(Exception::class);
 
-    DB::table('reports')->insert(['id' => Str::uuid7()->toString(), 'institution_id' => $institutionId, 'assessment_id' => $assessmentId, 'student_id' => $studentId, 'generated_at' => now(), 's3_key' => 'reports/one.pdf', 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
-    expect(fn () => DB::transaction(fn () => DB::table('reports')->insert([
-        'id' => Str::uuid7()->toString(), 'institution_id' => $institutionId, 'assessment_id' => $assessmentId,
-        'student_id' => $studentId, 'generated_at' => now(), 's3_key' => 'reports/two.pdf', 'version' => 1, 'created_at' => now(), 'updated_at' => now(),
-    ])))->toThrow(Exception::class);
+    $comment = ['institution_id' => $institutionId, 'student_id' => $studentId, 'year' => 2026, 'term' => 1, 'term_closure_id' => $closureId, 'state' => 'pending', 'version' => 1, 'created_at' => now(), 'updated_at' => now()];
+    DB::table('comments')->insert(['id' => Str::uuid7()->toString(), ...$comment]);
+    expect(fn () => DB::transaction(fn () => DB::table('comments')->insert(['id' => Str::uuid7()->toString(), ...$comment])))->toThrow(Exception::class);
+
+    $report = ['institution_id' => $institutionId, 'student_id' => $studentId, 'year' => 2026, 'term' => 1, 'generated_at' => now(), 's3_key' => 'reports/one.pdf', 'version' => 1, 'created_at' => now(), 'updated_at' => now()];
+    DB::table('reports')->insert(['id' => Str::uuid7()->toString(), ...$report]);
+    expect(fn () => DB::transaction(fn () => DB::table('reports')->insert(['id' => Str::uuid7()->toString(), ...$report])))->toThrow(Exception::class);
+
+    // Another term is another identity, and a soft deleted row frees its identity for the next cycle.
+    DB::table('comments')->insert(['id' => Str::uuid7()->toString(), ...$comment, 'term' => 2]);
+    DB::table('comments')->where('term', 1)->update(['deleted_at' => now()]);
+    DB::table('comments')->insert(['id' => Str::uuid7()->toString(), ...$comment]);
+    expect(DB::table('comments')->count())->toBe(3);
 });
+
+test('a comment has a body unless it is pending or failed', function (string $state, bool $allowed) {
+    $g = buildGraph();
+    $closure = closeGraphTerm($g);
+    DB::table('comments')->where('term_closure_id', $closure->id)->delete();
+    $insert = fn () => DB::transaction(fn () => DB::table('comments')->insert([
+        'id' => Str::uuid7()->toString(), 'institution_id' => $g['institution']->id, 'student_id' => $g['student']->id,
+        'year' => 2026, 'term' => 1, 'term_closure_id' => $closure->id, 'state' => $state, 'version' => 1,
+        'created_at' => now(), 'updated_at' => now(),
+    ]));
+
+    $allowed ? $insert() : expect($insert)->toThrow(Exception::class);
+
+    expect(DB::table('comments')->count())->toBe($allowed ? 1 : 0);
+})->with([
+    'pending' => ['pending', true],
+    'failed' => ['failed', true],
+    'draft' => ['draft', false],
+    'accepted' => ['accepted', false],
+]);
 
 test('every primary key column is uuid, not an auto-incrementing integer', function () use ($tables) {
     foreach (array_keys($tables) as $table) {

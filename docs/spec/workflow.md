@@ -73,10 +73,20 @@ negligible. It is accepted only when:
 On acceptance, in one transaction, the server writes a `term_closures` row
 (`docs/spec/data-model.md`), creates one `comments` row per student enrolled in
 the stream that year, in state `pending`, and dispatches generation after commit
-(ADR 0007). Closing a term that is already closed is the no-op.
+(ADR 0007). A student who already has a live comment for that term, because a
+stream they were in earlier closed it first, is skipped, since a comment is one
+per student per term; the response counts the skipped students. Closing a term
+that is already closed is the no-op.
+
+It is `POST /api/term-closures` with `class_id`, `year`, and `term`: `201` with the
+closure when this request closed the term, `200` with the existing closure when it
+was already closed, `403` for a user who may not close it, and `422` when the
+term cannot be closed yet.
 
 While a term is closed, creating an assessment for that stream, year, and term is
-`invalid`: its marks would not be on the cards already issued. The way back is an
+`invalid`: its marks would not be on the cards already issued. So is an edit that
+would move an assessment into a closed term or out of one; a rename is not refused,
+since the name is not on the card. The way back is an
 admin's unlock of any assessment of that term, which unwinds the close (Unlock,
 below), after which the term is closed again once the new assessment is finalized.
 
