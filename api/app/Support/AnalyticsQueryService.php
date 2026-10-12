@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 
 final class AnalyticsQueryService
 {
-    private const PASS_MARK_PCT = 50;
+    public const PASS_MARK_PCT = 50;
 
     /** @return list<int> */
     public function availableYears(string $institutionId, string $stream, ?string $subjectId): array

@@ -1,10 +1,11 @@
 import type { Student } from '../fixtures/students'
 import { PASS_MARK_PCT } from './analytics'
 
-/* A stand-in for the report assistant. The real one is a server-side call and
-   arrives with the API; until then, answers are sentences templated from the
-   report on screen, so what the assistant says agrees with the figures beside it.
-   Nothing here guesses: every number comes from the Summary it is handed. */
+/* The stand-in for the report assistant. The real one is a server-side call
+   (api/assistant.ts, ADR 0013); a server without a model key answers 503, and the
+   dialog falls back to this: sentences templated from the report on screen, so what
+   it says agrees with the figures beside it, labelled as a stand-in. Nothing here
+   guesses: every number comes from the Summary it is handed. */
 
 export type AssistantReport = {
   scopeLabel: string

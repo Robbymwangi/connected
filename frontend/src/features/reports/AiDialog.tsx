@@ -1,5 +1,7 @@
 import { CloudOff, Send, Sparkles } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { askAssistant, isAssistantUnavailable } from '../../api/assistant'
+import type { ReportSummaryFilters } from '../../api/reports'
 import { LineChart } from '../../components/charts'
 import { Modal } from '../../components/Modal'
 import { PASS_MARK_PCT } from '../../lib/analytics'
@@ -7,22 +9,23 @@ import { answer, SUGGESTIONS, type Answer, type AssistantReport } from '../../li
 import { useConnectivity } from '../../lib/connectivity'
 import { BarList } from './BarList'
 
-type Message = { role: 'user'; text: string } | { role: 'assistant'; answer: Answer }
+type Message = { role: 'user'; text: string } | { role: 'assistant'; answer: Answer; standIn?: boolean; failed?: boolean }
 
 type AiDialogProps = {
   open: boolean
   onClose: () => void
   report: AssistantReport
+  /* The scope the report on screen was asked for; the assistant answers within it. */
+  filters: ReportSummaryFilters | null
+  token: string
 }
 
-/* Time the stand-in takes to "think", so the loading state is real enough to design
-   against. The real assistant is a server call. */
-const THINK_MS = 700
-
-/* Questions about the report on screen. Needs a connection: the assistant runs on
-   the server, so offline the dialog says so and offers nothing else. Answers are
-   the stand-in's until the API exists, and are labelled as such. */
-export function AiDialog({ open, onClose, report }: AiDialogProps) {
+/* Questions about the report on screen (ADR 0013). Needs a connection: the assistant runs on
+   the server, so offline the dialog says so and offers nothing else. Each question is a live
+   call that the dialog waits on; the server keeps the conversation and returns its id. A server
+   without a model key says so, and the dialog falls back to the stand-in templated from the
+   report's own figures, labelled as such. */
+export function AiDialog({ open, onClose, report, filters, token }: AiDialogProps) {
   const { isOnline } = useConnectivity()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -30,11 +33,13 @@ export function AiDialog({ open, onClose, report }: AiDialogProps) {
   /* The ring turns twice when the dialog opens, keeps turning while thinking, and
      is off otherwise. The dialog is remounted per opening, so 'once' is initial. */
   const [ring, setRing] = useState<'once' | 'live' | 'off'>('once')
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const conversation = useRef<string | null>(null)
+  const mounted = useRef(true)
   const endRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
   }, [])
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' })
@@ -47,11 +52,24 @@ export function AiDialog({ open, onClose, report }: AiDialogProps) {
     setInput('')
     setThinking(true)
     setRing('live')
-    timer.current = setTimeout(() => {
-      setMessages((m) => [...m, { role: 'assistant', answer: answer(q, report) }])
+    void reply(q).then((message) => {
+      if (!mounted.current) return
+      setMessages((m) => [...m, message])
       setThinking(false)
       setRing('off')
-    }, THINK_MS)
+    })
+  }
+
+  const reply = async (q: string): Promise<Message> => {
+    if (!filters) return { role: 'assistant', answer: answer(q, report), standIn: true }
+    try {
+      const { data } = await askAssistant(filters, q, conversation.current, token)
+      conversation.current = data.conversationId
+      return { role: 'assistant', answer: { text: data.text, chart: data.chart ?? undefined } }
+    } catch (error) {
+      if (isAssistantUnavailable(error)) return { role: 'assistant', answer: answer(q, report), standIn: true }
+      return { role: 'assistant', answer: { text: 'The assistant could not answer just now. Check the connection and ask again.' }, failed: true }
+    }
   }
 
   return (
@@ -77,8 +95,8 @@ export function AiDialog({ open, onClose, report }: AiDialogProps) {
         ) : (
           <>
             <div className="flex-1 overflow-y-auto px-5 py-4">
-              <p className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] leading-snug text-foreground/80">
-                <strong className="text-warning">Stand-in.</strong> Answers are templated from the report on screen ({report.scopeLabel}) so they agree with it. The assistant proper arrives with the API.
+              <p className="mb-4 rounded-lg border border-border bg-muted/40 px-3 py-2 text-[11px] leading-snug text-muted-foreground">
+                Answers come only from the figures of this report ({report.scopeLabel}). Students reach the model as S1, S2, never by name.
               </p>
               {messages.length === 0 && (
                 <div>
@@ -98,7 +116,10 @@ export function AiDialog({ open, onClose, report }: AiDialogProps) {
                     <p key={i} className="ml-8 self-end rounded-2xl rounded-br-md bg-primary px-3 py-2 text-sm text-primary-foreground">{m.text}</p>
                   ) : (
                     <div key={i} className="mr-8 rounded-2xl rounded-bl-md border border-border bg-card px-3 py-2.5 text-sm leading-relaxed text-foreground">
-                      <p>{m.answer.text}</p>
+                      <p className={m.failed ? 'text-muted-foreground' : undefined}>{m.answer.text}</p>
+                      {m.standIn && (
+                        <p className="mt-1.5 text-[11px] text-warning">Stand-in: this server has no assistant, so the answer is templated from the report on screen.</p>
+                      )}
                       {m.answer.chart === 'trend' && report.trend.length >= 2 && (
                         <div className="mt-3">
                           <LineChart label={`Pass rate per assessment for ${report.scopeLabel}`} categories={report.trend.map((t) => t.label)} series={[{ id: 'p', label: 'Pass rate', color: 'primary', values: report.trend.map((t) => t.passRate) }]} max={100} format={(v) => `${Math.round(v)}%`} referenceLine={{ value: PASS_MARK_PCT, label: 'Pass mark' }} height={130} />

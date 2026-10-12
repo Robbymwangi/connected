@@ -7,6 +7,7 @@ use App\Http\Controllers\HealthController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\LogoutController;
 use App\Http\Controllers\MeController;
+use App\Http\Controllers\ReportAssistantController;
 use App\Http\Controllers\StudentsController;
 use App\Http\Controllers\SubjectsController;
 use App\Http\Controllers\SyncController;
@@ -42,6 +43,8 @@ Route::middleware(['auth:sanctum', EnsureAccountIsActive::class])->group(functio
     Route::post('/logout', LogoutController::class)->name('logout');
     Route::get('/me', MeController::class)->name('me');
     Route::get('/reports/summary', AnalyticsSummaryController::class)->name('reports.summary');
+    // The report assistant (ADR 0013): live, online only, rate limited per user.
+    Route::post('/reports/assistant', ReportAssistantController::class)->middleware('throttle:assistant')->name('reports.assistant');
 
     // Both sync verbs need the token's `sync` ability (docs/spec/access-model.md,
     // Tokens; docs/spec/sync-protocol.md, Authorization and scoping). A device

@@ -188,6 +188,8 @@ export function ReportsScreen({ directory, token, onOpenStudent }: ReportsScreen
           open={aiOpen}
           onClose={() => setAiOpen(false)}
           report={{ scopeLabel: scopeLabel(report.scope), summary: report.summary, criteria: report.criteria, trend: report.trend, attention: report.attention, roster: report.roster }}
+          filters={primaryRequest}
+          token={token}
         />
       )}
     </div>
