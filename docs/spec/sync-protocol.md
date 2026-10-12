@@ -581,7 +581,7 @@ takes, judged with the device's own earlier commands applied; a body the server 
 Nothing is written to the comment row: the screen shows queued, sent, and answered commands on top of the
 pulled row until the pull reaches the version a command was answered at, as for conflict commands. A second
 command waits for the first's answer and takes its version as its base. The outcomes settle as conflict
-commands do: `accepted` is kept until the pull catches up; `conflict` drops the command with a notice and
+commands do: `accepted` is kept until the pull reaches the version it was answered at (or the comment is withdrawn), and the pull then drops it, in the same reconciliation that drops answered conflict commands; `conflict` drops the command with a notice and
 adopts the comment as it stands, with what was queued behind it; `invalid` and `forbidden` fail it and what was
 queued behind it. A comment command belongs to no assessment, so it never holds a finalize back.
 
