@@ -4,7 +4,10 @@ Date: 2026-10-12
 
 ## Status
 
-Proposed. Reverses decision 8 of `docs/spec/data-model.md`.
+Accepted 2026-10-12. Reverses decision 8 of `docs/spec/data-model.md`. The unit of a
+term's mean, left open when this was proposed, is settled: the mean of the term's assessment
+percentages, each sitting weighted equally (`docs/spec/workflow.md`, Report cards). Decision 5
+is narrowed for the report assistant alone by ADR 0013, which is still proposed.
 
 ## Context
 
