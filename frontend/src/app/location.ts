@@ -4,11 +4,12 @@ import type { NavId } from '../layout/navigation'
    will replace, so screens take and return it rather than reaching into App. */
 export type Location =
   | { screen: Exclude<NavId, 'assessments' | 'sync' | 'classes'> }
-  /* Classes: the list, a stream, a student within a stream (reached contextually,
-     which is how the two-level cap allows a third), or a teacher. */
-  | { screen: 'classes'; classId?: undefined; studentId?: undefined; teacherId?: undefined }
-  | { screen: 'classes'; classId: string; studentId?: string; teacherId?: undefined }
-  | { screen: 'classes'; teacherId: string; classId?: undefined; studentId?: undefined }
+  /* Classes: the list, a stream, a student or a term's comments within a stream (each
+     reached contextually, which is how the two-level cap allows a third), or a teacher. */
+  | { screen: 'classes'; classId?: undefined; studentId?: undefined; teacherId?: undefined; comments?: undefined }
+  | { screen: 'classes'; classId: string; studentId?: string; teacherId?: undefined; comments?: undefined }
+  | { screen: 'classes'; classId: string; comments: { year: number; term: number }; studentId?: undefined; teacherId?: undefined }
+  | { screen: 'classes'; teacherId: string; classId?: undefined; studentId?: undefined; comments?: undefined }
   /* highlight draws the eye to one conflict on arrival, from the dashboard banner. */
   | { screen: 'sync'; highlight?: string }
   /* creating opens the new-assessment dialog on arrival, so the dashboard can start

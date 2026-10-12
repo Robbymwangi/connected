@@ -6,6 +6,7 @@ import { FilterDropdown } from '../../components/FilterDropdown'
 import { initials } from '../../fixtures/students'
 import { searchClasses } from '../../lib/classSearch'
 import { ClassCard } from './ClassCard'
+import { CommentReview } from './CommentReview'
 import { StreamDetail } from './StreamDetail'
 import { StudentProfile } from './StudentProfile'
 import { TeacherCard } from './TeacherCard'
@@ -17,10 +18,13 @@ type Tab = (typeof TABS)[number]
 type ClassesScreenProps = {
   store: SessionStore
   directory: SchoolDirectoryState
+  token: string
   classId?: string
   studentId?: string
   teacherId?: string
+  comments?: { year: number; term: number }
   onOpenClass: (classId: string) => void
+  onOpenComments: (classId: string, year: number, term: number) => void
   onOpenStudent: (classId: string, studentId: string) => void
   onOpenTeacher: (teacherId: string) => void
   onBackToList: () => void
@@ -29,7 +33,7 @@ type ClassesScreenProps = {
 }
 
 export function ClassesScreen(props: ClassesScreenProps) {
-  const { store, directory, classId, studentId, teacherId, onOpenClass, onOpenStudent, onOpenTeacher, onBackToList, onOpenGrid, onOpenReport } = props
+  const { store, directory, token, classId, studentId, teacherId, comments, onOpenClass, onOpenComments, onOpenStudent, onOpenTeacher, onBackToList, onOpenGrid, onOpenReport } = props
   const [tab, setTab] = useState<Tab>('classes')
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
   const [query, setQuery] = useState('')
@@ -47,7 +51,9 @@ export function ClassesScreen(props: ClassesScreenProps) {
 
   const data = directory.data
   const years = data.years.length ? data.years : [new Date().getFullYear()]
-  const year = selectedYear !== null && years.includes(selectedYear) ? selectedYear : years[0]
+  /* A term's comments are for the year in their address, whatever year the list shows. */
+  const year = comments && years.includes(comments.year) ? comments.year
+    : selectedYear !== null && years.includes(selectedYear) ? selectedYear : years[0]
   const yearOptions = years.map(String)
   const classes = data.classesForYear(year)
   const students = data.studentsForYear(year)
@@ -57,8 +63,21 @@ export function ClassesScreen(props: ClassesScreenProps) {
   const student = cls && studentId ? students.find((s) => s.id === studentId && s.classId === cls.id) : undefined
   const teacher = teacherId ? teachers.find((t) => t.id === teacherId) : undefined
 
+  if (cls && comments) {
+    return (
+      <CommentReview
+        cls={cls}
+        year={comments.year}
+        term={comments.term}
+        students={students}
+        teachers={teachers}
+        onBack={() => onOpenClass(cls.id)}
+        onBackToList={onBackToList}
+      />
+    )
+  }
   if (cls && student) {
-    return <StudentProfile student={student} cls={cls} store={store} onBack={() => onOpenClass(cls.id)} onBackToList={onBackToList} />
+    return <StudentProfile student={student} cls={cls} token={token} store={store} onBack={() => onOpenClass(cls.id)} onBackToList={onBackToList} />
   }
   if (cls) {
     return (
@@ -68,7 +87,9 @@ export function ClassesScreen(props: ClassesScreenProps) {
         students={students}
         teachers={teachers}
         store={store}
+        token={token}
         onBack={onBackToList}
+        onOpenComments={(commentYear, term) => onOpenComments(cls.id, commentYear, term)}
         onOpenStudent={(sid) => onOpenStudent(cls.id, sid)}
         onOpenTeacher={onOpenTeacher}
         onOpenGrid={onOpenGrid}
