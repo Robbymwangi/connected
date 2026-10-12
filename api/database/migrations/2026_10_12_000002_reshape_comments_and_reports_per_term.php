@@ -14,9 +14,18 @@ return new class extends Migration
        A comment also records the term close that created it, so an unlock unwinds exactly that
        close's comments even for a student whose enrolment has since moved to another stream.
        Nothing has ever written either table, so they are dropped and recreated rather than altered
-       column by column; DEV_DATA_EPOCH rebuilds dev databases. docs/spec/data-model.md. */
+       column by column; DEV_DATA_EPOCH rebuilds dev databases. That is a precondition, not a hope:
+       if either table holds a row, the migration refuses rather than drop it, and the row needs a
+       deliberate decision. Neither table is pushed by a device, so no offline client holds a write
+       against the old shape. docs/spec/data-model.md. */
     public function up(): void
     {
+        foreach (['reports', 'comments'] as $name) {
+            if (Schema::hasTable($name) && DB::table($name)->exists()) {
+                throw new RuntimeException("{$name} has rows; this migration recreates it and would drop them. Move them deliberately first.");
+            }
+        }
+
         Schema::dropIfExists('reports');
         Schema::dropIfExists('comments');
 

@@ -297,3 +297,12 @@ test('migrate:fresh then migrate:rollback returns the database to empty', functi
     // for whatever test runs after this one in the same process.
     Artisan::call('migrate', ['--force' => true]);
 });
+
+test('the per-term reshape refuses to run over existing comments rather than drop them', function () {
+    closeGraphTerm(buildGraph());
+    $migration = require database_path('migrations/2026_10_12_000002_reshape_comments_and_reports_per_term.php');
+
+    expect(fn () => $migration->up())->toThrow(RuntimeException::class, 'comments has rows');
+
+    expect(DB::table('comments')->count())->toBe(1);
+});
