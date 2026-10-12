@@ -95,7 +95,7 @@ Authorship follows the action, not the term close.
 
 **What the model is sent.** Never a name, an admission number, the school, a
 percentage, or a class position. The prompt carries the subject, the term, the
-performance level and mean for each subject, and the trend against earlier terms,
+performance level for each subject, and the trend against earlier terms,
 and refers to "the student". The name is put back on our side when the card is
 rendered. This is the first boundary to revisit if the privacy position changes,
 and it lives in one place, a prompt builder. Without an API key (development, CI),
@@ -130,8 +130,10 @@ the PDF with Dompdf, writes it to S3, and records `generated_at` and the S3 key 
 that student's `reports` row. The device downloads it through a presigned URL when
 online; nothing about the PDF is cached ahead of a request.
 
-The card shows, for each subject, the mean and performance level for Terms 1, 2, and
-3 of the year so far (a term not yet closed is blank), a compact history of earlier
+The card shows, for each subject, the performance level for Terms 1, 2, and
+3 of the year so far, a term not yet closed being blank. A term's level is the level of
+the subject's mean for that term, worked out from the mean percentage, which is not
+shown. The card also carries a compact history of earlier
 years drawn from the student's enrolments, the teacher's remark, and the
 school and student identifiers. It never shows a percentage, a class position, a
 rank, or a class size. Position and percentages remain on the teacher's screens only.

@@ -164,7 +164,7 @@ something #36 requires.
 - **`reports`**: `id`, `institution_id`, `student_id`, `year`, `term`,
   `generated_at`, `s3_key`. One per student per term, the report card. A later
   term's card is a new row, never an edit of an earlier one (ADR 0012). The PDF
-  shows means and performance levels only: never a percentage, a class position,
+  shows performance levels only: never a percentage, a class position,
   a rank, or a class size.
 - **`notifications`**: `id`, `institution_id`, `user_id`, `assessment_id` (nullable: the
   assessment a notice concerns, for a link and so a recipient gets one unread notice per kind and

@@ -19,7 +19,7 @@ a class, is the Reports screen's job and already exists.
 ## Decision
 
 1. **A report is per student per term** (`student_id`, `year`, `term`). The card shows
-   each subject's mean and performance level for the terms of the year so far, a
+   each subject's performance level for the terms of the year so far, a
    compact history of earlier years from the student's enrolments, and the remark.
 2. **A comment is the remark on that card**, per student per term, not per assessment.
 3. **`finalized` stays a per-assessment lock.** What triggers comments and reports is a
@@ -28,12 +28,14 @@ a class, is the Reports screen's job and already exists.
 4. **`reports-generated` is removed from the assessment lifecycle.** An assessment's
    life ends at `finalized`; whether its term's cards are done is a fact about the
    term, held by the report rows themselves.
-5. **What leaves the building.** Parents and students see means and performance levels.
-   Percentages and class position exist only on screens a teacher uses: Reports and
+5. **What leaves the building.** Parents and students see performance levels.
+   A term's level is the level of the subject's mean for that term, worked out from the
+   mean percentage, which is never shown. Percentages and class position exist only on screens a teacher uses: Reports and
    the attention lists. Neither appears on a PDF, in a notification, or in anything
    sent to the model.
-6. **External terminal examinations** are set by another body and are not the school's
-   term mean. How they are recorded is not decided here and is a follow-up.
+6. **External terminal examinations** are out of scope. They are set by another body
+   and fall after the final term of the final year, when the student leaves, so no card
+   depends on them.
 
 ## Considered and rejected
 

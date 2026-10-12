@@ -331,8 +331,8 @@ deliberate, for cost and to avoid regenerating while marks are still moving.
 
 **4.4 Report card job**
 Queued job on comment acceptance, rendering the per-student, per-term report card
-with Dompdf (means and performance levels across the terms and years, never a
-percentage or class position), writing the object to S3, and storing the key on
+with Dompdf (performance levels across the terms and years, never a percentage or
+class position), writing the object to S3, and storing the key on
 the `reports` row. Client downloads through a presigned URL.
 
 ---
