@@ -575,6 +575,16 @@ any write.
 
 **Replay.** A resend replays the stored outcome, as for every command.
 
+**On the device** (`frontend/src/lib/commentCommands.ts`). A command is queued against the version of the
+comment the teacher was shown, and only if the comment is on the device, live, and in a state the command
+takes, judged with the device's own earlier commands applied; a body the server would refuse is never queued.
+Nothing is written to the comment row: the screen shows queued, sent, and answered commands on top of the
+pulled row until the pull reaches the version a command was answered at, as for conflict commands. A second
+command waits for the first's answer and takes its version as its base. The outcomes settle as conflict
+commands do: `accepted` is kept until the pull catches up; `conflict` drops the command with a notice and
+adopts the comment as it stands, with what was queued behind it; `invalid` and `forbidden` fail it and what was
+queued behind it. A comment command belongs to no assessment, so it never holds a finalize back.
+
 ## GET /sync
 
 `GET /sync?since=<cursor>&limit=<n>` returns changes after that cursor:

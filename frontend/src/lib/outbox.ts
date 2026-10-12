@@ -35,14 +35,20 @@ export type EnqueueInput = {
   recordId: string
   kind: OutboxKind
   /* The version of the record when the user made the edit; for a command, the
-     conflict's own version. */
+     version of the conflict or comment it acts on. */
   baseVersion: number
   fields: Record<string, unknown>
   at: string
 }
 
 const FINALIZE_FIELDS = ['status', 'finalizedBy', 'finalizedAt']
-const COMMAND_KEYS = ['proposal', 'referral', 'resolution']
+
+/* The tables changed only by commands, and the commands each takes
+   (docs/spec/sync-protocol.md, "Conflict commands" and "Comment commands"). */
+const COMMAND_KEYS: Partial<Record<SyncTableName, readonly string[]>> = {
+  conflicts: ['proposal', 'referral', 'resolution'],
+  comments: ['edit', 'accept', 'regenerate'],
+}
 
 /* The tables a device may push, and for notifications the one field it may
    (docs/spec/sync-protocol.md, Scope). Every other table is pull-only. */
@@ -67,14 +73,15 @@ function validate(input: EnqueueInput): void {
   }
   const keys = Object.keys(input.fields)
 
+  const commands = COMMAND_KEYS[input.table]
   if (input.kind === 'command') {
-    if (input.table !== 'conflicts') throw new Error('Commands belong to the conflicts table')
-    if (keys.length !== 1 || !COMMAND_KEYS.includes(keys[0])) {
-      throw new Error('A conflict command carries exactly one of proposal, referral, or resolution')
+    if (!commands) throw new Error('Commands belong to the conflicts and comments tables')
+    if (keys.length !== 1 || !commands.includes(keys[0])) {
+      throw new Error(`A ${input.table} command carries exactly one of ${commands.join(', ')}`)
     }
     return
   }
-  if (input.table === 'conflicts') throw new Error('A conflict is changed by commands, never by field patches')
+  if (commands) throw new Error(`The ${input.table} table is changed by commands, never by field patches`)
 
   if (input.kind === 'finalize') {
     if (input.table !== 'assessments') throw new Error('Only an assessment can be finalized')
