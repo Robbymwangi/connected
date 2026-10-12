@@ -11,6 +11,7 @@ import { count } from '../../lib/time'
 import { Panel } from '../classes/Panel'
 import { BarList } from '../reports/BarList'
 import { ReportKpiTile } from '../reports/ReportKpiTile'
+import { Spinner } from '../../components/Spinner'
 import { useReportSummary } from '../reports/useReportSummary'
 import { STATUS_META } from './statusMeta'
 
@@ -68,7 +69,7 @@ export function AssessmentReport({ assessment: a, directory, token, onBack, onOp
       {response && !isOnline && <p className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-foreground" role="status">Offline. Showing the report fetched earlier.</p>}
       {response && error && <p className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-foreground" role="status">Could not refresh this report. The last fetched figures are still shown.</p>}
       {!response && directory.status === 'error' && <p className="py-16 text-center text-sm text-muted-foreground">School data is unavailable on this device.</p>}
-      {!response && isLoading && <p className="py-16 text-center text-sm text-muted-foreground" role="status">Loading assessment report…</p>}
+      {!response && isLoading && <Spinner label="Loading assessment report…" />}
       {!response && !isOnline && <p className="py-16 text-center text-sm text-muted-foreground">Reports need a connection. Marking continues to work offline.</p>}
       {!response && error && <div className="py-10 text-center"><p className="mb-3 text-sm text-muted-foreground">{error}</p><button type="button" onClick={retry} disabled={!isOnline} className="rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground disabled:opacity-40">Retry</button></div>}
       {response && s && !hasRecordedOutcomes ? (

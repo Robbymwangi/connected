@@ -1,5 +1,6 @@
 import { useId, useRef, useState, type ReactNode } from 'react'
 import { useWidth } from '../../lib/useSize'
+import { labelStride } from '../../lib/axisLabels'
 import { linear, niceTicks } from '../../lib/scale'
 import { CHART_COLORS, MARGIN, type ChartProps } from './chartTypes'
 import { ChartTooltip } from './ChartTooltip'
@@ -41,6 +42,7 @@ export function ChartFrame({ categories, series, max, referenceLine, height = 16
   const step = n > 0 ? (plot.x1 - plot.x0) / n : 0
   const slot = (i: number) => ({ x: plot.x0 + i * step, w: step })
   const cx = (i: number) => plot.x0 + (i + 0.5) * step
+  const stride = labelStride(categories, step)
 
   const indexAt = (clientX: number) => {
     const rect = containerRef.current?.getBoundingClientRect()
@@ -98,7 +100,7 @@ export function ChartFrame({ categories, series, max, referenceLine, height = 16
                 </text>
               </g>
             ))}
-            {categories.map((c, i) => (
+            {categories.map((c, i) => i % stride === 0 && (
               <text key={c + i} x={cx(i)} y={height - 8} textAnchor="middle" fontSize={10} fill="var(--chart-axis-text)">
                 {c}
               </text>

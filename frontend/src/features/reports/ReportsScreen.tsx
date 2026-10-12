@@ -15,6 +15,7 @@ import { Panel } from '../classes/Panel'
 import { BarList, type BarListRow } from './BarList'
 import { ReportKpiTile } from './ReportKpiTile'
 import { ScopePicker } from './ScopePicker'
+import { Spinner } from '../../components/Spinner'
 import { AiDialog } from './AiDialog'
 import { toReportView, type ReportView } from './reportModel'
 import { useReportSummary } from './useReportSummary'
@@ -136,7 +137,7 @@ export function ReportsScreen({ directory, token, onOpenStudent }: ReportsScreen
             disabled={controlsDisabled || primary.isLoading || !report}
             className="rounded-xl border border-border bg-card p-2 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <RefreshCw className="size-4" />
+            <RefreshCw className={`size-4 ${primary.isLoading ? 'motion-safe:animate-spin' : ''}`} />
           </button>
           <button
             type="button"
@@ -177,7 +178,7 @@ export function ReportsScreen({ directory, token, onOpenStudent }: ReportsScreen
       {report && !primary.isOnline && <p className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-foreground" role="status">Offline. Showing the report fetched earlier. Filters and refresh need a connection.</p>}
       {report && primary.error && <p className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-foreground" role="status">Could not refresh this report. The last fetched figures are still shown.</p>}
       {!report && directory.status === 'error' && <p className="py-16 text-center text-sm text-muted-foreground">School data is unavailable on this device.</p>}
-      {!report && directory.status === 'ready' && primary.isLoading && <p className="py-16 text-center text-sm text-muted-foreground" role="status">Loading report…</p>}
+      {!report && directory.status === 'ready' && primary.isLoading && <Spinner label="Loading report…" />}
       {!report && directory.status === 'ready' && !primary.isOnline && <p className="py-16 text-center text-sm text-muted-foreground">Reports need a connection. Marking continues to work offline.</p>}
       {!report && primary.error && <div className="py-10 text-center"><p className="mb-3 text-sm text-muted-foreground">{primary.error}</p><button type="button" onClick={primary.retry} disabled={!primary.isOnline} className="rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground disabled:opacity-40">Retry</button></div>}
       {report && <ReportBody report={report} cmp={cmp} metric={metric} onMetric={setMetric} onOpenStudent={onOpenStudent} />}
