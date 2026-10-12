@@ -322,16 +322,18 @@ filters; overall mode hiding the criterion breakdown and normalising means to
 percentages; the year selector reading from data.
 
 **4.3 Comment generation job**
-Queued job dispatched on finalize, submitting to the Anthropic batch API.
-Comments land in draft state. The teacher edits, accepts, or regenerates, and
-remains author of record. Do not generate comments synchronously on request; the
-batch shape is deliberate, for cost and to avoid regenerating while marks are
-still moving.
+Queued job dispatched on the term close (`docs/spec/workflow.md`, ADR 0012),
+submitting to the Anthropic batch API. One comment per student per term lands in
+draft state. The teacher edits, accepts, or regenerates, and remains author of
+record. Prompts are pseudonymised: no name, percentage, or class position reaches
+the model. Do not generate comments synchronously on request; the batch shape is
+deliberate, for cost and to avoid regenerating while marks are still moving.
 
-**4.4 Report generation job**
-Queued job on comment acceptance, rendering with Dompdf, writing the object to S3,
-and storing the key on the `reports` row. Client downloads through a presigned
-URL.
+**4.4 Report card job**
+Queued job on comment acceptance, rendering the per-student, per-term report card
+with Dompdf (performance levels across the terms and years, never a percentage or
+class position), writing the object to S3, and storing the key on
+the `reports` row. Client downloads through a presigned URL.
 
 ---
 
@@ -433,7 +435,7 @@ and needs a decision record before it enters the repository.
 - Sanctum for token authentication
 - Eloquent, with a global scope for `institution_id` and middleware resolving it
   from the authenticated user
-- Laravel queues on the database driver, worker on the app host (ADR 0006)
+- Laravel queues on the database driver, worker on the app host (ADR 0007)
 - Dompdf for report rendering, from a queued job
 - Laravel Sail for the local Docker environment
 
@@ -478,7 +480,7 @@ and needs a decision record before it enters the repository.
   Lambdas (ADR 0000, ADR 0006)
 - Laravel Vapor: paid, and it reintroduces the managed opacity the platform
   change was meant to remove
-- Redis for queues and cache (ADR 0006)
+- Redis for queues and cache (ADR 0007)
 - Replication and CRDT libraries, meaning RxDB replication, ElectricSQL,
   PowerSync, Dexie Cloud, Automerge, and Yjs: each delegates reconciliation and
   hollows out the distributed-systems workstream

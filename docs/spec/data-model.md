@@ -12,7 +12,9 @@ nothing to enforce here because the thing it protects against, one tenant
 reading another's data, can't occur on the tenant table itself.
 
 A table is synchronisable if a device ever needs its rows: that covers
-everything below except `institutions` itself and `unlock_notes`. A
+everything below except `institutions` itself, `unlock_notes`,
+`comment_generations`, and the server-only log tables `sync_changes` and
+`sync_mutations`. A
 synchronisable table carries a UUID primary key, an integer `version`
 incremented server-side, and `deleted_at` for a soft delete, per ADR 0001.
 `created_at` and `updated_at` are informational only and are never compared to
@@ -100,9 +102,8 @@ something #36 requires.
 - **`assessments`**: `id`, `institution_id`, `class_id`, `subject_id`, `name`,
   `term`, `year`, `date`, `status`, `created_by`, `finalized_at`,
   `finalized_by`. One row is one sitting of one subject in one stream, per
-  your answer; `status` stores `scheduled`, `finalized`, and
-  `reports-generated`. The lifecycle `scheduled → in-progress → complete → finalized →
-  reports-generated` includes two derived states, `in-progress` and `complete`, computed from the
+  your answer; `status` stores `scheduled` and `finalized`. The lifecycle
+  `scheduled → in-progress → complete → finalized` includes two derived states, `in-progress` and `complete`, computed from the
   grid's completeness each time it is read and never stored (`docs/spec/workflow.md`); it is
   forward-only except through `unlock_notes`.
   `created_by` is new against the brief: #36's Option B scopes lifecycle
@@ -135,23 +136,44 @@ something #36 requires.
 - **`results`**: `id`, `institution_id`, `assessment_id`, `student_id`,
   `total`, `max`, `level`. One row per student per assessment, matching
   `fixtures/results.ts`'s `ResultRecord` exactly; this grain isn't open.
-  Written by the server when an assessment finalizes.
-- **`comments`**: `id`, `institution_id`, `assessment_id`, `student_id`,
-  `author_id`, `body`, `state` (`draft`, `accepted`). One per student per
-  assessment, dispatched on finalize (`docs/spec/workflow.md`, #37 owns the
-  lifecycle; this file only fixes the grain).
-- **`reports`**: `id`, `institution_id`, `assessment_id`, `student_id`,
-  `generated_at`, `s3_key`. One per student per assessment, matching
-  `results` and `comments`. This isn't a narrower grain than a term report
-  card: `fixtures/assessments.ts`'s own example (`a6`, named "End of Term",
-  reaching `status: 'reports-generated'`) shows that a term report card is
-  simply the report for whichever assessment happens to be named "End of
-  Term," not a different kind of record.
+  Written by the server when an assessment finalizes, only for a student with
+  at least one scored mark: a student absent in every cell has no row, since
+  absence is an explicit mark kind and `total` is never null. Soft deleted when
+  the assessment is unlocked.
+- **`comments`**: `id`, `institution_id`, `student_id`, `year`, `term`,
+  `author_id` (nullable until a person edits or accepts), `body` (nullable
+  until generated), `state` (`pending`, `draft`, `accepted`, `failed`). One per
+  student per term, the remark on that student's report card, created `pending`
+  by the term close (`docs/spec/workflow.md`, ADR 0012). It has no
+  `assessment_id`: a comment is about a term, not a test. Pull-only for the
+  fields a device reads; edit, accept, and regenerate are commands
+  (`docs/spec/sync-protocol.md`).
+- **`comment_generations`**: `id`, `institution_id`, `comment_id`, `batch_id`
+  (nullable until submitted), `status` (`submitted`, `succeeded`, `errored`,
+  `expired`, `superseded`), `error`, timestamps. Server bookkeeping for one
+  request to the batch API, with `id` as the request's `custom_id`. Not
+  synchronisable, like `unlock_notes`: its own writes (submitting, polling) never
+  touch a comment. Applying a result is a separate update of the `comments` row,
+  under the one rule in `docs/spec/workflow.md`, through the ordinary `Syncable`
+  save: it bumps `version` and logs a `sync_changes` entry, which is how a device
+  sees `pending` become `draft` or `failed`.
+- **`term_closures`**: `id`, `institution_id`, `class_id`, `year`, `term`,
+  `closed_by`, `closed_at`. One live row per stream per term, written by the term
+  close (`docs/spec/workflow.md`), soft deleted by an unlock. Synchronisable and
+  pull-only, so a device knows a term is closed and can show the review screen.
+- **`reports`**: `id`, `institution_id`, `student_id`, `year`, `term`,
+  `generated_at`, `s3_key`. One per student per term, the report card. A later
+  term's card is a new row, never an edit of an earlier one (ADR 0012). The PDF
+  shows performance levels only: never a percentage, a class position,
+  a rank, or a class size.
 - **`notifications`**: `id`, `institution_id`, `user_id`, `assessment_id` (nullable: the
   assessment a notice concerns, for a link and so a recipient gets one unread notice per kind and
-  assessment, not one per cell; it reaches a device as `assessmentId`), `kind`
+  assessment, not one per cell; it reaches a device as `assessmentId`),
+  `term_closure_id` (nullable: the term close a `comments-failed` or `report-ready`
+  notice concerns, so a recipient gets one unread notice per kind and term close, and
+  the notice can link to it; it reaches a device as `termClosureId`), `kind`
   (`sync-conflict`, `submission`, `report-ready`, `enrolment`,
-  `edit-blocked`), `tone`, `title`, `body`, `unread` (boolean). Written by
+  `edit-blocked`, `comments-failed`), `tone`, `title`, `body`, `unread` (boolean). Written by
   the server (a conflict raised, a report ready), read by a device by pull;
   `unread` is the one field a device pushes back, matching AGENTS.md's
   frontend rule that notifications are synced job-status rows, not push
@@ -208,9 +230,15 @@ moment they both reach the server, rather than producing two rows with two
 different ids for one cell. The namespace UUID used for the v5 derivation is
 fixed once and lives alongside the migration that creates `marks`.
 
-A result's identity is `(assessment_id, student_id)`, one row, written once
-by the server at finalize. A report shares that identity for the same reason:
-one per student per assessment, whichever assessment that is.
+A result's identity is `(assessment_id, student_id)`, one live row, written by the
+server at finalize. After an unlock the old row stays soft deleted and the next
+finalize creates a new live row with a new id, recomputed from the marks as they
+then stand; a row is never restored. A comment and a report share a different identity,
+`(student_id, year, term)`, for the same reason: one live row per student per term,
+whichever term that is. A `term_closures` row's identity is `(class_id, year, term)`.
+For all four tables the identity applies to live rows only, through a partial unique
+index where `deleted_at` is null, so a cycle recreated after an unlock coexists with
+the soft-deleted rows of the cycle it replaces.
 
 An enrolment's identity is `(student_id, year)`: which class a student sat in
 for a given year, not an ongoing fact about the student.
@@ -255,10 +283,12 @@ for a given year, not an ongoing fact about the student.
    originally but reversed once the years this school runs past a single
    cohort mattered; the enrolment table is the more future-proof of the two,
    at the cost of one join wherever a roster is built.
-8. **Reports are per student per assessment, matching `results` and
-   `comments`.** Rejected: a per-class-per-term grain, which would make
-   "End of Term" a different kind of record instead of the ordinary
-   assessment it already is in `fixtures/assessments.ts`.
+8. **Reports and comments are per student per term, not per assessment.**
+   Reversed from the original per-assessment grain by ADR 0012: a Kenyan report
+   card is one document per student per term, and a card per test is a stack of
+   sheets nobody issues. The class-level view of one assessment is the Reports
+   screen's job.
+
 
 ## Not modelled yet
 
