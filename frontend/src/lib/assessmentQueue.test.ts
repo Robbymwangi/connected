@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Assessment, LifecycleStatus } from '../fixtures/assessments'
-import { ALL_SUBJECTS, ALL_TERMS, filterAssessments, sortQueue } from './assessmentQueue'
+import { ALL_SUBJECTS, ALL_TERMS, defaultFilters, filterAssessments, queueYears, sortQueue } from './assessmentQueue'
 
 const make = (id: string, over: Partial<Assessment> = {}): Assessment => ({
   id,
@@ -55,5 +55,22 @@ describe('sortQueue', () => {
     const list = [make('x', { status: 'finalized' }), make('y', { status: 'complete' })]
     sortQueue(list)
     expect(list.map((a) => a.id)).toEqual(['x', 'y'])
+  })
+})
+
+describe('the year filter', () => {
+  const october2026 = new Date(2026, 9, 13)
+
+  it('opens on the calendar year', () => {
+    expect(defaultFilters(october2026).year).toBe(2026)
+  })
+
+  it('offers the calendar year and two before it, newest first', () => {
+    expect(queueYears([], october2026)).toEqual(['2026', '2025', '2024'])
+  })
+
+  it('also offers a year a record carries that falls outside that window', () => {
+    const list = [make('a', { year: 2021 }), make('b', { year: 2027 }), make('c', { year: 2026 })]
+    expect(queueYears(list, october2026)).toEqual(['2027', '2026', '2025', '2024', '2021'])
   })
 })

@@ -21,11 +21,24 @@ export type QueueFilters = {
   subject: string
 }
 
-export const DEFAULT_FILTERS: QueueFilters = {
-  year: 2025,
-  status: 'All',
-  term: ALL_TERMS,
-  subject: ALL_SUBJECTS,
+/* The queue opens on the calendar year, not the newest year holding data: the
+   teacher's current work is this year's, and a fixed year goes stale the day the
+   calendar turns. */
+export function defaultFilters(now: Date = new Date()): QueueFilters {
+  return {
+    year: now.getFullYear(),
+    status: 'All',
+    term: ALL_TERMS,
+    subject: ALL_SUBJECTS,
+  }
+}
+
+/* Years the filter offers, newest first: the calendar year and the two before it,
+   plus any year a record already carries, so no record is unreachable by filter. */
+export function queueYears(list: Assessment[], now: Date = new Date()): string[] {
+  const current = now.getFullYear()
+  const years = new Set([current, current - 1, current - 2, ...list.map((a) => a.year)])
+  return [...years].sort((a, b) => b - a).map(String)
 }
 
 export function filterAssessments(list: Assessment[], filters: QueueFilters): Assessment[] {
