@@ -335,6 +335,16 @@ with Dompdf (performance levels across the terms and years, never a percentage o
 class position), writing the object to S3, and storing the key on
 the `reports` row. Client downloads through a presigned URL.
 
+**4.5 Report assistant**
+Replace `lib/assistant.ts`'s stand-in with the server assistant of ADR 0013:
+`POST /api/reports/assistant`, read-only tools over the analytics service with the
+report's scope fixed server-side, structured answers with a grounding check, history
+held by the server, students as handles with names restored on our side, and an
+question-scope gate before every answer. Done when the red-team evaluation meets ADR
+0013's bar (no attack yields off-topic content, a name, or another school's data; at least
+90 percent of ordinary questions answered), recorded in the merge request. Do not give the model
+a SQL tool or any tool beyond the report's own figures.
+
 ---
 
 ## Phase 5: parallel and closing
