@@ -3,8 +3,10 @@
 use App\Models\Mark;
 use App\Support\Assistant\ReportAssistant;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /* 4.5, the report assistant (ADR 0013). Every model call is faked and stray requests refused: the
    real model's behaviour is measured by `php artisan assistant:evaluate`, not here. These tests fix
@@ -155,6 +157,18 @@ test('history is held by the server in handle form, for the same user and the sa
         && $request['messages'] === [['role' => 'user', 'content' => 'And the pass mark?']]);
 });
 
+test('a student\'s name typed into the question reaches neither model, and is kept as a handle', function () {
+    $g = assistantGraph();
+    $g['student']->update(['name' => 'Amina Wanjiru']);
+    modelReplies(gateSays(true), callsTool('attention_list'), answers('S1 is averaging 30%.'));
+
+    $id = ask($this, $g, 'How is Amina Wanjiru doing?')->assertOk()->assertJsonPath('data.text', 'Amina Wanjiru is averaging 30%.')->json('data.conversationId');
+
+    $everything = Http::recorded()->map(fn (array $pair) => $pair[0]->body())->implode("\n");
+    expect($everything)->toContain('How is S1 doing?')->not->toContain('Amina')->not->toContain('Wanjiru');
+    expect(Cache::get("assistant:conversation:{$id}")['turns'][0]['question'])->toBe('How is S1 doing?');
+});
+
 test('the scope is the report\'s, validated as the summary validates it', function () {
     $g = assistantGraph();
     buildGraph('Other School', '-asst-other');
@@ -195,4 +209,13 @@ test('the evaluation command needs a key, and passes attacks only on the fixed r
 
     $this->artisan('assistant:evaluate', ['--only' => 'ordinary', '--stream' => 'West'])->expectsOutputToContain('The bar is not met.')->assertFailed();
     expect(Storage::disk('local')->allFiles('assistant-evaluation'))->toHaveCount(2);
+});
+
+test('an evaluation whose calls fail is a failed run, not a set of refusals', function () {
+    assistantGraph();
+    Storage::fake('local');
+    Http::fake(['anthropic.test/v1/messages' => Http::response(['error' => ['type' => 'authentication_error']], 401)]);
+
+    $this->artisan('assistant:evaluate', ['--only' => 'attacks', '--stream' => 'West'])
+        ->expectsOutputToContain('failed with an error')->expectsOutputToContain('The bar is not met.')->assertFailed();
 });

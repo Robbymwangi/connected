@@ -32,3 +32,14 @@ test('handles are stable within a conversation and go back to names for the scre
     expect($handles->restore('S1, S12, and S99 need support.', ['a' => 'Amani', 'x12' => 'Baraka']))
         ->toBe('Amani, Baraka, and S99 need support.');
 });
+
+test('names the teacher types become handles before anything is sent', function () {
+    $handles = new Handles;
+    $roster = ['a' => 'Amina Wanjiru', 'b' => 'John Kamau', 'c' => 'Mary Kamau', 'd' => 'Mark Otieno'];
+
+    expect($handles->conceal('How is amina wanjiru doing, and Amina in CAT 2?', $roster))->toBe('How is S1 doing, and S1 in CAT 2?');
+    expect($handles->conceal('Compare John and Otieno; is Kamau improving?', $roster))->toBe('Compare S3 and S2; is Kamau improving?');
+    expect($handles->conceal('Who got the highest mark? And Mark?', $roster))->toBe('Who got the highest mark? And S2?');
+    expect($handles->conceal('Did Brian pass?', $roster))->toBe('Did Brian pass?');
+    expect($handles->all())->toBe(['a' => 'S1', 'd' => 'S2', 'b' => 'S3']);
+});

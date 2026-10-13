@@ -87,7 +87,11 @@ ADR narrows it for the assistant (decision 4).
    back in the answer before it reaches the screen. The handle-to-student mapping is held
    with the conversation's history and expires with it, so a handle names the same
    student on every retained turn, and no retained turn outlives the mapping that gives
-   its handles meaning. No school name is sent. This is the same
+   its handles meaning. The teacher's own question is the other way a name could
+   leave: a roster student's full name, or a part of it no other student shares and
+   written with its capital, becomes that student's handle before either model sees
+   the question, and the question is kept in that form. A name typed in lower case,
+   or one the roster does not hold, is not caught. No school name is sent. This is the same
    pseudonymising boundary as comment prompts, held in the tool layer. It narrows ADR
    0012 decision 5 for this one surface: that rule continues to hold for comments,
    report cards, and notifications.

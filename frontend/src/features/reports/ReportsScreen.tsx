@@ -156,7 +156,9 @@ export function ReportsScreen({ directory, token, onOpenStudent }: ReportsScreen
                 setAiOpenings((n) => n + 1)
                 setAiOpen(true)
               }}
-              disabled={!report}
+              // While a new scope loads, or after it failed to, the figures on screen are an
+              // earlier scope's; the assistant would answer for the filters instead.
+              disabled={!report || primary.isLoading || primary.error !== null}
               className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-40"
             >
               <Sparkles className="size-4" /> Ask AI

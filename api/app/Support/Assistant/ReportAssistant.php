@@ -12,6 +12,9 @@ use Throwable;
 /* The report assistant (ADR 0013): one question about the report on screen, answered from the
    analytics service through tools, or the fixed reply. Every step is here to read:
 
+   0. Names out: a name of a student on the report's roster that the teacher typed into the
+      question becomes that student's handle before the gate sees it, and that is the question the
+      conversation keeps. Nothing the provider receives carries a name.
    1. The question-scope gate: Claude Haiku 5.5, no tools, no report data, no history, thinking
       off, and a one-field structured output. Only a clear "in scope" goes on; anything else (out
       of scope, an error, a refusal, a timeout, unparseable output) is the fixed reply and the main
@@ -66,12 +69,19 @@ final class ReportAssistant
         private readonly AnalyticsQueryService $analytics,
     ) {}
 
-    /** @return array{answerable: bool, text: string, chart: ?string} */
+    /**
+     * The answer for the screen. `error` is for the evaluation only: it tells a fixed reply that
+     * came from a failed call apart from one that was a refusal, and the controller never sends it.
+     *
+     * @return array{answerable: bool, text: string, chart: ?string, error: bool}
+     */
     public function answer(string $question, AnalyticsFilters $filters, Conversation $conversation): array
     {
-        $fixed = ['answerable' => false, 'text' => self::FIXED_REPLY, 'chart' => null];
+        $fixed = ['answerable' => false, 'text' => self::FIXED_REPLY, 'chart' => null, 'error' => false];
 
         try {
+            $question = $conversation->handles->conceal($question, $this->roster($filters));
+
             if (! $this->inScope($question)) {
                 return $fixed;
             }
@@ -80,7 +90,7 @@ final class ReportAssistant
         } catch (Throwable $exception) {
             Log::warning('report assistant failed', ['error' => $exception->getMessage()]);
 
-            return $fixed;
+            return [...$fixed, 'error' => true];
         }
 
         if ($outcome === null) {
@@ -94,7 +104,23 @@ final class ReportAssistant
             'answerable' => true,
             'text' => $conversation->handles->restore($outcome['text'], $names),
             'chart' => $outcome['chart'],
+            'error' => false,
         ];
+    }
+
+    /**
+     * Step 0: the students of the report's stream and year, by id, for taking their names out of
+     * the question before either call. Names never leave this server.
+     *
+     * @return array<string, string>
+     */
+    private function roster(AnalyticsFilters $filters): array
+    {
+        return Student::query()
+            ->whereHas('enrolments', fn ($enrolment) => $enrolment->where('year', $filters->year)
+                ->whereHas('schoolClass', fn ($class) => $class->where('stream', $filters->stream)))
+            ->pluck('name', 'id')
+            ->all();
     }
 
     /** Step 1. Fails closed: only {"in_scope": true} lets the question through. */
