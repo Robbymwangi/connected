@@ -4,6 +4,7 @@ import {
   ALL_SUBJECTS,
   ALL_TERMS,
   filterAssessments,
+  queueYears,
   sortQueue,
   STATUS_GROUPS,
   type QueueFilters,
@@ -11,7 +12,6 @@ import {
 } from '../../lib/assessmentQueue'
 import { AssessmentRow } from './AssessmentRow'
 
-const YEARS = ['2025', '2024'] as const
 /* Derived from the same list the create dialog offers, so every term a record can
    carry is one the queue can filter for. */
 const TERMS = [ALL_TERMS, ...SCHOOL_TERMS] as const
@@ -30,6 +30,7 @@ type QueueListProps = {
 /* Filters live in the screen so the header can report how many rows they left. */
 export function QueueList({ assessments, subjects, filters, onFiltersChange: setFilters, onOpenGrid, onOpenReport, onDelete }: QueueListProps) {
   const rows = sortQueue(filterAssessments(assessments, filters))
+  const years = queueYears(assessments)
   const subjectOptions = [ALL_SUBJECTS, ...subjects] as const
 
   return (
@@ -37,8 +38,8 @@ export function QueueList({ assessments, subjects, filters, onFiltersChange: set
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <FilterDropdown
           label="Year"
-          value={String(filters.year) as (typeof YEARS)[number]}
-          options={YEARS}
+          value={String(filters.year)}
+          options={years}
           onChange={(year) => setFilters((f) => ({ ...f, year: Number(year) }))}
         />
         <FilterDropdown
