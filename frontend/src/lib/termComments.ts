@@ -92,12 +92,18 @@ export function termViews(input: {
   })
 }
 
-/* Whether the server would let this user close the stream's term (TermClosurePolicy): a
-   Director of Studies, or a teacher assigned to any subject of the stream. Being its class teacher
-   grants nothing on its own. The server checks again; this only decides whether to offer it. */
-export function mayCloseTerm(user: { id: string; role: string }, classId: string, assignments: readonly LocalRecord[]): boolean {
-  if (user.role === DIRECTOR_OF_STUDIES) return true
-  return assignments.some((row) => live(row) && row.userId === user.id && row.classId === classId)
+/* Whether the server would let this user close a term (TermClosurePolicy): a Director of Studies
+   only (ADR 0014, decision 5). Neither teaching the stream nor being its class teacher grants it.
+   The server checks again; this only decides whether to offer it. */
+export function mayCloseTerm(user: { role: string }): boolean {
+  return user.role === DIRECTOR_OF_STUDIES
+}
+
+/* Whether the server would let this user unlock a finalized assessment of this subject
+   (AssessmentPolicy::unlock, ADR 0014, decision 3): a Director of Studies, or the HOD of the
+   subject, that is a teacher who moderates it. */
+export function mayUnlock(user: { role: string; moderatedSubjectIds: readonly string[] }, subjectId: string | undefined): boolean {
+  return user.role === DIRECTOR_OF_STUDIES || (subjectId !== undefined && user.moderatedSubjectIds.includes(subjectId))
 }
 
 /* A term can be closed once it has assessments and every one is finalized; the server

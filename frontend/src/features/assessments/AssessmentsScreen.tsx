@@ -71,6 +71,7 @@ export function AssessmentsScreen({
         onAcceptProposal={store.acceptProposal}
         onReferConflict={store.referConflict}
         onFinalize={store.finalizeAssessment}
+        token={token}
         onBack={onBackToList}
       />
     )

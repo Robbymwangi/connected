@@ -46,15 +46,18 @@ class AssessmentPolicy
                 ->exists();
     }
 
-    /* Unlocking belongs to the Director of Studies (ADR 0014, decision 3), and to the HOD of the
-       assessment's subject once the app has an unlock screen. Until that merge request, the admin
-       panel's unlock action is the only screen that can do it, so an admin keeps it there; that
-       half is removed with the panel's action. */
+    /* Unlocking is an academic decision, made in the app (ADR 0014, decision 3): by a Director of
+       Studies, for any assessment of the institution, or by the HOD of the assessment's subject,
+       that is a teacher who moderates it. Never by an admin account, and not by whoever ran the
+       sitting as such: the creator or an assigned teacher unlocks only if they also hold one of
+       the two. */
     public function unlock(User $user, Assessment $assessment): bool
     {
-        return $user->institution_id === $assessment->institution_id
-            && ($user->directsStudies() || $user->isAdmin())
+        return $user->isTeacher()
+            && $user->institution_id === $assessment->institution_id
             && $user->deactivated_at === null
-            && ! $user->trashed();
+            && ! $user->trashed()
+            && ($user->directsStudies()
+                || $user->subjectModerations()->where('subject_id', $assessment->subject_id)->exists());
     }
 }

@@ -2,7 +2,6 @@
 
 use App\Filament\Resources\Admins\Pages\CreateAdmin;
 use App\Filament\Resources\Admins\Pages\ListAdmins;
-use App\Filament\Resources\Assessments\Pages\ListAssessments;
 use App\Filament\Resources\Students\Pages\CreateStudent;
 use App\Filament\Resources\Teachers\Pages\EditUser;
 use App\Filament\Resources\Teachers\Pages\ListUsers;
@@ -14,6 +13,7 @@ use App\Models\User;
 use App\Support\CurrentInstitution;
 use Filament\Auth\Pages\Login;
 use Filament\Facades\Filament;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 
 /* Build plan 5.4 to 5.6, the admin panel (ADR 0009), each test one of the plan's "done when" lines.
@@ -276,56 +276,13 @@ test('a moderation grant is made and revoked on the account', function () {
     expect(SubjectModeration::query()->where('user_id', $g['teacher']->id)->where('subject_id', $g['subject']->id)->count())->toBe(1);
 });
 
-test('unlocking through the panel writes the same unlock note the model rule writes for the API', function () {
+test('the panel does no academic work: it has no assessments screen, and an admin cannot unlock', function () {
     $graph = buildGraph();
     $admin = adminOf($graph);
     $graph['assessment']->update(['status' => 'finalized', 'finalized_at' => '2026-10-05 10:00:00', 'finalized_by' => $graph['teacher']->id]);
-    $closure = closeGraphTerm($graph);
-    issuedReport($graph);
-    $this->actingAs($admin, 'admin');
-    asPanelRequestFor($admin);
 
-    Livewire::test(ListAssessments::class)
-        ->callTableAction('unlock', $graph['assessment'], data: ['note' => '  Correct the recorded score.  '])
-        ->assertHasNoTableActionErrors();
-
-    $this->assertDatabaseHas('unlock_notes', [
-        'assessment_id' => $graph['assessment']->id,
-        'institution_id' => $graph['institution']->id,
-        'user_id' => $admin->id,
-        'note' => 'Correct the recorded score.',
-    ]);
-    $this->assertDatabaseCount('unlock_notes', 1);
-    $this->assertSoftDeleted($closure);
-    expect($graph['assessment']->fresh()->status)->toBe('scheduled');
-});
-
-test('with reports issued, the panel requires the note', function () {
-    $graph = buildGraph();
-    $admin = adminOf($graph);
-    $graph['assessment']->update(['status' => 'finalized', 'finalized_at' => '2026-10-05 10:00:00', 'finalized_by' => $graph['teacher']->id]);
-    closeGraphTerm($graph);
-    issuedReport($graph);
-    $this->actingAs($admin, 'admin');
-    asPanelRequestFor($admin);
-
-    Livewire::test(ListAssessments::class)
-        ->callTableAction('unlock', $graph['assessment'], data: ['note' => ''])
-        ->assertHasTableActionErrors(['note' => 'required']);
-
-    expect($graph['assessment']->fresh()->status)->toBe('finalized');
-});
-
-test('the finalized filter lists a row still holding the retired reports-generated status', function () {
-    $graph = buildGraph();
-    $admin = adminOf($graph);
-    $graph['assessment']->update(['status' => 'reports-generated', 'finalized_at' => '2026-10-05 10:00:00', 'finalized_by' => $graph['teacher']->id]);
-    $this->actingAs($admin, 'admin');
-    asPanelRequestFor($admin);
-
-    Livewire::test(ListAssessments::class)
-        ->filterTable('status', 'finalized')->assertCanSeeTableRecords([$graph['assessment']])
-        ->filterTable('status', 'scheduled')->assertCanNotSeeTableRecords([$graph['assessment']]);
+    $this->actingAs($admin, 'admin')->get('/admin/assessments')->assertNotFound();
+    expect(Gate::forUser($admin)->allows('unlock', $graph['assessment']))->toBeFalse();
 });
 
 arch('no API controller depends on the admin panel')
