@@ -16,6 +16,13 @@ export function UnlockDialog({ open, onClose, onConfirm }: UnlockDialogProps) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  /* The dialog stays mounted between openings, so closing it clears what the last attempt left. */
+  const close = () => {
+    setNote('')
+    setError(null)
+    onClose()
+  }
+
   const confirm = async () => {
     setSaving(true)
     setError(null)
@@ -32,14 +39,14 @@ export function UnlockDialog({ open, onClose, onConfirm }: UnlockDialogProps) {
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={close}
       title="Unlock assessment?"
       size="sm"
       footer={
         <>
           <button
             type="button"
-            onClick={onClose}
+            onClick={close}
             disabled={saving}
             className="flex-1 rounded-xl border border-border py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted"
           >

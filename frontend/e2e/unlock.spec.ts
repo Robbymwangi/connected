@@ -35,6 +35,14 @@ test('the HOD of the subject unlocks a finalized assessment, and is told the not
   await dialog.getByRole('button', { name: 'Unlock' }).click()
   await expect(dialog.getByRole('alert')).toHaveText('A resolution note is required when reports exist.')
 
+  /* Cancelling and reopening starts clean, not with the last attempt's refusal. */
+  await dialog.getByLabel('Reason for unlocking').fill('half-typed')
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).toBeHidden()
+  await page.getByRole('button', { name: 'Unlock' }).click()
+  await expect(dialog.getByRole('alert')).toHaveCount(0)
+  await expect(dialog.getByLabel('Reason for unlocking')).toHaveValue('')
+
   await dialog.getByLabel('Reason for unlocking').fill('Correct the recorded score.')
   await dialog.getByRole('button', { name: 'Unlock' }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Unlocked.' })).toBeVisible()
