@@ -7,7 +7,7 @@ import { useConnectivity } from '../../lib/connectivity'
 import { localDatabaseFor, type LocalRecord } from '../../lib/localDatabase'
 import { Panel } from './Panel'
 
-type Link = { reportId: string; url: string } | { reportId: string; error: string }
+type Link = { reportId: string; url: string; expiresAt: number } | { reportId: string; error: string }
 
 const ACTION =
   'flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
@@ -19,19 +19,29 @@ const ACTION =
 export function ReportCardsPanel({ studentId, token }: { studentId: string; token: string }) {
   const user = useCurrentUser()
   const { isOnline } = useConnectivity()
-  const [reports, setReports] = useState<LocalRecord[]>([])
+  /* Keyed by the student they belong to, so a profile never shows the previous student's cards
+     in the moment before the new query answers. */
+  const [loaded, setLoaded] = useState<{ studentId: string; rows: LocalRecord[] }>({ studentId, rows: [] })
   const [fetching, setFetching] = useState<string | null>(null)
   const [link, setLink] = useState<Link | null>(null)
 
   useEffect(() => {
     const database = localDatabaseFor(user.id)
     const subscription = liveQuery(() => database.reports.where('studentId').equals(studentId).toArray()).subscribe({
-      next: (rows) => setReports(rows.filter((row) => row.deletedAt == null)),
-      error: () => setReports([]),
+      next: (rows) => setLoaded({ studentId, rows: rows.filter((row) => row.deletedAt == null) }),
+      error: () => setLoaded({ studentId, rows: [] }),
     })
     return () => subscription.unsubscribe()
   }, [user.id, studentId])
 
+  /* The link expires within minutes; once it has, the panel offers a fresh one. */
+  useEffect(() => {
+    if (!link || !('url' in link)) return
+    const timer = setTimeout(() => setLink(null), Math.max(0, link.expiresAt - Date.now()))
+    return () => clearTimeout(timer)
+  }, [link])
+
+  const reports = loaded.studentId === studentId ? loaded.rows : []
   const sorted = [...reports].sort((a, b) => Number(b.year) - Number(a.year) || Number(b.term) - Number(a.term))
 
   const fetchLink = async (reportId: string) => {
@@ -39,7 +49,8 @@ export function ReportCardsPanel({ studentId, token }: { studentId: string; toke
     setLink(null)
     try {
       const { data } = await getReportDownload(reportId, token)
-      setLink({ reportId, url: data.url })
+      const expiresAt = Date.parse(data.expiresAt)
+      setLink({ reportId, url: data.url, expiresAt: Number.isNaN(expiresAt) ? Date.now() + 5 * 60_000 : expiresAt })
     } catch (error) {
       setLink({ reportId, error: error instanceof Error ? error.message : 'The card could not be fetched.' })
     } finally {

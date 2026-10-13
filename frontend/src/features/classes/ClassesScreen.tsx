@@ -63,7 +63,8 @@ export function ClassesScreen(props: ClassesScreenProps) {
   const student = cls && studentId ? students.find((s) => s.id === studentId && s.classId === cls.id) : undefined
   const teacher = teacherId ? teachers.find((t) => t.id === teacherId) : undefined
 
-  if (cls && comments) {
+  /* A year outside the directory would pair its comments with another year's roster; show the stream instead. */
+  if (cls && comments && years.includes(comments.year)) {
     return (
       <CommentReview
         cls={cls}
