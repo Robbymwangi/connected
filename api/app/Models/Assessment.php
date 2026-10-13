@@ -28,7 +28,7 @@ class Assessment extends Model
 {
     use BelongsToInstitution, Syncable;
 
-    /** The statuses that mean finalized; reports-generated is retired by ADR 0012 and leaves with the frontend's reading of it. */
+    /** The statuses that mean finalized. reports-generated is retired by ADR 0012: nothing writes it, and it is not migrated away (migrations are additive only), so a row holding it still reads as finalized. */
     public const FINALIZED = ['finalized', 'reports-generated'];
 
     protected function casts(): array

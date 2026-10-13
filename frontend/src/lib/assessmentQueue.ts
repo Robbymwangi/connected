@@ -3,10 +3,10 @@ import type { Assessment, LifecycleStatus } from '../fixtures/assessments'
 /* Pure filtering and ordering for the assessments queue. */
 
 export const STATUS_GROUPS = {
-  All: ['scheduled', 'in-progress', 'complete', 'finalized', 'reports-generated'],
+  All: ['scheduled', 'in-progress', 'complete', 'finalized'],
   Open: ['scheduled', 'in-progress'],
   'Needs action': ['complete'],
-  Closed: ['finalized', 'reports-generated'],
+  Closed: ['finalized'],
 } as const satisfies Record<string, readonly LifecycleStatus[]>
 
 export type StatusGroup = keyof typeof STATUS_GROUPS
@@ -46,7 +46,6 @@ const QUEUE_PRIORITY: Record<LifecycleStatus, number> = {
   'in-progress': 1,
   scheduled: 2,
   finalized: 3,
-  'reports-generated': 4,
 }
 
 export function sortQueue(list: Assessment[]): Assessment[] {

@@ -2,10 +2,12 @@
 
 namespace App\Providers;
 
+use App\Auth\AdminUserProvider;
 use App\Support\Anthropic\Messages;
 use App\Support\CurrentInstitution;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -31,6 +33,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Auth::provider('admin-eloquent', fn ($app, array $config) => new AdminUserProvider($app['hash'], $config['model']));
+
         // #43: two limits apply together. Five a minute keyed by email + IP
         // stops repeated guessing against one account; alone, that key
         // would let one address cycle through many different emails at

@@ -25,11 +25,14 @@ class ResolveInstitution
 {
     public function __construct(private readonly CurrentInstitution $currentInstitution) {}
 
-    public function handle(Request $request, Closure $next): Response
+    /* The guard is sanctum for the API group, and admin for the admin panel, where this runs as
+       persistent Filament middleware so a Livewire update request is scoped like a page load
+       (build plan 5.4). */
+    public function handle(Request $request, Closure $next, string $guard = 'sanctum'): Response
     {
         $this->currentInstitution->reset();
 
-        $user = $request->user('sanctum');
+        $user = $request->user($guard);
 
         $this->currentInstitution->beginRequest($user?->institution_id);
 

@@ -24,3 +24,7 @@ Thumbs.db
 
 # Laravel Boost MCP config carries an absolute path; copy .mcp.json.example to .mcp.json.
 .mcp.json
+
+/public/css/filament
+/public/fonts/filament
+/public/js/filament
