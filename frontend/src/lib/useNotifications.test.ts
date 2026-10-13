@@ -9,10 +9,12 @@ describe('mapNotificationRows', () => {
       { id: 'n2', version: 1, userId: 'u2', kind: 'sync-conflict', tone: 'warning', title: 'Other user', body: 'Private.', unread: true },
       { id: 'n3', version: 1, userId: 'u1', kind: 'report-ready', tone: 'success', title: 'Deleted', body: 'Old.', unread: false, deletedAt: '2026-10-08T09:00:00Z' },
       { id: 'n4', version: 1, userId: 'u1', kind: 'unknown', tone: 'info', title: 'Unknown kind', body: 'Skip.', unread: true },
+      { id: 'n5', version: 1, userId: 'u1', kind: 'comments-failed', tone: 'warning', title: 'Comments not drafted', body: 'Open the term.', unread: true, termClosureId: 'tc1' },
     ]
 
     expect(mapNotificationRows(rows, 'u1')).toEqual([
       { id: 'n1', kind: 'edit-blocked', tone: 'danger', title: 'Edit not applied', body: 'Assessment finalized.', unread: true },
+      { id: 'n5', kind: 'comments-failed', tone: 'warning', title: 'Comments not drafted', body: 'Open the term.', unread: true },
     ])
   })
 })
