@@ -380,7 +380,17 @@ function closeGraphTerm(array $graph): TermClosure
         $graph['assessment']->update(['status' => 'finalized', 'finalized_at' => now(), 'finalized_by' => $graph['teacher']->id]);
     }
 
-    return TermClosure::close($graph['teacher'], $graph['class'], $graph['assessment']->year, $graph['assessment']->term)['closure'];
+    return TermClosure::close(asDirector($graph['teacher']), $graph['class'], $graph['assessment']->year, $graph['assessment']->term)['closure'];
+}
+
+/** Gives a teacher the Director of Studies grant, on this same instance, since closing a term is theirs alone (ADR 0014, decision 5). */
+function asDirector(User $teacher): User
+{
+    if (! $teacher->directs_studies) {
+        $teacher->update(['directs_studies' => true]);
+    }
+
+    return $teacher;
 }
 
 /** A report card issued for a student of the graph's term. */

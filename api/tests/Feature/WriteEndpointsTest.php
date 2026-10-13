@@ -119,6 +119,7 @@ test('unlock returns 422 when the optional note is not a string', function () {
 
 test('unlock returns 403 for a teacher without the grant even when they created the assessment', function () {
     $graph = buildGraph();
+    $graph['subjectModeration']->delete();
     $graph['assessment']->finalize($graph['teacher']);
 
     $response = $this->withToken(tokenFor($graph['teacher']))->postJson(

@@ -54,7 +54,7 @@ function termTwoClosed(int $students = 1): array
 
     // Both jobs are run by hand here; faking them keeps the sync queue from running them on dispatch.
     Bus::fake([SubmitCommentBatch::class, CollectCommentBatch::class]);
-    $closure = TermClosure::close($g['teacher'], $g['class'], 2026, 2)['closure'];
+    $closure = TermClosure::close(asDirector($g['teacher']), $g['class'], 2026, 2)['closure'];
     $g['termTwo'] = $termTwo;
     $g['students'] = $everyone;
 

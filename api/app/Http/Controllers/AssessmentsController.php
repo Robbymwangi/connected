@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Gate;
    institution for any authenticated user (docs/spec/access-model.md, The
    principle). Optional class_id narrows to one class's sittings. Assessments
    are created and edited over POST /sync (3.2), never here; unlock stays an
-   online administrator action. */
+   online action of a Director of Studies or the subject's HOD (ADR 0014). */
 class AssessmentsController extends Controller
 {
     /**

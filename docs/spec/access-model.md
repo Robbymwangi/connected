@@ -35,17 +35,16 @@ work of examining a class; the lifecycle actions are decisions about whether a
 sitting is complete and correct, and those belong to whoever is answerable for
 that assessment, not to anyone with a login.
 
-Unlocking a finalized assessment is not the sitting's to decide: it belongs to
-the Director of Studies (Roles, below), independent of who ran the sitting. Until
-the app has an unlock screen (ADR 0014's roles merge request), the admin panel's
-unlock action is the only screen that does it, so an admin account keeps that
-one academic act in the interim; the same merge request adds the HOD of the
-assessment's subject and removes the panel's action.
+Unlocking a finalized assessment is not the sitting's to decide (ADR 0014,
+decision 3): it belongs to a Director of Studies, for any assessment, and to the
+HOD of the assessment's subject, that is a teacher who moderates it (Roles,
+below). It is done in the app, online only; the creator or an assigned teacher
+unlocks only if they also hold one of the two.
 
-Closing a term for a stream (`docs/spec/workflow.md`) is allowed to a Director
-of Studies, and, in the interim until that same merge request, to a teacher
-assigned to any subject of that stream. Being the class teacher grants nothing
-here.
+Closing a term for a stream (`docs/spec/workflow.md`) is a Director of Studies'
+act alone (ADR 0014, decision 5): the exams office decides when results are
+final, not each subject teacher. Neither teaching the stream nor being its class
+teacher grants it.
 
 ## What admin accounts do
 
@@ -67,8 +66,6 @@ exhaustive; nothing outside it is admin work.
 - Keeping the term calendar: opening a term when the school opens, ending the
   current term for the holidays, and withdrawing a term opened by mistake
   (ADR 0014, decision 4; the rules are in `docs/spec/data-model.md`, `terms`).
-- In the interim only, unlocking a finalized assessment, with the note the
-  workflow requires (The principle, above).
 
 "Remove" means deactivate, never delete: marks and conflict records reference
 users by id, and a hard delete would orphan that history. An admin account does

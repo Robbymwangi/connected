@@ -2,6 +2,7 @@
 
 use App\Models\Conflict;
 use App\Models\Subject;
+use App\Models\SubjectModeration;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
@@ -283,8 +284,9 @@ test('an assessment can be finalized again after unlock and historical reports d
     $this->assertDatabaseCount('unlock_notes', 1);
 });
 
-test('a non-admin creator cannot unlock a finalized assessment', function () {
+test('the creator cannot unlock a finalized assessment without directing studies or heading its subject', function () {
     $graph = buildGraph();
+    $graph['subjectModeration']->delete();
     $graph['assessment']->finalize($graph['teacher']);
 
     expect(fn () => $graph['assessment']->unlock($graph['teacher']))->toThrow(AuthorizationException::class);
@@ -295,6 +297,22 @@ test('a non-admin creator cannot unlock a finalized assessment', function () {
         'version' => 2,
     ]);
     $this->assertDatabaseCount('unlock_notes', 0);
+});
+
+test('the HOD of the assessment\'s subject may unlock it, and the HOD of another subject may not', function () {
+    $graph = buildGraph();
+    $graph['subjectModeration']->delete();
+    $hod = makeModerator($graph, 'hod-unlock@example.com');
+    $otherHod = makeColleague($graph, 'other-hod-unlock@example.com');
+    $science = Subject::create(['institution_id' => $graph['institution']->id, 'name' => 'Science']);
+    SubjectModeration::create(['institution_id' => $graph['institution']->id, 'user_id' => $otherHod->id, 'subject_id' => $science->id]);
+    $graph['assessment']->finalize($graph['teacher']);
+
+    expect(Gate::forUser($otherHod)->allows('unlock', $graph['assessment']))->toBeFalse();
+    expect(Gate::forUser($hod)->allows('unlock', $graph['assessment']))->toBeTrue();
+
+    $graph['assessment']->unlock($hod);
+    expect($graph['assessment']->fresh()->status)->toBe('scheduled');
 });
 
 test('a Director of Studies cannot unlock a scheduled assessment', function () {

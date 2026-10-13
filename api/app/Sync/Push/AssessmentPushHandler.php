@@ -87,7 +87,7 @@ final class AssessmentPushHandler extends PushHandler
 
     /* A finalize is its own entry, checked before any version rule: it is never a create, it carries
        exactly status and finalizedBy (and optionally finalizedAt), the status is finalized (unlock is
-       an administrator action, never a mutation), and finalizedBy is the token's user, which a device
+       an online action of a Director of Studies or HOD, never a mutation), and finalizedBy is the token's user, which a device
        reports because it records its own action offline but may not claim for someone else. */
     public function check(PushEntry $entry, ?Model $record): void
     {
@@ -110,7 +110,7 @@ final class AssessmentPushHandler extends PushHandler
         }
 
         if ($entry->fields['status'] !== 'finalized') {
-            throw SyncRejection::invalid('status changes only by finalize; unlocking is an administrator action');
+            throw SyncRejection::invalid('status changes only by finalize; unlocking is an online action, never a sync entry');
         }
 
         if (! is_string($entry->fields['finalizedBy']) || $entry->fields['finalizedBy'] !== (string) $this->user->id) {
@@ -327,7 +327,7 @@ final class AssessmentPushHandler extends PushHandler
     private function assertTermOpen(string $classId, int $year, int $term): void
     {
         if (TermClosure::isClosed($classId, $year, $term)) {
-            throw SyncRejection::invalid('The term is closed for this stream; an administrator must unlock it first.');
+            throw SyncRejection::invalid('The term is closed for this stream; the Director of Studies or the subject\'s head of department must unlock it first.');
         }
     }
 

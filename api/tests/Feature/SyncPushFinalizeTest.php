@@ -83,13 +83,13 @@ test('a finalizedBy that is not a string is invalid, never compared loosely', fu
     expect(DB::table('assessments')->where('id', $g['assessment']->id)->value('status'))->toBe('scheduled');
 })->with(['an integer' => [5], 'an array' => [['x']], 'a boolean' => [true], 'null' => [null]]);
 
-test('a status other than finalized is invalid, since unlocking is an administrator action', function (mixed $status) {
+test('a status other than finalized is invalid, since unlocking is an online action, never a sync entry', function (mixed $status) {
     $g = buildGraph('School A', '-fin-status');
     $entry = finalizeEntry($g, $g['teacher'], extra: ['status' => $status]);
 
     $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
 
-    expect($result)->toBe(['id' => $entry['id'], 'status' => 'invalid', 'reason' => 'status changes only by finalize; unlocking is an administrator action']);
+    expect($result)->toBe(['id' => $entry['id'], 'status' => 'invalid', 'reason' => 'status changes only by finalize; unlocking is an online action, never a sync entry']);
 })->with(['scheduled' => ['scheduled'], 'reports-generated' => ['reports-generated'], 'junk' => ['x'], 'null' => [null]]);
 
 test('finalize is sent on its own: mixed with a field, or missing a half, it is invalid', function (array $shape) {
