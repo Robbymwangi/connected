@@ -14,7 +14,8 @@ use Illuminate\Support\Facades\Schema;
    holds anything that belongs to teaching, the migration refuses rather than choose a side for
    it: such a person is split into two accounts by hand first, the existing row keeping the side
    its history belongs to. An admin's device tokens are revoked, since an admin no longer signs in
-   to the app. */
+   to the app. An assessment's creator counts as teaching: once an admin, they could no longer edit
+   or finalize it, and no one else may unless assigned to its class and subject. */
 return new class extends Migration
 {
     public function up(): void
@@ -24,7 +25,8 @@ return new class extends Migration
         $teaching = $admins->filter(fn (string $id) => DB::table('teacher_assignments')->where('user_id', $id)->exists()
             || DB::table('subject_moderations')->where('user_id', $id)->exists()
             || DB::table('classes')->where('class_teacher_id', $id)->exists()
-            || DB::table('marks')->where('last_edited_by', $id)->exists());
+            || DB::table('marks')->where('last_edited_by', $id)->exists()
+            || DB::table('assessments')->where('created_by', $id)->exists());
 
         if ($teaching->isNotEmpty()) {
             throw new RuntimeException(
