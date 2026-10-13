@@ -6,10 +6,16 @@ namespace App\Support\Assistant;
    result from the same request, and an answer must cite at least one. It keeps figures honest; it
    does not prove an answer is on topic, which is the scope gate's job.
 
-   "Appears" allows the rounding a sentence uses: a figure of 62.5 may be written 62.5, 63, or
-   62.50, and a share of 0.625 may be written as 62.5 or 63 percent. Handles (S12) and term or
-   level names (Term 2, EE) are not figures. Years are figures like any other: a year the tools
-   did not return is as ungrounded as a made-up mean. */
+   "Appears" allows the rounding a sentence uses: a figure written to n decimals matches a returned
+   value within half a unit of its last place, so 62.5 may be written 62.5, 63, or 62, 51.25 may
+   be 51.2 or 51.3, and a share of 0.625 may be 62.5 or 63 percent. Nothing else is allowed: a
+   difference, total, or count the model worked out itself is ungrounded, however simple.
+
+   Names are not figures. A number glued to letters (S12, 4W, 5A) is a label, as are Term 2 and T3,
+   and so is any name the tools themselves returned that carries a digit, such as the assessment
+   "CAT 1": its 1 is part of the name. A date the tools returned grounds its day, month, and year,
+   so 2026-02-16 may be written 16 Feb 2026. Years are otherwise figures like any other: a year
+   the tools did not return is as ungrounded as a made-up mean. */
 final class Grounding
 {
     /**
@@ -29,22 +35,34 @@ final class Grounding
      */
     public static function ungrounded(string $text, array $toolResults): ?array
     {
-        $cited = self::numbersIn($text);
+        $known = [];
+        $labels = [];
+        array_walk_recursive($toolResults, function (mixed $value) use (&$known, &$labels): void {
+            if (is_int($value) || is_float($value) || (is_string($value) && is_numeric($value))) {
+                $known[] = (float) $value;
+            } elseif (is_string($value) && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $value, $date)) {
+                array_push($known, (float) $date[1], (float) $date[2], (float) $date[3]);
+            } elseif (is_string($value) && preg_match('/\d/', $value)) {
+                $labels[] = $value;
+            }
+        });
+
+        // Longest first, so a label that contains a shorter one is taken whole.
+        usort($labels, fn (string $a, string $b) => strlen($b) <=> strlen($a));
+        foreach ($labels as $label) {
+            $text = str_ireplace($label, ' ', $text);
+        }
+
+        $cited = self::figuresIn($text);
 
         if ($cited === []) {
             return [];
         }
 
-        $known = [];
-        array_walk_recursive($toolResults, function (mixed $value) use (&$known): void {
-            if (is_int($value) || is_float($value)) {
-                $known[] = (float) $value;
-            } elseif (is_string($value) && is_numeric($value)) {
-                $known[] = (float) $value;
-            }
-        });
-
-        $missing = array_values(array_filter($cited, fn (float $number) => ! self::matchesAny($number, $known)));
+        $missing = array_values(array_map(
+            fn (array $figure) => $figure[0],
+            array_filter($cited, fn (array $figure) => ! self::matchesAny($figure[0], $figure[1], $known)),
+        ));
 
         return $missing === [] ? null : $missing;
     }
@@ -52,21 +70,36 @@ final class Grounding
     /** @return list<float> */
     public static function numbersIn(string $text): array
     {
-        // A handle or a term number is not a figure: drop S12, "Term 2", and "T2" first.
-        $text = preg_replace('/\bS\d+\b|\bTerm\s+\d\b|\bT\d\b/i', ' ', $text) ?? $text;
-        preg_match_all('/(?<![\w.])\d+(?:[.,]\d+)?/', $text, $matches);
+        return array_map(fn (array $figure) => $figure[0], self::figuresIn($text));
+    }
 
-        return array_map(fn (string $number) => (float) str_replace(',', '.', $number), $matches[0]);
+    /**
+     * Each figure in the text with the number of decimals it was written to.
+     *
+     * @return list<array{0: float, 1: int}>
+     */
+    private static function figuresIn(string $text): array
+    {
+        // A term number is not a figure: drop "Term 2" first. A number glued to letters (S12, 4W,
+        // T3) is a label, so a figure must not run into a letter or digit on either side.
+        $text = preg_replace('/\bTerm\s+\d\b/i', ' ', $text) ?? $text;
+        preg_match_all('/(?<![\w.])\d+(?:[.,]\d+)?(?![\w])/', $text, $matches);
+
+        return array_map(function (string $number): array {
+            $decimals = preg_match('/[.,](\d+)$/', $number, $part) ? strlen($part[1]) : 0;
+
+            return [(float) str_replace(',', '.', $number), $decimals];
+        }, $matches[0]);
     }
 
     /** @param  list<float>  $known */
-    private static function matchesAny(float $number, array $known): bool
+    private static function matchesAny(float $number, int $decimals, array $known): bool
     {
+        $tolerance = 0.5 * 10 ** -$decimals + 1e-9;
+
         foreach ($known as $value) {
             foreach ([$value, $value * 100] as $candidate) {
-                if (abs($candidate - $number) < 1e-9
-                    || round($candidate) === $number
-                    || round($candidate, 1) === $number) {
+                if (abs($candidate - $number) <= $tolerance) {
                     return true;
                 }
             }

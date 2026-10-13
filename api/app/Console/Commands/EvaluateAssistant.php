@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Storage;
    the bar is not met. */
 class EvaluateAssistant extends Command
 {
-    protected $signature = 'assistant:evaluate {--stream= : The stream to scope the report to} {--year= : The year} {--only= : Run only attacks or only ordinary}';
+    protected $signature = 'assistant:evaluate {--stream= : The stream to scope the report to} {--year= : The year} {--subject=Maths : The subject to scope the report to, as a report with a subject chosen; criteria exist only per subject} {--only= : Run only attacks or only ordinary}';
 
     protected $description = 'Run the report assistant red-team evaluation (ADR 0013) against the real models';
 
@@ -31,19 +31,20 @@ class EvaluateAssistant extends Command
             return self::FAILURE;
         }
 
-        $sitting = Assessment::withoutGlobalScopes()->with('schoolClass')->whereIn('status', Assessment::FINALIZED)
+        $sitting = Assessment::withoutGlobalScopes()->with(['schoolClass', 'subject'])->whereIn('status', Assessment::FINALIZED)
+            ->whereHas('subject', fn ($query) => $query->withoutGlobalScopes()->where('name', $this->option('subject')))
             ->when($this->option('year'), fn ($query, $year) => $query->where('year', (int) $year))
             ->whereHas('schoolClass', fn ($query) => $query->withoutGlobalScopes()->when($this->option('stream'), fn ($q, $stream) => $q->where('stream', $stream)))
             ->orderByDesc('year')->first();
 
         if ($sitting === null) {
-            $this->error('No finalized assessment to scope a report to. Seed the demo school and finalize something first.');
+            $this->error('No finalized assessment of that subject to scope a report to. Seed the demo school and finalize something first.');
 
             return self::FAILURE;
         }
 
-        $filters = new AnalyticsFilters($sitting->institution_id, $sitting->schoolClass->stream, null, (int) $sitting->year);
-        $this->info("Report scope: stream {$filters->stream}, {$filters->year}, all subjects, year to date.");
+        $filters = new AnalyticsFilters($sitting->institution_id, $sitting->schoolClass->stream, $sitting->subject_id, (int) $sitting->year);
+        $this->info("Report scope: stream {$filters->stream}, {$sitting->subject->name}, {$filters->year}, year to date.");
 
         $ask = fn (string $question) => $current->actingFor($sitting->institution_id, fn () => $assistant->answer(
             $question, $filters, Conversation::resume(null, 'evaluation', 'evaluation'),
@@ -82,7 +83,7 @@ class EvaluateAssistant extends Command
         $path = 'assistant-evaluation/'.now()->format('Ymd-His').'-'.($only ?? 'all').'.json';
         Storage::disk('local')->put($path, json_encode([
             'models' => ['answer' => config('services.anthropic.assistant_model'), 'gate' => config('services.anthropic.gate_model')],
-            'scope' => ['stream' => $filters->stream, 'year' => $filters->year],
+            'scope' => ['stream' => $filters->stream, 'subject' => $sitting->subject->name, 'year' => $filters->year],
             'attacks' => ['run' => count($attacks), 'failed' => $attackFailures],
             'ordinary' => ['run' => count($ordinary), 'answeredPct' => $answeredPct],
             'errors' => $errors,

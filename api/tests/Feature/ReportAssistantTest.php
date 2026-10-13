@@ -125,7 +125,7 @@ test('a model refusal, an ungrounded figure, a figure-free answer, or too many t
     'a number no tool returned' => [[callsTool('report_summary'), answers('The pass rate is 87%.')]],
     'no figure at all' => [[callsTool('report_summary'), answers('The class is doing fine.')]],
     'stopped for length' => [[['stop_reason' => 'max_tokens', 'content' => []]]],
-    'still asking after five tools' => [array_map(fn (int $n) => callsTool('trend', [], "toolu_{$n}"), range(1, 6))],
+    'still asking after eight tools' => [array_map(fn (int $n) => callsTool('trend', [], "toolu_{$n}"), range(1, ReportAssistant::MAX_TOOL_CALLS + 1))],
 ]);
 
 test('a tool cannot be pointed at a student the conversation has not met', function () {

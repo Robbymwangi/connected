@@ -24,6 +24,28 @@ test('handles and term numbers are not figures', function () {
     expect(Grounding::numbersIn('S12 and S3 slipped in Term 2 and T3, to 41.5'))->toBe([41.5]);
 });
 
+test('a name the tools returned is not a figure, and a date they returned grounds its parts', function () {
+    $results = [['scope' => ['stream' => '4W'], 'passRatePct' => 80.2], ['assessments' => [
+        ['assessment' => 'CAT 1', 'date' => '2026-02-16', 'meanPct' => 58.9],
+    ]]];
+
+    expect(Grounding::holds('The pass rate for stream 4W is 80.2%.', $results))->toBeTrue();
+    expect(Grounding::holds('Stream 5A passed at 80.2%.', $results))->toBeTrue();
+    expect(Grounding::holds('In CAT 1, on 16 Feb 2026, the mean was 58.9%.', $results))->toBeTrue();
+    // A number beside a name is still a figure; only the name's own digit is not.
+    expect(Grounding::ungrounded('CAT 1 had 12 absentees.', $results))->toBe([12.0]);
+    expect(Grounding::ungrounded('That was on 17 Feb.', $results))->toBe([17.0]);
+});
+
+test('rounding is allowed to the places written, and nothing the model worked out is', function () {
+    $results = [['latestPct' => 51.25, 'earlierMeanPct' => 69.4, 'otherPct' => 50.0]];
+
+    expect(Grounding::holds('S5 fell to 51.3%, or 51.2%, or about 51%.', $results))->toBeTrue();
+    expect(Grounding::ungrounded('S5 fell to 51.4%.', $results))->toBe([51.4]);
+    // 69.4 - 51.25 = 18.15: a difference is not in any tool result, however it is rounded.
+    expect(Grounding::ungrounded('S5 dropped by about 18 points.', $results))->toBe([18.0]);
+});
+
 test('handles are stable within a conversation and go back to names for the screen only', function () {
     $handles = new Handles;
 
