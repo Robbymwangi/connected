@@ -16,6 +16,7 @@ use App\Models\Student;
 use App\Models\Subject;
 use App\Models\SubjectModeration;
 use App\Models\TeacherAssignment;
+use App\Models\Term;
 use App\Models\TermClosure;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -85,9 +86,15 @@ function tokenFor(User $user): string
     return $user->createToken('device', ['sync'])->plainTextToken;
 }
 
-function buildGraph(string $institutionName = 'Test School', string $suffix = ''): array
+/* The graph's school is in Term 2, 2026 (ADR 0014): the term assessmentFields() creates into. Its
+   one assessment is from Term 1, made before. A test of the calendar itself passes $openTerm false. */
+function buildGraph(string $institutionName = 'Test School', string $suffix = '', bool $openTerm = true): array
 {
     $institution = Institution::create(['name' => $institutionName]);
+
+    if ($openTerm) {
+        Term::create(['institution_id' => $institution->id, 'year' => 2026, 'term' => 2, 'opened_at' => '2026-05-04 05:00:00']);
+    }
 
     $teacher = User::create([
         'institution_id' => $institution->id,

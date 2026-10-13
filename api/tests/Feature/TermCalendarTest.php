@@ -31,7 +31,7 @@ function calendarOf(array $g): array
 }
 
 test('an admin opens a term, recording when and by whom, and the change reaches the sync log', function () {
-    $g = buildGraph();
+    $g = buildGraph(openTerm: false);
     $admin = calendarAdmin($g);
     $this->travelTo('2026-05-04 05:00:00');
 
@@ -44,7 +44,7 @@ test('an admin opens a term, recording when and by whom, and the change reaches 
 });
 
 test('opening the next term ends the open one at the same instant', function () {
-    $g = buildGraph();
+    $g = buildGraph(openTerm: false);
     $admin = calendarAdmin($g);
     $first = Term::open($admin, 2026, 2);
     $this->travelTo('2026-09-01 05:00:00');
@@ -57,7 +57,7 @@ test('opening the next term ends the open one at the same instant', function () 
 });
 
 test('a term must come after every term recorded, but need not be the very next one', function () {
-    $g = buildGraph();
+    $g = buildGraph(openTerm: false);
     $admin = calendarAdmin($g);
     Term::open($admin, 2026, 2);
 
@@ -71,7 +71,7 @@ test('a term must come after every term recorded, but need not be the very next 
 });
 
 test('the suggested next term follows Term 3 with Term 1 of the next year', function () {
-    $g = buildGraph();
+    $g = buildGraph(openTerm: false);
     $admin = calendarAdmin($g);
     expect(Term::suggestedNext($g['institution']->id))->toBe(['year' => null, 'term' => null]);
 
@@ -83,7 +83,7 @@ test('the suggested next term follows Term 3 with Term 1 of the next year', func
 });
 
 test('ending the open term for the holidays leaves none open, and with none open there is nothing to end', function () {
-    $g = buildGraph();
+    $g = buildGraph(openTerm: false);
     $admin = calendarAdmin($g);
     Term::open($admin, 2026, 3);
 
@@ -97,7 +97,7 @@ test('ending the open term for the holidays leaves none open, and with none open
 });
 
 test('the database itself refuses a second open term in one institution', function () {
-    $g = buildGraph();
+    $g = buildGraph(openTerm: false);
     Term::open(calendarAdmin($g), 2026, 2);
 
     expect(fn () => Term::create(['institution_id' => $g['institution']->id, 'year' => 2026, 'term' => 3, 'opened_at' => now()]))
@@ -105,7 +105,7 @@ test('the database itself refuses a second open term in one institution', functi
 });
 
 test('withdrawing a term opened by mistake reopens the term its opening ended', function () {
-    $g = buildGraph();
+    $g = buildGraph(openTerm: false);
     $admin = calendarAdmin($g);
     $previous = Term::open($admin, 2026, 2);
     $mistake = Term::open($admin, 2026, 3);
@@ -121,7 +121,7 @@ test('withdrawing a term opened by mistake reopens the term its opening ended', 
 });
 
 test('withdrawing leaves a term ended for the holidays ended, since the opening did not end it', function () {
-    $g = buildGraph();
+    $g = buildGraph(openTerm: false);
     $admin = calendarAdmin($g);
     $previous = Term::open($admin, 2026, 2);
     $this->travelTo(now()->addDay());
@@ -136,7 +136,7 @@ test('withdrawing leaves a term ended for the holidays ended, since the opening 
 });
 
 test('a term that an assessment names cannot be withdrawn, and an ended term cannot be withdrawn at all', function () {
-    $g = buildGraph();
+    $g = buildGraph(openTerm: false);
     $admin = calendarAdmin($g);
     $ended = Term::open($admin, 2026, 1);
     $open = Term::open($admin, 2026, 2);
@@ -149,7 +149,7 @@ test('a term that an assessment names cannot be withdrawn, and an ended term can
 });
 
 test('only an active admin keeps the calendar: a teacher, even a Director of Studies, may not', function () {
-    $g = buildGraph();
+    $g = buildGraph(openTerm: false);
     $director = makeColleague($g, 'dos-calendar@example.com', directsStudies: true);
     $admin = calendarAdmin($g);
     $open = Term::open($admin, 2026, 2);
@@ -165,8 +165,8 @@ test('only an active admin keeps the calendar: a teacher, even a Director of Stu
 });
 
 test('each institution keeps its own calendar', function () {
-    $a = buildGraph('School A', '-cal-a');
-    $b = buildGraph('School B', '-cal-b');
+    $a = buildGraph('School A', '-cal-a', false);
+    $b = buildGraph('School B', '-cal-b', false);
     $adminA = calendarAdmin($a, 'office-cal-a@example.com');
     $adminB = calendarAdmin($b, 'office-cal-b@example.com');
     $termA = Term::open($adminA, 2026, 3);
@@ -180,7 +180,7 @@ test('each institution keeps its own calendar', function () {
 });
 
 test('the migration records each term assessments already name, as ended, opens none, and logs them for pull', function () {
-    $g = buildGraph('School A', '-cal-mig');
+    $g = buildGraph('School A', '-cal-mig', false);
     Assessment::create([...$g['assessment']->only(['institution_id', 'class_id', 'subject_id', 'created_by']),
         'name' => 'End of Term', 'term' => 2, 'year' => 2026, 'date' => '2026-07-20', 'status' => 'scheduled']);
 
@@ -211,7 +211,7 @@ describe('the panel', function () {
     }
 
     test('lists the calendar, and opening a term suggests the one after the latest', function () {
-        $g = buildGraph();
+        $g = buildGraph(openTerm: false);
         $admin = calendarAdmin($g);
         Term::open($admin, 2026, 3);
         $this->actingAs($admin, 'admin');
@@ -228,7 +228,7 @@ describe('the panel', function () {
     });
 
     test('reports what the model refused, and changes nothing', function () {
-        $g = buildGraph();
+        $g = buildGraph(openTerm: false);
         $admin = calendarAdmin($g);
         Term::open($admin, 2026, 3);
         $this->actingAs($admin, 'admin');
@@ -242,7 +242,7 @@ describe('the panel', function () {
     });
 
     test('ends the current term, and withdraws a term opened by mistake', function () {
-        $g = buildGraph();
+        $g = buildGraph(openTerm: false);
         $admin = calendarAdmin($g);
         Term::open($admin, 2026, 2);
         $mistake = Term::open($admin, 2026, 3);

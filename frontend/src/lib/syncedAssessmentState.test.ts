@@ -13,6 +13,7 @@ const directory = mapSchoolDirectory({
   subjects: [{ id: 'subject-1', version: 1, name: 'Kiswahili' }],
   teacherAssignments: [{ id: 'assignment-1', version: 1, userId: 'teacher-1', classId: 'class-1', subjectId: 'subject-1' }],
   users: [{ id: 'teacher-1', version: 1, name: 'Teacher One', email: 'teacher@example.test' }],
+  terms: [],
 })
 
 describe('mapSyncedAssessmentState', () => {

@@ -1,14 +1,14 @@
 import { Check } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Modal } from '../../components/Modal'
-import { TERMS } from '../../fixtures/assessments'
 import type { SchoolClass } from '../../fixtures/classes'
 import type { Criterion, Subject } from '../../fixtures/rubrics'
+import { termLabel, type OpenTerm } from '../../lib/schoolDirectory'
 
 export type NewAssessment = {
   subject: Subject
   name: string
-  term: string
+  term: OpenTerm
   date: string
   classIds: string[]
 }
@@ -16,16 +16,18 @@ export type NewAssessment = {
 type Draft = {
   subject: Subject | null
   name: string
-  term: string
   date: string
   classIds: string[]
 }
 
-const EMPTY: Draft = { subject: null, name: '', term: TERMS[0], date: '', classIds: [] }
+const EMPTY: Draft = { subject: null, name: '', date: '', classIds: [] }
 const STEPS = 4
 
 type CreateAssessmentDialogProps = {
   open: boolean
+  /* The open term, which every assessment made here belongs to (ADR 0014). The screen opens the
+     dialog only when there is one. */
+  term: OpenTerm
   classes: SchoolClass[]
   subjects: string[]
   criteriaBySubject: Record<string, Criterion[]>
@@ -34,8 +36,10 @@ type CreateAssessmentDialogProps = {
 }
 
 /* Four steps: subject, name and date, streams, confirmation. Each step must be
-   complete before the next; the export let name and date through empty. */
-export function CreateAssessmentDialog({ open, classes, subjects, criteriaBySubject, onClose, onCreate }: CreateAssessmentDialogProps) {
+   complete before the next; the export let name and date through empty. The term is not
+   a choice: it is the open term, shown as a fact, and the sitting date must fall in its
+   year, which the server checks too. */
+export function CreateAssessmentDialog({ open, term, classes, subjects, criteriaBySubject, onClose, onCreate }: CreateAssessmentDialogProps) {
   const [step, setStep] = useState(0)
   const [draft, setDraft] = useState<Draft>(EMPTY)
   const [saving, setSaving] = useState(false)
@@ -53,9 +57,10 @@ export function CreateAssessmentDialog({ open, classes, subjects, criteriaBySubj
     setTimeout(reset, 200)
   }
 
+  const dateOutsideYear = draft.date !== '' && !draft.date.startsWith(`${term.year}-`)
   const canContinue =
     step === 0 ? draft.subject !== null
-    : step === 1 ? draft.name.trim() !== '' && draft.date !== ''
+    : step === 1 ? draft.name.trim() !== '' && draft.date !== '' && !dateOutsideYear
     : step === 2 ? draft.classIds.length > 0
     : true
 
@@ -72,7 +77,7 @@ export function CreateAssessmentDialog({ open, classes, subjects, criteriaBySubj
       await onCreate({
         subject: draft.subject,
         name: draft.name.trim(),
-        term: draft.term,
+        term,
         date: draft.date,
         classIds: draft.classIds,
       })
@@ -157,7 +162,10 @@ export function CreateAssessmentDialog({ open, classes, subjects, criteriaBySubj
 
       {step === 1 && (
         <div className="flex flex-col gap-3">
-          <p className="mb-1 text-sm font-semibold text-foreground">Name, term, and date</p>
+          <p className="mb-1 text-sm font-semibold text-foreground">Name and date</p>
+          <p className="text-sm text-muted-foreground" data-testid="open-term">
+            For <strong className="text-foreground">{termLabel(term)}</strong>, the term the school is in.
+          </p>
           <input
             value={draft.name}
             onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
@@ -165,23 +173,19 @@ export function CreateAssessmentDialog({ open, classes, subjects, criteriaBySubj
             aria-label="Assessment name"
             className={inputClass}
           />
-          <select
-            value={draft.term}
-            onChange={(e) => setDraft((d) => ({ ...d, term: e.target.value }))}
-            aria-label="Term"
-            className={inputClass}
-          >
-            {TERMS.map((t) => (
-              <option key={t}>{t}</option>
-            ))}
-          </select>
           <input
             type="date"
             value={draft.date}
+            min={`${term.year}-01-01`}
+            max={`${term.year}-12-31`}
             onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
             aria-label="Assessment date"
+            aria-invalid={dateOutsideYear}
             className={inputClass}
           />
+          {dateOutsideYear && (
+            <p className="text-sm text-danger" role="alert">The sitting date must be in {term.year}, the year of {termLabel(term)}.</p>
+          )}
         </div>
       )}
 
@@ -223,7 +227,7 @@ export function CreateAssessmentDialog({ open, classes, subjects, criteriaBySubj
           <p className="text-sm text-muted-foreground">
             <strong>{draft.name}</strong> · {draft.subject}
             <br />
-            {draft.term} · {draft.classIds.length} stream
+            {termLabel(term)} · {draft.classIds.length} stream
             {draft.classIds.length !== 1 ? 's' : ''} · {draft.date}
           </p>
         </div>

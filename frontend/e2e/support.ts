@@ -29,7 +29,8 @@ export const E2E_SYNC_CHANGES: E2ESyncChange[] = [
   { table: 'enrolments', recordId: 'enrolment-1', version: 1, fields: { studentId: 'student-1', classId: 'class-1', year: 2025 } },
   { table: 'assessments', recordId: 'a1', version: 1, fields: {
     classId: 'class-1', subjectId: 'subject-1', name: 'CAT 1', term: 'Term 2', year: 2025, date: '2025-05-12', status: 'scheduled',
-  } },
+  } },  /* The school is in Term 3, 2025 (ADR 0014): a new assessment takes it. */
+  { table: 'terms', recordId: 'term-2025-3', version: 1, fields: { year: 2025, term: 3, openedAt: '2025-09-01T05:00:00.000000Z', openedBy: 'admin-1' } },
 ]
 
 /* Fakes login, /me, and the initial sync pull just long enough to sign in and

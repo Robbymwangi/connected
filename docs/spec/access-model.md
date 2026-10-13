@@ -24,7 +24,9 @@ Creating an assessment is likewise unrestricted, for the same reason: any
 teacher may create an assessment for any class that offers the chosen
 subject. The frontend already assumes this: `CreateAssessmentDialog.tsx` filters
 the class picker by whether a class teaches the selected subject, not by who the
-signed-in teacher is.
+signed-in teacher is. What is not the teacher's to choose is the term: a new
+assessment belongs to the term an admin has opened (ADR 0014, decision 4), and
+with no term open none can be created.
 
 Once an assessment exists, its lifecycle is not unrestricted. Editing its name or
 date and finalizing it are scoped to whoever created it, or to a teacher who
