@@ -80,9 +80,10 @@ final class Grounding
      */
     private static function figuresIn(string $text): array
     {
-        // A term number is not a figure: drop "Term 2" first. A number glued to letters (S12, 4W,
-        // T3) is a label, so a figure must not run into a letter or digit on either side.
-        $text = preg_replace('/\bTerm\s+\d\b/i', ' ', $text) ?? $text;
+        // A term number is not a figure: drop "Term 2" first, and list numbering, "1)" or a "1." that
+        // starts a line. A number glued to letters (S12, 4W, T3) is a label, so a figure must not run
+        // into a letter or digit on either side.
+        $text = preg_replace(['/\bTerm\s+\d\b/i', '/(?<![\w.(])\d+\)/', '/^\s*\d+\.(?=\s)/m'], ' ', $text) ?? $text;
         preg_match_all('/(?<![\w.])\d+(?:[.,]\d+)?(?![\w])/', $text, $matches);
 
         return array_map(function (string $number): array {

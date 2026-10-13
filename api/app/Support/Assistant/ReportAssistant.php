@@ -176,7 +176,7 @@ final class ReportAssistant
         }
         $messages[] = ['role' => 'user', 'content' => $question];
 
-        for ($calls = 0; ;) {
+        for ($calls = 0, $nudged = false; ;) {
             $message = $this->messages->create([
                 'model' => config('services.anthropic.assistant_model'),
                 'max_tokens' => config('services.anthropic.assistant_max_tokens'),
@@ -189,6 +189,16 @@ final class ReportAssistant
             ]);
 
             $stop = $message['stop_reason'] ?? null;
+
+            // An answer before any tool result cannot be grounded; it is usually a note that the model
+            // is about to check. The model is asked once, in its own conversation, to use the tools.
+            if ($stop === 'end_turn' && $results === [] && ! $nudged) {
+                $nudged = true;
+                $messages[] = ['role' => 'assistant', 'content' => self::echoed($message['content'])];
+                $messages[] = ['role' => 'user', 'content' => self::NUDGE];
+
+                continue;
+            }
 
             if ($stop !== 'tool_use') {
                 return $stop === 'end_turn' ? self::accept(self::finalJson($message), $results) : ['refused' => "the model stopped for {$stop}"];
@@ -226,6 +236,8 @@ final class ReportAssistant
             ? [...$block, 'input' => (object) ($block['input'] ?? [])]
             : $block, $content);
     }
+
+    private const NUDGE = 'Call the tools you need now, then give your final answer from their results.';
 
     private const ANSWER_SCHEMA = [
         'type' => 'object',

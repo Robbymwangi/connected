@@ -128,6 +128,26 @@ test('a model refusal, an ungrounded figure, a figure-free answer, or too many t
     'still asking after eight tools' => [array_map(fn (int $n) => callsTool('trend', [], "toolu_{$n}"), range(1, ReportAssistant::MAX_TOOL_CALLS + 1))],
 ]);
 
+test('an answer sent before any tool is asked once, and only once, to use the tools', function () {
+    $g = assistantGraph();
+    modelReplies(gateSays(true), answers('Checking the report now.'), callsTool('report_summary'), answers('The pass mark is 50%.'));
+
+    expect(ask($this, $g, 'What is the pass mark?')->assertOk()->json('data'))->toMatchArray(['answerable' => true, 'text' => 'The pass mark is 50%.']);
+    $sent = Http::recorded()->map(fn (array $pair) => $pair[0])->all();
+    expect($sent)->toHaveCount(4);
+    expect(collect($sent[2]['messages'])->last())->toMatchArray(['role' => 'user', 'content' => 'Call the tools you need now, then give your final answer from their results.']);
+    // Every fractional figure reaches the model at one decimal, as the report shows it.
+    expect($sent[3]['messages'][4]['content'][0]['content'])->not->toMatch('/\d\.\d{2,}/');
+});
+
+test('a model that still answers without a tool after being asked gets the fixed reply', function () {
+    $g = assistantGraph();
+    modelReplies(gateSays(true), answers('Checking now.'), answers('Still checking.'));
+
+    expect(ask($this, $g, 'What is the pass mark?')->assertOk()->json('data'))->toMatchArray(['answerable' => false, 'text' => ReportAssistant::FIXED_REPLY]);
+    expect(Http::recorded())->toHaveCount(3);
+});
+
 test('a tool cannot be pointed at a student the conversation has not met', function () {
     $g = assistantGraph();
     modelReplies(gateSays(true), callsTool('student_outcomes', ['student' => 'S7']), answers('S7 is not in this report.'));

@@ -48,6 +48,34 @@ final class ReportTools
      */
     public function run(string $name, array $input): array
     {
+        return self::rounded($this->result($name, $input));
+    }
+
+    /**
+     * Every fractional figure to one decimal, as the report shows it. The model then quotes a
+     * figure as given instead of shortening 78.947 itself, and the grounding check compares the
+     * answer with exactly what the model was given.
+     *
+     * @param  array<string, mixed>  $result
+     * @return array<string, mixed>
+     */
+    private static function rounded(array $result): array
+    {
+        array_walk_recursive($result, function (mixed &$value): void {
+            if (is_float($value)) {
+                $value = round($value, 1);
+            }
+        });
+
+        return $result;
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    private function result(string $name, array $input): array
+    {
         $f = $this->filters;
 
         return match ($name) {

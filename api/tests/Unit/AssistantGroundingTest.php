@@ -20,8 +20,9 @@ test('an answer is grounded only when every number it cites came from a tool res
     expect(Grounding::ungrounded('62.5% passed.', $results))->toBeNull();
 });
 
-test('handles and term numbers are not figures', function () {
+test('handles, term numbers, and list numbering are not figures', function () {
     expect(Grounding::numbersIn('S12 and S3 slipped in Term 2 and T3, to 41.5'))->toBe([41.5]);
+    expect(Grounding::numbersIn("1) The mean is 60.7 (up from 58.9). 2) Watch S5.\n3. The pass mark is 50."))->toBe([60.7, 58.9, 50.0]);
 });
 
 test('a name the tools returned is not a figure, and a date they returned grounds its parts', function () {
