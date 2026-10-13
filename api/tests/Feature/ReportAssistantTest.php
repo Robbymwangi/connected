@@ -41,8 +41,12 @@ function gateSays(bool $inScope): array
     return ['stop_reason' => 'end_turn', 'content' => [['type' => 'text', 'text' => json_encode(['in_scope' => $inScope])]]];
 }
 
+/* The API sends a tool's input as a JSON object, an empty one for a tool that takes no arguments, so
+   the fake does too: a PHP [] would be sent as a list and hide the round trip the real API checks. */
 function callsTool(string $name, array $input = [], string $id = 'toolu_1'): array
 {
+    $input = (object) $input;
+
     return ['stop_reason' => 'tool_use', 'content' => [
         ['type' => 'thinking', 'thinking' => '', 'signature' => 'sig'],
         ['type' => 'tool_use', 'id' => $id, 'name' => $name, 'input' => $input],
@@ -84,6 +88,8 @@ test('an in-scope question is answered from a tool, with names restored only for
     expect(collect($first['tools'])->pluck('name')->all())->toBe(['report_summary', 'trend', 'criterion_breakdown', 'attention_list', 'decline_list', 'student_outcomes']);
     expect(collect($first['tools'])->every(fn (array $tool) => $tool['strict'] === true))->toBeTrue();
     expect($second['messages'][2]['content'][0])->toMatchArray(['type' => 'tool_result', 'tool_use_id' => 'toolu_1']);
+    // The model's tool call goes back as the API sent it: an empty input stays an object, never a list.
+    expect(json_decode($second->body())->messages[1]->content[1]->input)->toEqual(new stdClass);
     expect($second['messages'][2]['content'][0]['content'])->toContain('"student":"S1"');
     $everything = $sent->map(fn (Request $request) => $request->body())->implode("\n");
     expect($everything)->not->toContain('S. Student')->not->toContain('Hillside Academy')->not->toContain($g['student']->id);

@@ -190,7 +190,7 @@ final class ReportAssistant
                 return null;
             }
 
-            $messages[] = ['role' => 'assistant', 'content' => $message['content']];
+            $messages[] = ['role' => 'assistant', 'content' => self::echoed($message['content'])];
             $messages[] = ['role' => 'user', 'content' => array_map(function (array $use) use ($tools, &$results): array {
                 $result = $tools->run((string) $use['name'], is_array($use['input'] ?? null) ? $use['input'] : []);
                 $results[] = $result;
@@ -198,6 +198,22 @@ final class ReportAssistant
                 return ['type' => 'tool_result', 'tool_use_id' => $use['id'], 'content' => json_encode($result, JSON_THROW_ON_ERROR)];
             }, $uses)];
         }
+    }
+
+    /**
+     * The model's turn as it goes back to the API. Each tool call's input arrived as a JSON object,
+     * an empty one for the tools that take no arguments; decoded into PHP it is an array, and an empty
+     * array would be sent as a list, which the API refuses. So the input is sent as an object again.
+     * Everything else in the turn, its thinking blocks included, goes back unchanged.
+     *
+     * @param  list<array<string, mixed>>  $content
+     * @return list<array<string, mixed>>
+     */
+    private static function echoed(array $content): array
+    {
+        return array_map(fn (array $block) => ($block['type'] ?? null) === 'tool_use'
+            ? [...$block, 'input' => (object) ($block['input'] ?? [])]
+            : $block, $content);
     }
 
     private const ANSWER_SCHEMA = [
