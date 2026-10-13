@@ -7,5 +7,4 @@ export const STATUS_META: Record<LifecycleStatus, { label: string; tone: StatusT
   'in-progress': { label: 'In Progress', tone: 'info' },
   complete: { label: 'Needs Finalizing', tone: 'warning' },
   finalized: { label: 'Finalized', tone: 'success' },
-  'reports-generated': { label: 'Reports Generated', tone: 'primary' },
 }

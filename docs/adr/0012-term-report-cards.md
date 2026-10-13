@@ -55,7 +55,9 @@ a class, is the Reports screen's job and already exists.
 
 - Items 4.3 and 4.4 change grain: comments and reports hang off the term close, not
   off finalize and acceptance of a per-assessment record.
-- The assessment `status` enum loses `reports-generated`; existing code and fixtures
-  that read it change when the implementation merge requests land.
+- `reports-generated` leaves the assessment lifecycle in code and fixtures, but not the
+  database: migrations are additive only (build plan 5.2), so the stored enum keeps the
+  value, nothing writes it, and a row holding it reads as finalized on the server and
+  the device alike.
 - The card is cumulative: a later term's card is a new row, never an edit of an
   earlier one, so a closed term stays what it was when it closed.
