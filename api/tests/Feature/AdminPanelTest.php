@@ -247,6 +247,18 @@ test('with reports issued, the panel requires the note', function () {
     expect($graph['assessment']->fresh()->status)->toBe('finalized');
 });
 
+test('the finalized filter lists a row still holding the retired reports-generated status', function () {
+    $graph = buildGraph();
+    $admin = adminOf($graph);
+    $graph['assessment']->update(['status' => 'reports-generated', 'finalized_at' => '2026-10-05 10:00:00', 'finalized_by' => $graph['teacher']->id]);
+    $this->actingAs($admin, 'admin');
+    asPanelRequestFor($admin);
+
+    Livewire::test(ListAssessments::class)
+        ->filterTable('status', 'finalized')->assertCanSeeTableRecords([$graph['assessment']])
+        ->filterTable('status', 'scheduled')->assertCanNotSeeTableRecords([$graph['assessment']]);
+});
+
 arch('no API controller depends on the admin panel')
     ->expect('App\Http\Controllers')
     ->not->toUse('Filament');

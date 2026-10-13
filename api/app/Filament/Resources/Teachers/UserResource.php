@@ -84,15 +84,18 @@ class UserResource extends Resource
                     ->visible(fn (User $record) => $record->deactivated_at !== null)
                     ->requiresConfirmation()
                     ->action(fn (User $record) => $record->update(['deactivated_at' => null])),
+                // The app's devices hold Sanctum tokens; an administrator's panel session is a
+                // separate login this does not end. Deactivating the account does: the panel
+                // refuses a deactivated administrator on their next request.
                 Action::make('revokeDevices')
-                    ->label('Revoke devices')
+                    ->label('Sign out of the app')
                     ->icon(Heroicon::OutlinedDevicePhoneMobile)
                     ->color('warning')
                     ->requiresConfirmation()
-                    ->modalDescription('Every device signed in as this teacher is signed out. They can sign in again.')
+                    ->modalDescription('Every phone and computer signed in to the app as this person is signed out, and can sign in again. An administrator\'s session in this panel is not ended; to end it, deactivate the account.')
                     ->action(function (User $record): void {
                         $record->tokens()->delete();
-                        Notification::make()->title('Devices signed out')->success()->send();
+                        Notification::make()->title('Signed out of the app')->success()->send();
                     }),
             ]);
     }

@@ -14,6 +14,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
@@ -48,7 +49,15 @@ class AssessmentResource extends Resource
             ])
             ->defaultSort('date', 'desc')
             ->filters([
-                SelectFilter::make('status')->options(['scheduled' => 'Open', 'finalized' => 'Finalized']),
+                // Finalized means every status in Assessment::FINALIZED, so a row still holding the
+                // retired reports-generated status is listed with the others it unlocks like.
+                SelectFilter::make('status')
+                    ->options(['scheduled' => 'Open', 'finalized' => 'Finalized'])
+                    ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
+                        'finalized' => $query->whereIn('status', Assessment::FINALIZED),
+                        'scheduled' => $query->where('status', 'scheduled'),
+                        default => $query,
+                    }),
             ])
             ->recordActions([self::unlockAction()]);
     }
