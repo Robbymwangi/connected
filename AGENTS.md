@@ -80,9 +80,9 @@ These are load-bearing. Do not work around them.
   works offline and needs no push infrastructure.
 - The assistant lives in Reports, scoped to the report on screen, and shares that
   screen's connectivity requirement above; it checks the connection itself rather
-  than trusting a cached report to still be answerable offline. Until the API's
-  assistant exists, answers are templated from the report's own figures and
-  labelled as a stand-in.
+  than trusting a cached report to still be answerable offline. The server runs it
+  (ADR 0013); where the server has no model key, answers are templated from the
+  report's own figures and labelled as a stand-in.
 - Fixtures under `fixtures/` use short readable string ids (`s1`, `class-4w`). They
   stand in for the local store, which assigns the real client-generated UUIDs.
 

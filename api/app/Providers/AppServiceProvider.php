@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Auth\AdminUserProvider;
+use App\Support\Anthropic\Messages;
 use App\Support\CurrentInstitution;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -22,6 +23,9 @@ class AppServiceProvider extends ServiceProvider
         // read must share one instance within a request, and a long-lived
         // worker must get a fresh one for the next request or job.
         $this->app->scoped(CurrentInstitution::class);
+
+        // Read at resolve time, so a test or a changed config sees the current key.
+        $this->app->bind(Messages::class, fn () => Messages::fromConfig());
     }
 
     /**
@@ -44,6 +48,15 @@ class AppServiceProvider extends ServiceProvider
                 ),
                 Limit::perMinute(20)->by($request->ip()),
             ];
+        });
+
+        // The report assistant (ADR 0013, decision 2): every question is a live model call with
+        // tool round trips, so a teacher gets ten a minute and sixty an hour.
+        RateLimiter::for('assistant', function (Request $request) {
+            $key = (string) $request->user()?->getAuthIdentifier();
+
+            // Distinct keys: two limits sharing one key would share one counter.
+            return [Limit::perMinute(10)->by('minute:'.$key), Limit::perHour(60)->by('hour:'.$key)];
         });
     }
 }

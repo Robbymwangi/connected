@@ -38,6 +38,12 @@ return [
         'version' => '2023-06-01',
         'comment_model' => env('ANTHROPIC_COMMENT_MODEL', 'claude-haiku-5-5'),
         'comment_max_tokens' => 1024,
+        // The report assistant (ADR 0013): Sonnet answers, Haiku judges whether a question is
+        // about the report at all. Live calls, so a short timeout.
+        'assistant_model' => env('ANTHROPIC_ASSISTANT_MODEL', 'claude-sonnet-5-5'),
+        'gate_model' => env('ANTHROPIC_GATE_MODEL', 'claude-haiku-5-5'),
+        'assistant_max_tokens' => 2048,
+        'assistant_timeout' => 30,
     ],
 
     'slack' => [
