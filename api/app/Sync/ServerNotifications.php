@@ -105,7 +105,42 @@ final class ServerNotifications
     public function commentsFailed(Comment $comment): void
     {
         $closure = TermClosure::query()->with(['schoolClass', 'closedBy'])->find($comment->term_closure_id);
-        $user = $closure?->closedBy;
+
+        if ($closure === null) {
+            return;
+        }
+
+        $stream = $this->stream($closure);
+
+        $this->notifyCloser(
+            $closure,
+            'comments-failed',
+            'warning',
+            "Comments not drafted: {$stream}, Term {$closure->term}",
+            "Some comments for {$stream}, Term {$closure->term} {$closure->year} could not be drafted. Open the term's comments to write them or regenerate them.",
+        );
+    }
+
+    /* Every student of a term close has a report card (docs/spec/workflow.md, Report cards): the user
+       who closed the term is told, by the report job that wrote the last card, inside its transaction. */
+    public function reportsReady(TermClosure $closure): void
+    {
+        $closure->loadMissing(['schoolClass', 'closedBy']);
+        $stream = $this->stream($closure);
+
+        $this->notifyCloser(
+            $closure,
+            'report-ready',
+            'success',
+            "Report cards ready: {$stream}, Term {$closure->term}",
+            "Every report card for {$stream}, Term {$closure->term} {$closure->year} has been generated.",
+        );
+    }
+
+    /* One unread notice per kind and term close, to the closer, unless they have been deactivated. */
+    private function notifyCloser(TermClosure $closure, string $kind, string $tone, string $title, string $body): void
+    {
+        $user = $closure->closedBy;
 
         if ($user === null || $user->deactivated_at !== null) {
             return;
@@ -113,7 +148,7 @@ final class ServerNotifications
 
         $alreadyUnread = Notification::query()
             ->where('user_id', $user->id)
-            ->where('kind', 'comments-failed')
+            ->where('kind', $kind)
             ->where('term_closure_id', $closure->id)
             ->where('unread', true)
             ->exists();
@@ -122,18 +157,21 @@ final class ServerNotifications
             return;
         }
 
-        $stream = "Grade {$closure->schoolClass?->grade} {$closure->schoolClass?->stream}";
-
         Notification::create([
             'institution_id' => $closure->institution_id,
             'user_id' => $user->id,
             'term_closure_id' => $closure->id,
-            'kind' => 'comments-failed',
-            'tone' => 'warning',
-            'title' => Str::limit("Comments not drafted: {$stream}, Term {$closure->term}", self::TITLE_LIMIT),
-            'body' => "Some comments for {$stream}, Term {$closure->term} {$closure->year} could not be drafted. Open the term's comments to write them or regenerate them.",
+            'kind' => $kind,
+            'tone' => $tone,
+            'title' => Str::limit($title, self::TITLE_LIMIT),
+            'body' => $body,
             'unread' => true,
         ]);
+    }
+
+    private function stream(TermClosure $closure): string
+    {
+        return "Grade {$closure->schoolClass?->grade} {$closure->schoolClass?->stream}";
     }
 
     /**

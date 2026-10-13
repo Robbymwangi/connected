@@ -4,6 +4,7 @@ namespace App\Support\Comments;
 
 use App\Models\Result;
 use App\Support\PerformanceLevel;
+use Illuminate\Support\Collection;
 
 /* A student's performance level per subject per term: the level of the mean of that term's
    assessment percentages (total over max from each live result of a live assessment), so every
@@ -20,7 +21,41 @@ final class TermLevels
      */
     public static function forStudent(string $studentId, array $years): array
     {
-        $rows = Result::query()
+        return self::termShares($studentId, $years)->map(fn (object $row) => [
+            'subject' => (string) $row->subject,
+            'year' => (int) $row->year,
+            'term' => (int) $row->term,
+            'level' => PerformanceLevel::forShare((float) $row->mean_share),
+        ])->all();
+    }
+
+    /**
+     * A year's level per subject, for the report card's history of earlier years: the level of the
+     * mean of that year's term means, so each term weighs the same, as each sitting does within a term.
+     *
+     * @param  list<int>  $years
+     * @return list<array{subject: string, year: int, level: PerformanceLevel}>
+     */
+    public static function forStudentByYear(string $studentId, array $years): array
+    {
+        return self::termShares($studentId, $years)
+            ->groupBy(fn (object $row) => $row->subject."\0".$row->year)
+            ->map(fn (Collection $terms) => [
+                'subject' => (string) $terms->first()->subject,
+                'year' => (int) $terms->first()->year,
+                'level' => PerformanceLevel::forShare((float) $terms->avg('mean_share')),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  list<int>  $years
+     * @return Collection<int, object{subject: string, year: int, term: int, mean_share: float}>
+     */
+    private static function termShares(string $studentId, array $years): Collection
+    {
+        return Result::query()
             ->join('assessments', 'assessments.id', '=', 'results.assessment_id')
             ->join('subjects', 'subjects.id', '=', 'assessments.subject_id')
             ->where('results.student_id', $studentId)
@@ -35,12 +70,5 @@ final class TermLevels
             ->selectRaw('avg(results.total::double precision / results.max) as mean_share')
             ->toBase()
             ->get();
-
-        return $rows->map(fn (object $row) => [
-            'subject' => (string) $row->subject,
-            'year' => (int) $row->year,
-            'term' => (int) $row->term,
-            'level' => PerformanceLevel::forShare((float) $row->mean_share),
-        ])->all();
     }
 }

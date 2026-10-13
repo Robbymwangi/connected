@@ -3,7 +3,8 @@
 # here (it runs natively on Node, see the root README), so the Vite port mapping is
 # gone, the app service is named through APP_SERVICE in .env, the app waits for
 # Postgres to be healthy, and a queue worker runs from the first `sail up` because
-# report PDFs are queued jobs.
+# report PDFs are queued jobs. MinIO stands in for S3 for those PDFs (build plan 4.4),
+# and minio-bucket creates the bucket once MinIO is healthy, then exits.
 name: connected
 
 services:
@@ -72,9 +73,47 @@ services:
                 - '${DB_USERNAME}'
             retries: 3
             timeout: 5s
+    minio:
+        image: 'minio/minio:latest'
+        ports:
+            - '${FORWARD_MINIO_PORT:-9000}:9000'
+            - '${FORWARD_MINIO_CONSOLE_PORT:-8900}:8900'
+        environment:
+            MINIO_ROOT_USER: '${AWS_ACCESS_KEY_ID:-sail}'
+            MINIO_ROOT_PASSWORD: '${AWS_SECRET_ACCESS_KEY:-password}'
+        volumes:
+            - 'sail-minio:/data'
+        networks:
+            - sail
+        command: 'minio server /data --console-address ":8900"'
+        healthcheck:
+            test:
+                - CMD
+                - mc
+                - ready
+                - local
+            retries: 3
+            timeout: 5s
+    minio-bucket:
+        image: 'minio/mc:latest'
+        environment:
+            MINIO_ROOT_USER: '${AWS_ACCESS_KEY_ID:-sail}'
+            MINIO_ROOT_PASSWORD: '${AWS_SECRET_ACCESS_KEY:-password}'
+            AWS_BUCKET: '${AWS_BUCKET:-reports}'
+        entrypoint:
+            - /bin/sh
+            - -c
+            - 'mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" && mc mb --ignore-existing "local/$$AWS_BUCKET"'
+        networks:
+            - sail
+        depends_on:
+            minio:
+                condition: service_healthy
 networks:
     sail:
         driver: bridge
 volumes:
     sail-pgsql:
+        driver: local
+    sail-minio:
         driver: local
