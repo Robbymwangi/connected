@@ -107,7 +107,8 @@ make dev       # frontend on http://localhost:5173
 
 The first `make setup` builds the Sail image and takes a few minutes. The API answers
 on http://localhost:8000 (`GET /api/user` returns 401 until you have a token; that is
-the success case). Run `make` alone to list every target.
+the success case). The admin panel is on http://localhost:8000/admin, for an
+administrator account (ADR 0009). Run `make` alone to list every target.
 
 ### Day to day
 

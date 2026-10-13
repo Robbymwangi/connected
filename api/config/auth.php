@@ -42,6 +42,14 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // The admin panel's own session guard (build plan 5.4, ADR 0009): the same accounts as
+        // the PWA, signed into separately, through a provider that can find an account before
+        // its institution is known.
+        'admin' => [
+            'driver' => 'session',
+            'provider' => 'admins',
+        ],
     ],
 
     /*
@@ -65,6 +73,11 @@ return [
         'users' => [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', User::class),
+        ],
+
+        'admins' => [
+            'driver' => 'admin-eloquent',
+            'model' => User::class,
         ],
 
         // 'users' => [

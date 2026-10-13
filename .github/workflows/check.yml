@@ -31,6 +31,24 @@ jobs:
       - run: npm run lint
       - run: npm test
 
+  # The Playwright specs (offline, connectivity, sign-in, and sync), through the
+  # same `make e2e` a developer runs: Playwright's own Docker image, pinned in the
+  # Makefile, so CI and a laptop run one browser build. No API runs; the specs
+  # fake every /api call in the page. Installed on the runner first, since the
+  # container uses the checkout's node_modules.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: make e2e
+
   api:
     runs-on: ubuntu-latest
     defaults:

@@ -55,7 +55,9 @@ function RowAction({ assessment: a, onOpenGrid, onOpenReport, onDelete }: Omit<A
   const base = 'shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold transition-colors'
   let action
 
-  if (a.status === 'reports-generated') {
+  /* A finalized assessment is read-only, so its report is the useful thing to open; before
+     ADR 0012 retired reports-generated, that status held this action. */
+  if (a.status === 'finalized') {
     action = (
       <button
         type="button"
