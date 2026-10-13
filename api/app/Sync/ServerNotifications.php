@@ -52,7 +52,7 @@ final class ServerNotifications
             'edit-blocked',
             'danger',
             "Edit not applied: {$assessment->name}",
-            "A mark change by {$actor->name} reached the server after {$this->describe($assessment)} was finalized, so it was not applied. An administrator can unlock the assessment; the mark can then be entered again.",
+            "A mark change by {$actor->name} reached the server after {$this->describe($assessment)} was finalized, so it was not applied. The Director of Studies or the subject's head of department can unlock the assessment; the mark can then be entered again.",
         );
     }
 

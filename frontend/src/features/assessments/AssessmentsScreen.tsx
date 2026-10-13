@@ -1,17 +1,21 @@
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
+import { useCurrentUser } from '../../app/AuthContext'
 import type { SessionStore } from '../../app/useSessionStore'
 import type { SchoolDirectoryState } from '../../app/useSchoolDirectory'
 import { Modal } from '../../components/Modal'
 import type { Assessment } from '../../fixtures/assessments'
-import { DEFAULT_FILTERS, filterAssessments, type QueueFilters } from '../../lib/assessmentQueue'
+import { defaultFilters, filterAssessments, type QueueFilters } from '../../lib/assessmentQueue'
 import { MarkingGrid } from './grid/MarkingGrid'
 import { AssessmentReport } from './AssessmentReport'
 import { BrowseTree } from './BrowseTree'
 import { CreateAssessmentDialog, type NewAssessment } from './CreateAssessmentDialog'
 import { QueueList } from './QueueList'
+import { useTermClosures } from './useTermClosures'
 
 type View = 'queue' | 'browse'
+
+const NO_TERM_OPEN = 'No term is open, so no assessment can be created. The school office opens each term.'
 
 type AssessmentsScreenProps = {
   store: SessionStore
@@ -42,8 +46,9 @@ export function AssessmentsScreen({
   onCreateClosed,
 }: AssessmentsScreenProps) {
   const { assessments: list, conflicts } = store
+  const closures = useTermClosures(useCurrentUser().id)
   const [listView, setListView] = useState<View>('queue')
-  const [filters, setFilters] = useState<QueueFilters>(DEFAULT_FILTERS)
+  const [filters, setFilters] = useState<QueueFilters>(() => defaultFilters())
   const [creating, setCreating] = useState(creatingOnArrival)
   const [deleteCandidate, setDeleteCandidate] = useState<Assessment | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -52,6 +57,8 @@ export function AssessmentsScreen({
   const referenceYear = school?.years[0] ?? new Date().getFullYear()
   const referenceClasses = school?.classesForYear(referenceYear) ?? []
   const referenceGrades = [...new Set(referenceClasses.map((cls) => cls.grade))]
+  const openTerm = school?.openTerm ?? null
+  const termClasses = openTerm ? school?.classesForYear(openTerm.year) ?? [] : []
 
   const open = assessmentId ? list.find((a) => a.id === assessmentId) : undefined
   if (open && view === 'grid') {
@@ -67,6 +74,7 @@ export function AssessmentsScreen({
         onAcceptProposal={store.acceptProposal}
         onReferConflict={store.referConflict}
         onFinalize={store.finalizeAssessment}
+        token={token}
         onBack={onBackToList}
       />
     )
@@ -78,21 +86,20 @@ export function AssessmentsScreen({
   const shown = filterAssessments(list, filters).length
   const inProgress = list.filter((a) => a.status === 'in-progress').length
 
-  /* One scheduled assessment per chosen stream. Term comes from the dialog and the
-     year from the chosen date's calendar year; neither is inferred from the other,
-     because no school-calendar rule exists yet to map dates onto terms. The store
+  /* One scheduled assessment per chosen stream, in the open term: its year and term
+     both come from the calendar (ADR 0014), and the streams are that year's. The store
      assigns each record its UUID. */
   const create = async (draft: NewAssessment) => {
+    const year = draft.term.year
     const created: Omit<Assessment, 'id' | 'version'>[] = draft.classIds.flatMap((classId) => {
-      const year = Number(draft.date.slice(0, 4))
       const cls = school?.classesForYear(year).find((c) => c.id === classId)
       if (!cls) return []
       return [{
         subject: draft.subject,
         stream: cls.stream,
         name: draft.name,
-        term: draft.term,
-        year: Number(draft.date.slice(0, 4)),
+        term: `Term ${draft.term.term}`,
+        year,
         date: draft.date,
         entered: 0,
         total: cls.enrolment,
@@ -102,7 +109,7 @@ export function AssessmentsScreen({
     })
     await store.addAssessments(created)
     /* Show the year the new records landed in, so they are not filtered out of view. */
-    setFilters((f) => ({ ...f, year: Number(draft.date.slice(0, 4)) }))
+    setFilters((f) => ({ ...f, year }))
   }
 
   const confirmDelete = async () => {
@@ -127,6 +134,7 @@ export function AssessmentsScreen({
           <p className="mt-1 text-sm font-medium text-muted-foreground">
             {listView === 'queue' ? `${shown} shown` : `${list.length} total`} · {inProgress} in progress
           </p>
+          {school && !openTerm && <p className="mt-1 text-sm text-muted-foreground" data-testid="no-term-open">{NO_TERM_OPEN}</p>}
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 rounded-xl border border-border bg-muted/60 p-1" role="group" aria-label="View">
@@ -147,7 +155,8 @@ export function AssessmentsScreen({
           <button
             type="button"
             onClick={() => setCreating(true)}
-            disabled={!school || school.subjects.length === 0 || referenceClasses.length === 0}
+            disabled={!openTerm || !school || school.subjects.length === 0 || termClasses.length === 0}
+            title={openTerm ? undefined : NO_TERM_OPEN}
             className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="size-4" /> New
@@ -195,17 +204,19 @@ export function AssessmentsScreen({
         </div>}
       </Modal>
 
-      <CreateAssessmentDialog
+      {openTerm && <CreateAssessmentDialog
         open={creating}
-        classes={referenceClasses}
+        term={openTerm}
+        classes={termClasses}
         subjects={school?.subjects ?? []}
         criteriaBySubject={school?.criteriaBySubject ?? {}}
+        closures={closures}
         onClose={() => {
           setCreating(false)
           onCreateClosed?.()
         }}
         onCreate={create}
-      />
+      />}
     </div>
   )
 }

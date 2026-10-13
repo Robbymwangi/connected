@@ -3,6 +3,7 @@
 namespace App\Auth;
 
 use App\Models\Scopes\InstitutionScope;
+use App\Models\User;
 use Illuminate\Auth\EloquentUserProvider;
 
 /* The admin panel's user provider (build plan 5.4, ADR 0009). An account is looked up before its
@@ -10,11 +11,12 @@ use Illuminate\Auth\EloquentUserProvider;
    with no account, so InstitutionScope fails closed and an ordinary provider would find nobody.
    This lifts that one scope for the user lookup only, the same explicit, narrow bypass
    LoginController makes for the PWA and for the same reason. Every other query in the panel stays
-   scoped; soft-deleted accounts stay invisible. */
+   scoped; soft-deleted accounts stay invisible. Only admin accounts are found (ADR 0014, decision
+   1), so a teacher's address and password are not a panel credential. */
 class AdminUserProvider extends EloquentUserProvider
 {
     protected function newModelQuery($model = null)
     {
-        return parent::newModelQuery($model)->withoutGlobalScope(InstitutionScope::class);
+        return parent::newModelQuery($model)->withoutGlobalScope(InstitutionScope::class)->where('kind', User::ADMIN);
     }
 }

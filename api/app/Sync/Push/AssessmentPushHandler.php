@@ -6,6 +6,7 @@ use App\Models\Assessment;
 use App\Models\ClassSubject;
 use App\Models\SchoolClass;
 use App\Models\Subject;
+use App\Models\Term;
 use App\Models\TermClosure;
 use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Model;
@@ -13,7 +14,8 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 /* Assessments over POST /sync. Creation is unrestricted by who, as in
-   docs/spec/access-model.md; an update is scoped to its creator or an assigned
+   docs/spec/access-model.md, and is into the open term only, with the term and year fixed from then
+   on (ADR 0014); an update is scoped to its creator or an assigned
    teacher, the policy's rule. deletedAt is refused, since no assessment is deleted from a
    device, and status is accepted only as a finalize entry (see check()). Every type and range is checked here in PHP, before any query or save,
    because a malformed value reaching Postgres would be a 5xx, not an answer, and a
@@ -85,7 +87,7 @@ final class AssessmentPushHandler extends PushHandler
 
     /* A finalize is its own entry, checked before any version rule: it is never a create, it carries
        exactly status and finalizedBy (and optionally finalizedAt), the status is finalized (unlock is
-       an administrator action, never a mutation), and finalizedBy is the token's user, which a device
+       an online action of a Director of Studies or HOD, never a mutation), and finalizedBy is the token's user, which a device
        reports because it records its own action offline but may not claim for someone else. */
     public function check(PushEntry $entry, ?Model $record): void
     {
@@ -108,7 +110,7 @@ final class AssessmentPushHandler extends PushHandler
         }
 
         if ($entry->fields['status'] !== 'finalized') {
-            throw SyncRejection::invalid('status changes only by finalize; unlocking is an administrator action');
+            throw SyncRejection::invalid('status changes only by finalize; unlocking is an online action, never a sync entry');
         }
 
         if (! is_string($entry->fields['finalizedBy']) || $entry->fields['finalizedBy'] !== (string) $this->user->id) {
@@ -217,6 +219,8 @@ final class AssessmentPushHandler extends PushHandler
         }
 
         $this->validateTypes($fields);
+        $this->assertIsTheOpenTerm($fields['year'], $fields['term']);
+        $this->assertDateInYear($fields['date'], $fields['year']);
         $this->assertClassOffersSubject($fields['classId'], $fields['subjectId']);
         $this->assertTermOpen($fields['classId'], $fields['year'], $fields['term']);
 
@@ -256,33 +260,64 @@ final class AssessmentPushHandler extends PushHandler
             unset($fields['deletedAt']);
         }
 
+        // The term is the calendar's, taken when the assessment was created (ADR 0014, decision 4).
+        foreach (['year', 'term'] as $name) {
+            if (array_key_exists($name, $fields) && $fields[$name] !== (int) $record->{$name}) {
+                throw SyncRejection::invalid("An assessment's term and year are fixed when it is created.");
+            }
+        }
+
+        if (array_key_exists('date', $fields)) {
+            $this->assertDateInYear($fields['date'], (int) $record->year);
+        }
+
         $classId = $fields['classId'] ?? (string) $record->class_id;
         $subjectId = $fields['subjectId'] ?? (string) $record->subject_id;
-        $year = $fields['year'] ?? (int) $record->year;
 
-        $scopeChanged = $classId !== (string) $record->class_id
-            || $subjectId !== (string) $record->subject_id
-            || $year !== (int) $record->year;
-
-        if ($scopeChanged && $record->marks()->exists()) {
-            throw SyncRejection::invalid('The class, subject, and year cannot change after marks exist.');
+        if (($classId !== (string) $record->class_id || $subjectId !== (string) $record->subject_id) && $record->marks()->exists()) {
+            throw SyncRejection::invalid('The class and subject cannot change after marks exist.');
         }
 
         if (array_key_exists('classId', $fields) || array_key_exists('subjectId', $fields)) {
             $this->assertClassOffersSubject($classId, $subjectId);
         }
 
-        // A closed term's cards are already issued: nothing moves into it, and nothing moves out.
-        $term = $fields['term'] ?? (int) $record->term;
-
-        if ($classId !== (string) $record->class_id || $year !== (int) $record->year || $term !== (int) $record->term) {
+        // A closed term's cards are already issued: no assessment moves into its stream, or out of it.
+        if ($classId !== (string) $record->class_id) {
             $this->assertTermOpen((string) $record->class_id, (int) $record->year, (int) $record->term);
-            $this->assertTermOpen($classId, $year, $term);
+            $this->assertTermOpen($classId, (int) $record->year, (int) $record->term);
         }
 
         $record->fill(collect($fields)->mapWithKeys(fn ($value, $name) => [$this->columns()[$name] => $value])->all());
 
         return $record;
+    }
+
+    /* A new assessment belongs to the term the school is in (ADR 0014, decision 4): the open term
+       when the create arrives, not when it was made. The device fills the term in from the calendar
+       it last pulled; the server checks it rather than filling it in, because a device offline when
+       the next term opened would otherwise have its assessment moved into a term it never chose.
+       The push holds the institution's advisory lock, as opening a term does, so the two cannot
+       interleave. */
+    private function assertIsTheOpenTerm(int $year, int $term): void
+    {
+        $open = Term::current($this->user->institution_id);
+
+        if ($open === null) {
+            throw SyncRejection::invalid('No term is open; the school office opens each term.');
+        }
+
+        if ($open->year !== $year || $open->term !== $term) {
+            throw SyncRejection::invalid("Term {$term}, {$year} is not open; the school is in {$open->label()}.");
+        }
+    }
+
+    /** The sitting date is in the term's year: a date in another year is a typing mistake. */
+    private function assertDateInYear(string $date, int $year): void
+    {
+        if ((int) substr($date, 0, 4) !== $year) {
+            throw SyncRejection::invalid("The sitting date must be in {$year}, the year of the assessment's term.");
+        }
     }
 
     /* While a stream's term is closed its cards stand on the assessments it closed over, so an
@@ -292,7 +327,7 @@ final class AssessmentPushHandler extends PushHandler
     private function assertTermOpen(string $classId, int $year, int $term): void
     {
         if (TermClosure::isClosed($classId, $year, $term)) {
-            throw SyncRejection::invalid('The term is closed for this stream; an administrator must unlock it first.');
+            throw SyncRejection::invalid('The term is closed for this stream; the Director of Studies or the subject\'s head of department must unlock it first.');
         }
     }
 

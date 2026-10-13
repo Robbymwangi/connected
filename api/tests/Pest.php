@@ -16,6 +16,7 @@ use App\Models\Student;
 use App\Models\Subject;
 use App\Models\SubjectModeration;
 use App\Models\TeacherAssignment;
+use App\Models\Term;
 use App\Models\TermClosure;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -85,9 +86,15 @@ function tokenFor(User $user): string
     return $user->createToken('device', ['sync'])->plainTextToken;
 }
 
-function buildGraph(string $institutionName = 'Test School', string $suffix = ''): array
+/* The graph's school is in Term 2, 2026 (ADR 0014): the term assessmentFields() creates into. Its
+   one assessment is from Term 1, made before. A test of the calendar itself passes $openTerm false. */
+function buildGraph(string $institutionName = 'Test School', string $suffix = '', bool $openTerm = true): array
 {
     $institution = Institution::create(['name' => $institutionName]);
+
+    if ($openTerm) {
+        Term::create(['institution_id' => $institution->id, 'year' => 2026, 'term' => 2, 'opened_at' => '2026-05-04 05:00:00']);
+    }
 
     $teacher = User::create([
         'institution_id' => $institution->id,
@@ -207,16 +214,18 @@ function assessmentFields(array $graph, array $overrides = []): array
 }
 
 /**
- * A second user in the graph's institution; optionally an admin, optionally assigned to the graph's class and subject.
+ * A second user in the graph's institution: a teacher unless $admin, optionally the Director of Studies,
+ * optionally assigned to the graph's class and subject.
  */
-function makeColleague(array $graph, string $email, bool $admin = false, bool $assigned = false): User
+function makeColleague(array $graph, string $email, bool $admin = false, bool $assigned = false, bool $directsStudies = false): User
 {
     $user = User::create([
         'institution_id' => $graph['institution']->id,
         'name' => 'A. Colleague',
         'email' => $email,
         'password' => 'a-hashed-password',
-        'is_admin' => $admin,
+        'kind' => $admin ? User::ADMIN : User::TEACHER,
+        'directs_studies' => $directsStudies,
     ]);
 
     if ($assigned) {
@@ -371,7 +380,17 @@ function closeGraphTerm(array $graph): TermClosure
         $graph['assessment']->update(['status' => 'finalized', 'finalized_at' => now(), 'finalized_by' => $graph['teacher']->id]);
     }
 
-    return TermClosure::close($graph['teacher'], $graph['class'], $graph['assessment']->year, $graph['assessment']->term)['closure'];
+    return TermClosure::close(asDirector($graph['teacher']), $graph['class'], $graph['assessment']->year, $graph['assessment']->term)['closure'];
+}
+
+/** Gives a teacher the Director of Studies grant, on this same instance, since closing a term is theirs alone (ADR 0014, decision 5). */
+function asDirector(User $teacher): User
+{
+    if (! $teacher->directs_studies) {
+        $teacher->update(['directs_studies' => true]);
+    }
+
+    return $teacher;
 }
 
 /** A report card issued for a student of the graph's term. */

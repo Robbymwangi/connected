@@ -6,10 +6,11 @@ use App\Models\Comment;
 use App\Models\CommentGeneration;
 use App\Models\Enrolment;
 use App\Models\SchoolClass;
-use App\Models\TeacherAssignment;
+use App\Models\Term;
 use App\Models\TermClosure;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 /* 4.3, the term close (ADR 0012): POST /api/term-closures closes one stream's term once every
@@ -34,7 +35,7 @@ function finalizeGraph(array $graph): void
     $graph['assessment']->finalize($graph['teacher']);
 }
 
-test('an assigned teacher closes the term: a logged closure and one pending comment per live enrolment', function () {
+test('a Director of Studies closes the term: a logged closure and one pending comment per live enrolment', function () {
     $g = buildGraph();
     $second = enrolledStudent($g, 'Second');
     $left = enrolledStudent($g, 'Left the stream');
@@ -42,7 +43,7 @@ test('an assigned teacher closes the term: a logged closure and one pending comm
     finalizeGraph($g);
     $this->travelTo('2026-04-01 09:00:00');
 
-    $response = closeTermRequest($this, $g, $g['teacher']);
+    $response = closeTermRequest($this, $g, asDirector($g['teacher']));
 
     $response->assertCreated()
         ->assertJsonPath('data.class_id', $g['class']->id)
@@ -64,20 +65,27 @@ test('the close queues generation for its closure once, and a no-op close queues
     $g = buildGraph();
     finalizeGraph($g);
 
-    $closureId = closeTermRequest($this, $g, $g['teacher'])->assertCreated()->json('data.id');
-    closeTermRequest($this, $g, $g['teacher'])->assertOk();
+    $closureId = closeTermRequest($this, $g, asDirector($g['teacher']))->assertCreated()->json('data.id');
+    closeTermRequest($this, $g, asDirector($g['teacher']))->assertOk();
 
     Bus::assertDispatchedTimes(SubmitCommentBatch::class, 1);
     Bus::assertDispatched(SubmitCommentBatch::class, fn (SubmitCommentBatch $job) => $job->termClosureId === $closureId
         && $job->institutionId === $g['institution']->id);
 });
 
-test('an admin closes a term without teaching the stream', function () {
+test('a Director of Studies closes a term without teaching the stream', function () {
     $g = buildGraph();
-    $admin = makeColleague($g, 'admin-close@example.com', admin: true);
+    $director = makeColleague($g, 'dos-close@example.com', directsStudies: true);
     finalizeGraph($g);
 
-    closeTermRequest($this, $g, $admin)->assertCreated()->assertJsonPath('data.closed_by', $admin->id);
+    closeTermRequest($this, $g, $director)->assertCreated()->assertJsonPath('data.closed_by', $director->id);
+});
+
+test('an admin account cannot close a term, even reaching the policy without the API door', function () {
+    $g = buildGraph();
+    $admin = makeColleague($g, 'admin-close@example.com', admin: true);
+
+    expect(Gate::forUser($admin)->allows('create', [TermClosure::class, $g['class']]))->toBeFalse();
 });
 
 test('being the class teacher grants nothing: an unassigned class teacher is forbidden', function () {
@@ -92,20 +100,18 @@ test('being the class teacher grants nothing: an unassigned class teacher is for
     $this->assertDatabaseCount('comments', 0);
 });
 
-test('a teacher assigned to another stream only is forbidden', function () {
+test('a teacher assigned to the stream is forbidden without the grant: the close is the exams office\'s', function () {
     $g = buildGraph();
-    $other = makeColleague($g, 'other-stream@example.com');
-    $otherClass = SchoolClass::create(['institution_id' => $g['institution']->id, 'grade' => '4', 'stream' => 'East']);
-    TeacherAssignment::create(['institution_id' => $g['institution']->id, 'user_id' => $other->id, 'class_id' => $otherClass->id, 'subject_id' => $g['subject']->id]);
     finalizeGraph($g);
 
-    closeTermRequest($this, $g, $other)->assertForbidden();
+    closeTermRequest($this, $g, $g['teacher'])->assertForbidden();
+    $this->assertDatabaseCount('term_closures', 0);
 });
 
 test('another school\'s stream does not resolve', function () {
     $g = buildGraph('School A', '-close-a');
     $b = buildGraph('School B', '-close-b');
-    $b['teacher']->update(['is_admin' => true]);
+    $b['teacher']->update(['directs_studies' => true]);
     finalizeGraph($g);
 
     closeTermRequest($this, $g, $b['teacher'])->assertUnprocessable()->assertInvalid(['class_id']);
@@ -121,7 +127,7 @@ test('an assessment of the term still open makes the close invalid, naming it, a
         'name' => 'End of Term', 'term' => 1, 'year' => 2026, 'date' => '2026-03-20', 'status' => 'scheduled', 'created_by' => $g['teacher']->id,
     ]);
 
-    closeTermRequest($this, $g, $g['teacher'])
+    closeTermRequest($this, $g, asDirector($g['teacher']))
         ->assertUnprocessable()
         ->assertInvalid(['assessments' => 'Every assessment of the term must be finalized first. Still open: End of Term.']);
 
@@ -138,23 +144,23 @@ test('a deleted assessment is not open, and another term\'s or another stream\'s
     $otherClass = SchoolClass::create(['institution_id' => $g['institution']->id, 'grade' => '4', 'stream' => 'East']);
     Assessment::create([...$base, 'class_id' => $otherClass->id, 'name' => 'Other stream', 'term' => 1]);
 
-    closeTermRequest($this, $g, $g['teacher'])->assertCreated();
+    closeTermRequest($this, $g, asDirector($g['teacher']))->assertCreated();
 });
 
 test('a term with no assessments cannot be closed', function () {
     $g = buildGraph();
     finalizeGraph($g);
 
-    closeTermRequest($this, $g, $g['teacher'], ['term' => 2])->assertUnprocessable()->assertInvalid(['term']);
+    closeTermRequest($this, $g, asDirector($g['teacher']), ['term' => 2])->assertUnprocessable()->assertInvalid(['term']);
 });
 
 test('closing a closed term is the no-op: 200 with the same closure and nothing new written', function () {
     $g = buildGraph();
     finalizeGraph($g);
-    $first = closeTermRequest($this, $g, $g['teacher'])->assertCreated()->json('data.id');
+    $first = closeTermRequest($this, $g, asDirector($g['teacher']))->assertCreated()->json('data.id');
     $logged = DB::table('sync_changes')->count();
 
-    closeTermRequest($this, $g, $g['teacher'])
+    closeTermRequest($this, $g, asDirector($g['teacher']))
         ->assertOk()
         ->assertJsonPath('data.id', $first)
         ->assertJsonPath('meta', ['comments' => 0, 'skipped' => 0]);
@@ -172,7 +178,7 @@ test('a student who already has a live comment for the term, from another stream
     $existing = $earlierClosure->comments()->create(['institution_id' => $g['institution']->id, 'student_id' => $g['student']->id, 'year' => 2026, 'term' => 1, 'state' => 'pending']);
     $second = enrolledStudent($g, 'Second');
 
-    closeTermRequest($this, $g, $g['teacher'])->assertCreated()->assertJsonPath('meta', ['comments' => 1, 'skipped' => 1]);
+    closeTermRequest($this, $g, asDirector($g['teacher']))->assertCreated()->assertJsonPath('meta', ['comments' => 1, 'skipped' => 1]);
 
     $closure = TermClosure::query()->where('class_id', $g['class']->id)->sole();
     expect($closure->comments()->pluck('student_id')->all())->toBe([$second->id]);
@@ -182,7 +188,7 @@ test('a student who already has a live comment for the term, from another stream
 test('the term must be 1, 2, or 3 and the year an integer', function (array $overrides, string $field) {
     $g = buildGraph();
 
-    closeTermRequest($this, $g, $g['teacher'], $overrides)->assertUnprocessable()->assertInvalid([$field]);
+    closeTermRequest($this, $g, asDirector($g['teacher']), $overrides)->assertUnprocessable()->assertInvalid([$field]);
 })->with([
     'term 4' => [['term' => 4], 'term'],
     'term 0' => [['term' => 0], 'term'],
@@ -191,7 +197,9 @@ test('the term must be 1, 2, or 3 and the year an integer', function (array $ove
 ]);
 
 test('while the term is closed, an assessment cannot be created in it over sync', function () {
+    // A close is allowed while its term is still open (ADR 0014, decision 5): report forms go home on closing day.
     $g = buildGraph('School A', '-closed-create');
+    Term::query()->where('institution_id', $g['institution']->id)->update(['term' => 1]);
     closeGraphTerm($g);
     $id = Str::uuid7()->toString();
 
@@ -227,7 +235,7 @@ test('while the term is closed, an assessment cannot be moved into it or out of 
 
 test('the unlock unwinds the close: closure, comments, and reports soft deleted, generations in flight superseded', function () {
     $g = buildGraph();
-    $g['teacher']->update(['is_admin' => true]);
+    $g['teacher']->update(['directs_studies' => true]);
     $closure = closeGraphTerm($g);
     $comment = $closure->comments()->sole();
     $inFlight = CommentGeneration::create(['institution_id' => $g['institution']->id, 'comment_id' => $comment->id, 'status' => 'submitted']);
@@ -244,13 +252,13 @@ test('the unlock unwinds the close: closure, comments, and reports soft deleted,
 
 test('after an unlock, closing again writes a new closure and new comments beside the soft deleted history', function () {
     $g = buildGraph();
-    $g['teacher']->update(['is_admin' => true]);
+    $g['teacher']->update(['directs_studies' => true]);
     $first = closeGraphTerm($g);
     $firstComment = $first->comments()->sole();
     $g['assessment']->unlock($g['teacher']);
     finalizeGraph($g);
 
-    closeTermRequest($this, $g, $g['teacher'])->assertCreated();
+    closeTermRequest($this, $g, asDirector($g['teacher']))->assertCreated();
 
     $second = TermClosure::query()->sole();
     expect($second->id)->not->toBe($first->id);
@@ -261,7 +269,7 @@ test('after an unlock, closing again writes a new closure and new comments besid
 
 test('unlocking an assessment of another term leaves a closed term alone', function () {
     $g = buildGraph();
-    $g['teacher']->update(['is_admin' => true]);
+    $g['teacher']->update(['directs_studies' => true]);
     $closure = closeGraphTerm($g);
     $later = Assessment::create([
         'institution_id' => $g['institution']->id, 'class_id' => $g['class']->id, 'subject_id' => $g['subject']->id,

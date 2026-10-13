@@ -19,7 +19,7 @@ command's rules are in `docs/spec/workflow.md`, Comments. A notification's
 other synchronisable table in `docs/spec/data-model.md` (#34), classes,
 `class_subjects`, subjects, criteria, students, `enrolments`,
 `teacher_assignments`, `subject_moderations`, users, results,
-`term_closures`, reports, is pull-only: a device reads it and never proposes a change.
+`terms`, `term_closures`, reports, is pull-only: a device reads it and never proposes a change.
 `institutions`, `unlock_notes`, and `comment_generations` aren't synchronisable at all (#34's
 Conventions) and never appear on either verb.
 
@@ -548,7 +548,8 @@ exactly one of these in `fields`:
 { "regenerate": { "byId": "<me>" } }
 ```
 
-`byId` must be the token's user. An edit's `body` is trimmed and must be non-blank, at most 600 characters,
+`byId` must be the token's user, and that user must be the class teacher of the comment's stream (through its
+term close) or a Director of Studies; anyone else is `forbidden`, before any version rule. An edit's `body` is trimmed and must be non-blank, at most 600 characters,
 with no NUL; 600 characters is what fits the report card.
 
 | | pending | draft | failed | accepted |
@@ -557,11 +558,13 @@ with no NUL; 600 characters is what fits the report card.
 | accept | invalid | allowed | invalid | invalid |
 | regenerate | allowed | allowed | allowed | invalid |
 
-**Who.** Any authenticated user of the institution, as grading is unrestricted; another school's comment is
-never found, so it is `forbidden` at a nonzero base. A comment is created only by the term close: an unknown
-id at base 0 is `invalid`.
+**Who.** The class teacher of the comment's stream, read through its term close as it stands when the command
+arrives, or a Director of Studies (ADR 0014, decision 6); any other teacher is `forbidden`. Another school's
+comment is never found, so it is `forbidden` at a nonzero base. A comment is created only by the term close: an
+unknown id at base 0 is `invalid`.
 
-**Order.** After rule 1: the comment is found and locked; the command's shape and `byId`; a base ahead of the
+**Order.** After rule 1: the comment is found and locked; who may act (`forbidden` otherwise, before any version
+rule, so a refused command never sits as a conflict); the command's shape and `byId`; a base ahead of the
 comment's version is `invalid`; a base behind it is `conflict` with the comment as `current`, so an acceptance
 never goes through over a body the acceptor did not see; and only at an equal version the state checks
 (`invalid`, including a comment withdrawn by an unlock) and the write.
@@ -818,6 +821,18 @@ resolves only among the caller's own, so another user's behaves like an unknown
 id. Updating an assessment is scoped like finalizing it (its creator or an
 assigned teacher), not open to every authenticated user.
 
+An assessment's term is the calendar's, not the device's (ADR 0014, decision 4).
+A create must name the term open when it arrives, and its `date` must fall in
+that term's year; otherwise it is `invalid`, with a reason naming the term the
+school is in, or saying that none is open. The server checks the term rather than
+filling it in: a device offline when the next term opened would otherwise have its
+assessment moved into a term it never chose, so it is refused loudly instead, and
+the marks queued against it are refused with it, since their assessment never
+resolves. After creation `term` and `year` never change: an update that sends a
+different value for either is `invalid`, and a `date` it sends must stay in the
+year. The check runs behind the institution's advisory lock, which opening a term
+also takes, so the two cannot interleave.
+
 **Proposed: a two-part rule for who a mutation's fields can claim to be.**
 A user id can legitimately appear in a payload: `workflow.md`'s finalize
 mutation sends `finalizedBy`, and a conflict's `proposals[]` entries carry
@@ -860,7 +875,7 @@ no field named `resolvedAt` at all: its device claim is the entry's `at`,
 so the `resolvedAt` a device pulls is only ever the server's.
 
 Push authorization mirrors #36 exactly: marks and assessment creation are
-unrestricted for any authenticated user; updating, finalizing, or unlocking
+unrestricted for any teacher account (creation into the open term only, above); updating, finalizing, or unlocking
 an existing assessment is scoped to its creator or a teacher assigned to
 that class and subject (`teacher_assignments`), checked as part of rule 6
 above, `forbidden` otherwise. Conflict actions are scoped by the policy

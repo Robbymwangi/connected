@@ -59,9 +59,9 @@ entirely: it needs a cross-assessment check and has server-side effects, and it
 happens once a term, so the offline-first cost of requiring a connection is
 negligible. It is accepted only when:
 
-- The acting user is a teacher assigned to any subject of the stream
-  (`teacher_assignments`), or an admin. Otherwise `forbidden`. Being the class
-  teacher is not a capability (`docs/spec/access-model.md`).
+- The acting user is a Director of Studies (ADR 0014, decision 5). Otherwise
+  `forbidden`: neither an assignment to the stream nor being its class teacher
+  grants it, and an admin account never closes a term (`docs/spec/access-model.md`).
 - The stream has at least one assessment in that year and term, and every one is
   `finalized`. Otherwise `invalid`, naming the assessments still open. A card built
   on a term with an unlocked assessment would show figures that can still move.
@@ -87,7 +87,7 @@ While a term is closed, creating an assessment for that stream, year, and term i
 `invalid`: its marks would not be on the cards already issued. So is an edit that
 would move an assessment into a closed term or out of one; a rename is not refused,
 since the name is not on the card. The way back is an
-admin's unlock of any assessment of that term, which unwinds the close (Unlock,
+unlock of any assessment of that term, by a Director of Studies or the subject's HOD, which unwinds the close (Unlock,
 below), after which the term is closed again once the new assessment is finalized.
 
 ## Comments
@@ -113,9 +113,12 @@ drafts are templated from the same figures and labelled as stand-ins, as the
 assistant's are: the body starts with `[Stand-in]`, so the label travels with the
 text wherever it appears.
 
-Any authenticated user may edit, accept, or regenerate a comment that is not yet
-accepted, not only a particular teacher, consistent with grading itself being
-unrestricted. These are commands, not field patches, so that a stale `accepted`
+The stream's class teacher, or a Director of Studies, may edit, accept, or
+regenerate a comment that is not yet accepted (ADR 0014, decision 6): on a Kenyan
+report form the remark is the class teacher's. Any other teacher reads them and is
+refused with `forbidden`. The Director of Studies covers a class with no class
+teacher and one whose class teacher is away; the server checks the grant, never
+an absence. These are commands, not field patches, so that a stale `accepted`
 can never merge over a body the acceptor did not see. Editing keeps and changes the
 text and supersedes any generation in flight; it is allowed on a `failed` comment
 too. Regenerating discards the text and requests a new one. Accepting moves the
@@ -183,7 +186,8 @@ term's card is a new row, never an edit of an earlier one.
 
 ## Unlock
 
-An ADMIN action (#36), always online, outside the mutation path entirely
+An action of a Director of Studies or of the HOD of the assessment's subject
+(ADR 0014, decision 3), taken in the app, always online, outside the mutation path entirely
 (#35): it writes an `unlock_notes` row and the assessment's status directly,
 never through the outbox. A note is required only once a report exists for
 at least one student of the assessment's stream in its term; unlocking a

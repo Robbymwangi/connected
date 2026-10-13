@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { LocalRecord } from './localDatabase'
 import type { OutboxEntry } from './outbox'
-import { actionsFor, closable, commentView, mayCloseTerm, termViews } from './termComments'
+import { actionsFor, closable, commentView, mayCloseTerm, mayUnlock, mayWriteRemarks, termViews } from './termComments'
+import { DIRECTOR_OF_STUDIES } from './session'
 
 const AT = '2026-10-12T08:00:00.000Z'
 const comment = (over: Partial<LocalRecord> = {}): LocalRecord => ({
@@ -47,13 +48,25 @@ describe('commentView', () => {
   })
 })
 
-describe('mayCloseTerm', () => {
-  const assignments: LocalRecord[] = [{ id: 'ta1', version: 1, userId: 'u1', classId: 'c1' }, { id: 'ta2', version: 1, userId: 'u2', classId: 'c1', deletedAt: AT }]
+describe('mayCloseTerm and mayUnlock', () => {
+  it('lets only a Director of Studies close a term, however the teacher is assigned', () => {
+    expect(mayCloseTerm({ role: DIRECTOR_OF_STUDIES })).toBe(true)
+    expect(mayCloseTerm({ role: 'Teacher' })).toBe(false)
+  })
 
-  it('lets an administrator or a teacher assigned to the stream close it, and nobody else', () => {
-    expect(mayCloseTerm({ id: 'u9', role: 'Administrator' }, 'c1', [])).toBe(true)
-    expect(mayCloseTerm({ id: 'u1', role: 'Teacher' }, 'c1', assignments)).toBe(true)
-    expect(mayCloseTerm({ id: 'u2', role: 'Teacher' }, 'c1', assignments)).toBe(false)
-    expect(mayCloseTerm({ id: 'u1', role: 'Teacher' }, 'c2', assignments)).toBe(false)
+  it('lets a Director of Studies unlock any subject, and an HOD only the subjects they moderate', () => {
+    expect(mayUnlock({ role: DIRECTOR_OF_STUDIES, moderatedSubjectIds: [] }, 'maths')).toBe(true)
+    expect(mayUnlock({ role: 'Teacher', moderatedSubjectIds: ['maths'] }, 'maths')).toBe(true)
+    expect(mayUnlock({ role: 'Teacher', moderatedSubjectIds: ['maths'] }, 'science')).toBe(false)
+    expect(mayUnlock({ role: 'Teacher', moderatedSubjectIds: [] }, undefined)).toBe(false)
+  })
+})
+
+describe('mayWriteRemarks', () => {
+  it('lets the stream\'s class teacher or a Director of Studies act on its remarks, and nobody else', () => {
+    expect(mayWriteRemarks({ id: 'u1', role: 'Teacher' }, 'u1')).toBe(true)
+    expect(mayWriteRemarks({ id: 'u9', role: DIRECTOR_OF_STUDIES }, null)).toBe(true)
+    expect(mayWriteRemarks({ id: 'u2', role: 'Teacher' }, 'u1')).toBe(false)
+    expect(mayWriteRemarks({ id: 'u2', role: 'Teacher' }, null)).toBe(false)
   })
 })

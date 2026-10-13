@@ -1,4 +1,4 @@
-import { TriangleAlert, Undo2, UserX } from 'lucide-react'
+import { CloudOff, TriangleAlert, Undo2, UserX } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { BackNav } from '../../../components/BackNav'
 import { LevelBadge } from '../../../components/LevelBadge'
@@ -10,12 +10,16 @@ import { reportRequest } from '../../../lib/conflictCommands'
 import { describeFinalizeBlock } from '../../../lib/conflicts'
 import type { Grid } from '../../../fixtures/marks'
 import { initials } from '../../../fixtures/students'
+import { unlockAssessment } from '../../../api/assessments'
+import { useCurrentUser } from '../../../app/AuthContext'
 import type { SchoolDirectoryState } from '../../../app/useSchoolDirectory'
 import { useConnectivity } from '../../../lib/connectivity'
+import { mayUnlock } from '../../../lib/termComments'
 import { ABSENT, EMPTY, performanceLevel, rowTotal, type Mark } from '../../../lib/grading'
 import { STATUS_META } from '../statusMeta'
 import { ConflictDialog } from './ConflictDialog'
 import { FinalizeDialog } from './FinalizeDialog'
+import { UnlockDialog } from './UnlockDialog'
 import { MarkCell, type GridMove } from './MarkCell'
 
 type Focus = { studentId: string; criterionId: string }
@@ -33,6 +37,8 @@ type MarkingGridProps = {
   onAcceptProposal: (id: string) => Promise<boolean>
   onReferConflict: (id: string) => Promise<boolean>
   onFinalize: (assessmentId: string) => Promise<void>
+  /* For the online unlock, which goes to the API directly rather than through the outbox. */
+  token: string
   onBack: () => void
 }
 
@@ -47,19 +53,25 @@ export function MarkingGrid({
   onAcceptProposal,
   onReferConflict,
   onFinalize,
+  token,
   onBack,
 }: MarkingGridProps) {
+  const user = useCurrentUser()
   const school = directory.status === 'ready' ? directory.data : null
   const rubric = school?.criteriaBySubject[assessment.subject] ?? []
   const maxTotal = rubric.reduce((sum, c) => sum + c.max, 0)
   const cls = school?.classesForYear(assessment.year).find((item) => item.stream === assessment.stream)
   const roster = cls ? school?.studentsForYear(assessment.year).filter((student) => student.classId === cls.id) ?? [] : []
   const finalized = assessment.status === 'finalized'
+  const subjectId = Object.entries(school?.subjectNameById ?? {}).find(([, name]) => name === assessment.subject)?.[0]
+  const canUnlock = finalized && mayUnlock(user, subjectId)
 
   const [editing, setEditing] = useState(false)
   const [focus, setFocus] = useState<Focus | null>(null)
   const [openConflictId, setOpenConflictId] = useState<string | null>(null)
   const [finalizeOpen, setFinalizeOpen] = useState(false)
+  const [unlockOpen, setUnlockOpen] = useState(false)
+  const [unlocked, setUnlocked] = useState(false)
   const [toast, setToast] = useState<ToastKind | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -71,7 +83,7 @@ export function MarkingGrid({
 
   /* Connectivity changes while marking. Offline stays up until the link returns;
      the others clear themselves. */
-  useConnectivity({
+  const { isOnline } = useConnectivity({
     onChange: (online) => (online ? showToast('syncing', 4000) : showToast('offline', null)),
   })
   useEffect(() => () => {
@@ -133,6 +145,14 @@ export function MarkingGrid({
      while one is, so the control says so instead of letting it look finalized and revert. */
   const finalizeBlock = describeFinalizeBlock(conflicts.filter((conflict) => conflict.assessmentId === assessment.id).length)
 
+  /* The server unlocks it; the reopened assessment reaches this device with the next pull, as a
+     term close's comments do, so the grid stays as it is until then and says so. */
+  const unlock = async (note: string) => {
+    await unlockAssessment(assessment.id, note, token)
+    setUnlockOpen(false)
+    setUnlocked(true)
+  }
+
   const finalize = async () => {
     await onFinalize(assessment.id)
     setEditing(false)
@@ -188,8 +208,29 @@ export function MarkingGrid({
               Finalize
             </button>
           )}
+          {canUnlock && !unlocked && (
+            isOnline ? (
+              <button
+                type="button"
+                onClick={() => setUnlockOpen(true)}
+                className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-1.5 text-xs font-semibold text-warning transition-colors hover:bg-warning/20"
+              >
+                Unlock
+              </button>
+            ) : (
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <CloudOff className="size-3.5" aria-hidden="true" /> Unlocking needs a connection
+              </span>
+            )
+          )}
         </div>
       </div>
+
+      {unlocked && (
+        <p className="mb-3 rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-foreground" role="status">
+          Unlocked. It reopens for marking on this device after the next sync.
+        </p>
+      )}
 
       {finalizeBlock && !finalized && (
         <p id="finalize-blocked" className="mb-3 flex items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
@@ -307,6 +348,7 @@ export function MarkingGrid({
         onClose={() => setOpenConflictId(null)}
       />
       <FinalizeDialog open={finalizeOpen} onClose={() => setFinalizeOpen(false)} onConfirm={finalize} />
+      <UnlockDialog open={unlockOpen} onClose={() => setUnlockOpen(false)} onConfirm={unlock} />
       {toast && <Toast kind={toast} />}
     </div>
   )

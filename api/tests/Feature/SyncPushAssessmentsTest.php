@@ -138,20 +138,20 @@ test('a base ahead of the server on an update is invalid', function () {
     expect($result)->toBe(['id' => $entry['id'], 'status' => 'invalid', 'reason' => 'baseVersion is ahead of the server']);
 });
 
-test('class, subject, and year cannot change once marks exist', function (string $field) {
+test('class and subject cannot change once marks exist', function (string $field) {
     $g = buildGraph('School A', '-asm-immutable-'.$field);
     $otherSubject = Subject::create(['institution_id' => $g['institution']->id, 'name' => 'Science']);
     ClassSubject::create(['institution_id' => $g['institution']->id, 'class_id' => $g['class']->id, 'subject_id' => $otherSubject->id]);
     $otherClass = SchoolClass::create(['institution_id' => $g['institution']->id, 'grade' => '5', 'stream' => 'East', 'class_teacher_id' => $g['teacher']->id]);
     ClassSubject::create(['institution_id' => $g['institution']->id, 'class_id' => $otherClass->id, 'subject_id' => $g['subject']->id]);
-    $change = ['classId' => ['classId' => $otherClass->id], 'subjectId' => ['subjectId' => $otherSubject->id], 'year' => ['year' => 2027]][$field];
+    $change = ['classId' => ['classId' => $otherClass->id], 'subjectId' => ['subjectId' => $otherSubject->id]][$field];
     $entry = assessmentUpdate($g, $change);
 
     $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
 
-    expect($result)->toBe(['id' => $entry['id'], 'status' => 'invalid', 'reason' => 'The class, subject, and year cannot change after marks exist.']);
+    expect($result)->toBe(['id' => $entry['id'], 'status' => 'invalid', 'reason' => 'The class and subject cannot change after marks exist.']);
     expect(DB::table('assessments')->where('id', $g['assessment']->id)->value('version'))->toBe(1);
-})->with(['classId', 'subjectId', 'year']);
+})->with(['classId', 'subjectId']);
 
 test('before marks exist the class and subject may change, but only to a pair the class offers', function () {
     $g = buildGraph('School A', '-asm-before-marks');

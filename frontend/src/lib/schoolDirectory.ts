@@ -14,7 +14,12 @@ export type SchoolDirectorySource = {
   teacherAssignments: LocalRecord[]
   users: LocalRecord[]
   assessments: LocalRecord[]
+  terms: LocalRecord[]
 }
+
+/* The term the school is in, as the calendar this device last pulled says (ADR 0014). A new
+   assessment takes it; the device never chooses one. */
+export type OpenTerm = { year: number; term: number }
 
 export type SchoolDirectory = {
   years: number[]
@@ -24,7 +29,20 @@ export type SchoolDirectory = {
   teachers: Teacher[]
   classesForYear: (year: number) => SchoolClass[]
   studentsForYear: (year: number) => Student[]
+  openTerm: OpenTerm | null
 }
+
+/* The live term with no end. The server allows one at most; if a device ever held two, the later
+   one in the calendar is the one a newer pull would have left. */
+export function openTermOf(terms: LocalRecord[]): OpenTerm | null {
+  const open = active(terms)
+    .filter((record) => record.endedAt == null && Number.isInteger(record.year) && Number.isInteger(record.term))
+    .map((record) => ({ year: record.year as number, term: record.term as number }))
+    .sort((a, b) => b.year - a.year || b.term - a.term)
+  return open[0] ?? null
+}
+
+export const termLabel = (term: OpenTerm) => `Term ${term.term}, ${term.year}`
 
 const active = (records: LocalRecord[]) => records.filter((record) => record.deletedAt == null)
 
@@ -126,6 +144,7 @@ export function mapSchoolDirectory(source: SchoolDirectorySource): SchoolDirecto
       grade: stringField(cls, 'grade'),
       stream: stringField(cls, 'stream'),
       teacher: teacherId ? stringField(userById.get(teacherId) ?? ({} as LocalRecord), 'name') : 'Unassigned',
+      teacherId: teacherId || null,
       enrolment: enrolments.filter((record) => record.classId === classId && record.year === year).length,
       subjects: [...(subjectsByClass.get(classId) ?? [])].sort(),
       assessments: assessments.filter((record) => record.classId === classId && record.year === year).length,
@@ -161,5 +180,6 @@ export function mapSchoolDirectory(source: SchoolDirectorySource): SchoolDirecto
     teachers,
     classesForYear,
     studentsForYear,
+    openTerm: openTermOf(source.terms),
   }
 }

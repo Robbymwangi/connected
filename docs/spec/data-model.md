@@ -54,10 +54,13 @@ something #36 requires.
 - **`institutions`**: `id` (UUIDv7), `name`. The tenant boundary itself; not
   scoped by `institution_id` and not synchronisable, since a device belongs to
   exactly one and never needs another's row.
-- **`users`**: `id`, `institution_id`, `name`, `email`, credentials, `is_admin`
-  (boolean), `deactivated_at` (nullable). Always server- or admin-created,
-  never offline; `is_admin` and the moderation grants below are the only
-  capabilities, per #36's "layered, not exclusive" decision. Deactivation is
+- **`users`**: `id`, `institution_id`, `name`, `email`, credentials, `kind`
+  (`teacher` or `admin`, exclusive, ADR 0014), `directs_studies` (boolean,
+  teachers only, enforced by a check constraint), `deactivated_at` (nullable).
+  Email is unique per kind, `unique(kind, email)`, so one person's teacher and
+  admin accounts may share an address. Always server- or admin-created, never
+  offline; within a teacher account, `directs_studies` and the moderation grants
+  below are the only capabilities, layered rather than exclusive. Deactivation is
   deliberately not `deleted_at`: a deactivated account still has to resolve to
   a name wherever it's referenced (a mark's `last_edited_by`, a conflict side,
   a resolution), so it stays synced and visible; it just can't authenticate or
@@ -164,6 +167,16 @@ something #36 requires.
   under the one rule in `docs/spec/workflow.md`, through the ordinary `Syncable`
   save: it bumps `version` and logs a `sync_changes` entry, which is how a device
   sees `pending` become `draft` or `failed`.
+- **`terms`**: `id`, `institution_id`, `year`, `term` (1 to 3), `opened_at`,
+  `opened_by`, `ended_at`, `ended_by`, all four nullable. The term calendar an
+  admin keeps (ADR 0014, decision 4): a row is opened when the school has
+  opened, and ended when the next term opens or the school closes for the
+  holidays. No planned dates. At most one open term per institution, and one
+  live row per `(institution_id, year, term)`, both through partial unique
+  indexes; a term opened by mistake is withdrawn by a soft delete. Terms that
+  existed before the calendar, backfilled from the assessments that name them,
+  have no `opened_at`. Synchronisable and pull-only. The rules are in the
+  `Term` model.
 - **`term_closures`**: `id`, `institution_id`, `class_id`, `year`, `term`,
   `closed_by`, `closed_at`. One live row per stream per term, written by the term
   close (`docs/spec/workflow.md`), soft deleted by an unlock. Synchronisable and
@@ -263,14 +276,13 @@ for a given year, not an ongoing fact about the student.
    Rejected: a random id per creation, which turns two devices creating the
    same cell offline into two permanent rows instead of one detectable
    conflict.
-3. **Term is a value (`term` smallint 1 to 3, plus `year`), not a table, for
-   now.** Nothing in the domain today needs a term's own start or end date,
-   and a table would make term rows synchronisable reference data that has
-   to exist on a device before an assessment for that term can be created
-   offline. Promoting to a table later is accepted in advance, not merely
-   possible: the day a real need for term dates shows up, moving to a table
-   is additive and doesn't need a fresh decision to justify it, only the
-   migration itself.
+3. **Term is a value (`term` smallint 1 to 3, plus `year`) on every row that
+   names one, and the calendar is its own table.** Promoted by ADR 0014, as
+   this decision accepted in advance: an admin opens and ends terms in the
+   `terms` table, which records what happened rather than planned dates.
+   Assessments, comments, reports, and closures still carry `year` and `term`
+   as values rather than a key into `terms`, so nothing written before the
+   calendar existed has to be rewritten.
 4. **Grade is a column on `classes`**, not derived from the stream name.
    Rejected: deriving it in `lib/reportScopes.ts` as today, which works only
    because every stream name happens to encode its grade as a convention, not
@@ -303,9 +315,6 @@ for a given year, not an ongoing fact about the student.
   per-subject grants; nothing groups subjects into departments, and nothing
   should derive one person's moderation from another subject's membership in
   some larger unit.
-- **A term-calendar table.** Not built now; decision 3 above already accepts
-  it as the future path once a real need for term dates exists, so adding it
-  later is an addition to this file, not a reopening of it.
 - **Mid-year class transfers.** `enrolments` assumes one class per student per
   year; a transfer mid-year isn't modelled and would need its own decision.
 - **Predicted marks and causal classification.** Out of scope per

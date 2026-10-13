@@ -1,6 +1,7 @@
 import { canApply, overlayCommentRow, type CommentCommand, type CommentState } from './commentCommands'
 import type { LocalRecord } from './localDatabase'
 import type { OutboxEntry } from './outbox'
+import { DIRECTOR_OF_STUDIES } from './session'
 
 /* What the device knows about a stream's terms for comments and report cards: whether each
    term is closed, whether it can be closed, and each student's comment as this device shows
@@ -91,18 +92,30 @@ export function termViews(input: {
   })
 }
 
-/* Whether the server would let this user close the stream's term (TermClosurePolicy): an
-   administrator, or a teacher assigned to any subject of the stream. Being its class teacher
-   grants nothing on its own. The server checks again; this only decides whether to offer it. */
-export function mayCloseTerm(user: { id: string; role: string }, classId: string, assignments: readonly LocalRecord[]): boolean {
-  if (user.role === 'Administrator') return true
-  return assignments.some((row) => live(row) && row.userId === user.id && row.classId === classId)
+/* Whether the server would let this user close a term (TermClosurePolicy): a Director of Studies
+   only (ADR 0014, decision 5). Neither teaching the stream nor being its class teacher grants it.
+   The server checks again; this only decides whether to offer it. */
+export function mayCloseTerm(user: { role: string }): boolean {
+  return user.role === DIRECTOR_OF_STUDIES
+}
+
+/* Whether the server would let this user unlock a finalized assessment of this subject
+   (AssessmentPolicy::unlock, ADR 0014, decision 3): a Director of Studies, or the HOD of the
+   subject, that is a teacher who moderates it. */
+export function mayUnlock(user: { role: string; moderatedSubjectIds: readonly string[] }, subjectId: string | undefined): boolean {
+  return user.role === DIRECTOR_OF_STUDIES || (subjectId !== undefined && user.moderatedSubjectIds.includes(subjectId))
 }
 
 /* A term can be closed once it has assessments and every one is finalized; the server
    decides, this decides whether the button is live. */
 export function closable(view: TermView): boolean {
   return view.closureId === null && view.assessments > 0 && view.finalized === view.assessments
+}
+
+/* Whether the server would take a comment command from this user (CommentPushHandler::authorize, ADR 0014,
+   decision 6): the stream's class teacher, or a Director of Studies. Everyone else reads. */
+export function mayWriteRemarks(user: { id: string; role: string }, classTeacherId: string | null | undefined): boolean {
+  return user.role === DIRECTOR_OF_STUDIES || (classTeacherId != null && classTeacherId === user.id)
 }
 
 export function actionsFor(comment: CommentView): Array<CommentCommand['kind']> {

@@ -25,10 +25,11 @@ export function useSchoolDirectory(userId: string): SchoolDirectoryState {
           database.students,
           database.subjects,
           database.teacher_assignments,
+          database.terms,
           database.users,
         ],
         async () => {
-          const [assessments, classes, classSubjects, criteria, enrolments, students, subjects, teacherAssignments, users] =
+          const [assessments, classes, classSubjects, criteria, enrolments, students, subjects, teacherAssignments, terms, users] =
             await Promise.all([
               database.assessments.toArray(),
               database.classes.toArray(),
@@ -38,6 +39,7 @@ export function useSchoolDirectory(userId: string): SchoolDirectoryState {
               database.students.toArray(),
               database.subjects.toArray(),
               database.teacher_assignments.toArray(),
+              database.terms.toArray(),
               database.users.toArray(),
             ])
 
@@ -50,6 +52,7 @@ export function useSchoolDirectory(userId: string): SchoolDirectoryState {
             students,
             subjects,
             teacherAssignments,
+            terms,
             users,
           })
         },

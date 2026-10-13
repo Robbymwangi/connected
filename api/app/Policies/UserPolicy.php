@@ -7,18 +7,18 @@ use App\Models\User;
 class UserPolicy
 {
     /**
-     * Allow only administrators to create teacher accounts.
+     * Allow only admin accounts, in the panel (ADR 0014), to create teacher accounts.
      */
     public function create(User $user): bool
     {
-        return (bool) $user->is_admin;
+        return $user->isAdmin();
     }
 
     /**
-     * Allow only administrators to update teacher accounts.
+     * Allow only admin accounts, in the panel (ADR 0014), to update teacher accounts.
      */
     public function update(User $user, User $teacher): bool
     {
-        return (bool) $user->is_admin;
+        return $user->isAdmin();
     }
 }

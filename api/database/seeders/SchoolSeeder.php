@@ -14,6 +14,7 @@ use App\Models\Student;
 use App\Models\Subject;
 use App\Models\SubjectModeration;
 use App\Models\TeacherAssignment;
+use App\Models\Term;
 use App\Models\User;
 use App\Support\PerformanceLevel;
 use Database\Seeders\Support\SeededRandom;
@@ -68,13 +69,14 @@ class SchoolSeeder extends Seeder
         DB::transaction(function () {
             $institution = Institution::create(['name' => 'Green Valley Primary School']);
 
-            [$admin, $classTeachers] = $this->seedStaff($institution);
+            [$admin, $directorOfStudies, $classTeachers] = $this->seedStaff($institution);
+            $this->seedTerms($institution, $admin);
             $subjects = $this->seedSubjectsAndCriteria($institution);
             $classes = $this->seedClasses($institution, $classTeachers);
 
             $this->seedClassSubjects($institution, $classes, $subjects);
             $this->seedTeacherAssignments($institution, $classes, $subjects, $classTeachers);
-            $this->seedSubjectModerations($institution, $admin, $subjects);
+            $this->seedSubjectModerations($institution, $directorOfStudies, $subjects);
 
             $studentsByClass = $this->seedStudentsAndEnrolments($institution, $classes);
 
@@ -86,8 +88,11 @@ class SchoolSeeder extends Seeder
         });
     }
 
+    /* Two kinds of account (ADR 0014): the back office signs in to the panel as an admin, and
+       teaches nothing; the Director of Studies is a teacher with the grant, who signs in to the app. */
+
     /**
-     * @return array{0: User, 1: array<string, User>}
+     * @return array{0: User, 1: User, 2: array<string, User>}
      */
     private function seedStaff(Institution $institution): array
     {
@@ -96,7 +101,15 @@ class SchoolSeeder extends Seeder
             'name' => 'Grace Wanjiru',
             'email' => 'admin@greenvalley.test',
             'password' => 'password',
-            'is_admin' => true,
+            'kind' => User::ADMIN,
+        ]);
+
+        $directorOfStudies = User::create([
+            'institution_id' => $institution->id,
+            'name' => 'Ruth Njeri',
+            'email' => 'dos@greenvalley.test',
+            'password' => 'password',
+            'directs_studies' => true,
         ]);
 
         $classTeachers = [
@@ -106,7 +119,32 @@ class SchoolSeeder extends Seeder
             '5B' => User::create(['institution_id' => $institution->id, 'name' => 'Esther Chebet', 'email' => 'e.chebet@greenvalley.test', 'password' => 'password']),
         ];
 
-        return [$admin, $classTeachers];
+        return [$admin, $directorOfStudies, $classTeachers];
+    }
+
+    /* The term calendar as the back office kept it (ADR 0014, decision 4): Terms 1 and 2 opened and
+       ended, Term 3 open now. The dates are chosen to contain this seeder's own sittings, not taken
+       from the Ministry's circular; a school opens and closes days either side of that anyway.
+       Written directly rather than through Term::open, which stamps the present moment. */
+    private function seedTerms(Institution $institution, User $admin): void
+    {
+        $calendar = [
+            [1, '2026-01-05 05:00:00', '2026-04-17 10:00:00'],
+            [2, '2026-05-04 05:00:00', '2026-08-21 10:00:00'],
+            [3, '2026-09-01 05:00:00', null],
+        ];
+
+        foreach ($calendar as [$term, $openedAt, $endedAt]) {
+            Term::create([
+                'institution_id' => $institution->id,
+                'year' => 2026,
+                'term' => $term,
+                'opened_at' => $openedAt,
+                'opened_by' => $admin->id,
+                'ended_at' => $endedAt,
+                'ended_by' => $endedAt === null ? null : $admin->id,
+            ]);
+        }
     }
 
     /**
@@ -212,12 +250,12 @@ class SchoolSeeder extends Seeder
     /**
      * @param  array<string, array{subject: Subject, criteria: array<int, Criterion>}>  $subjects
      */
-    private function seedSubjectModerations(Institution $institution, User $admin, array $subjects): void
+    private function seedSubjectModerations(Institution $institution, User $moderator, array $subjects): void
     {
         foreach (['Maths', 'Science'] as $name) {
             SubjectModeration::create([
                 'institution_id' => $institution->id,
-                'user_id' => $admin->id,
+                'user_id' => $moderator->id,
                 'subject_id' => $subjects[$name]['subject']->id,
             ]);
         }

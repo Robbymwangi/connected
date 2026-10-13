@@ -33,7 +33,7 @@ beforeEach(function () {
 function acceptedTermOne(array $g): TermClosure
 {
     $g['assessment']->finalize($g['teacher']);
-    $closure = TermClosure::close($g['teacher'], $g['class'], 2026, 1)['closure'];
+    $closure = TermClosure::close(asDirector($g['teacher']), $g['class'], 2026, 1)['closure'];
     $closure->comments()->get()->each(fn (Comment $comment) => $comment->update([
         'state' => 'accepted', 'body' => 'A confident term in Maths.', 'author_id' => $g['teacher']->id,
     ]));
@@ -68,7 +68,7 @@ function runReportJob(Comment $comment): void
 test('accepting a comment queues its student\'s report card, after commit', function () {
     $g = buildGraph();
     $g['assessment']->finalize($g['teacher']);
-    $comment = TermClosure::close($g['teacher'], $g['class'], 2026, 1)['closure']->comments()->sole();
+    $comment = TermClosure::close(asDirector($g['teacher']), $g['class'], 2026, 1)['closure']->comments()->sole();
     $comment->update(['state' => 'draft', 'body' => 'Generated text.']);
 
     pushEntries($this, tokenFor($g['teacher']), [pushEntry('comments', $comment->id, $comment->fresh()->version, ['accept' => ['byId' => $g['teacher']->id]])]);
@@ -99,7 +99,7 @@ test('the card carries levels for the closed terms of the year, earlier years, a
     finalizedSitting($g, $lastYear, 2025, 2, [$g['student']->id => 7]);
     $g['assessment']->finalize($g['teacher']);
     finalizedSitting($g, $g['class'], 2026, 2, [$g['student']->id => 5]);
-    $closure = TermClosure::close($g['teacher'], $g['class'], 2026, 2)['closure'];
+    $closure = TermClosure::close(asDirector($g['teacher']), $g['class'], 2026, 2)['closure'];
     $comment = $closure->comments()->sole();
     $comment->update(['state' => 'accepted', 'body' => 'Steady progress.']);
 

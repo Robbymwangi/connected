@@ -8,11 +8,11 @@ use App\Models\User;
 class AssessmentPolicy
 {
     /**
-     * Allow any authenticated user to create assessments; tenancy is enforced separately.
+     * Any teacher account may create assessments; an admin account never does (ADR 0014). Tenancy is enforced separately.
      */
     public function create(User $user): bool
     {
-        return true;
+        return $user->isTeacher();
     }
 
     /**
@@ -32,7 +32,8 @@ class AssessmentPolicy
 
     private function isAnswerableFor(User $user, Assessment $assessment): bool
     {
-        if ($user->institution_id !== $assessment->institution_id
+        if (! $user->isTeacher()
+            || $user->institution_id !== $assessment->institution_id
             || $user->deactivated_at !== null
             || $user->trashed()) {
             return false;
@@ -45,11 +46,18 @@ class AssessmentPolicy
                 ->exists();
     }
 
+    /* Unlocking is an academic decision, made in the app (ADR 0014, decision 3): by a Director of
+       Studies, for any assessment of the institution, or by the HOD of the assessment's subject,
+       that is a teacher who moderates it. Never by an admin account, and not by whoever ran the
+       sitting as such: the creator or an assigned teacher unlocks only if they also hold one of
+       the two. */
     public function unlock(User $user, Assessment $assessment): bool
     {
-        return $user->institution_id === $assessment->institution_id
-            && $user->is_admin
+        return $user->isTeacher()
+            && $user->institution_id === $assessment->institution_id
             && $user->deactivated_at === null
-            && ! $user->trashed();
+            && ! $user->trashed()
+            && ($user->directsStudies()
+                || $user->subjectModerations()->where('subject_id', $assessment->subject_id)->exists());
     }
 }

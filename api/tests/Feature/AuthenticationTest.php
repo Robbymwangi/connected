@@ -154,7 +154,7 @@ test('me returns the account, its admin flag, and the subjects it moderates, not
             'id' => $g['teacher']->id,
             'name' => $g['teacher']->name,
             'email' => 'teacher-me@example.com',
-            'is_admin' => false,
+            'directs_studies' => false,
             'moderated_subject_ids' => [$g['subject']->id],
         ]);
 });

@@ -118,6 +118,7 @@ test('Classes and assessment selectors read school reference data from the local
     { table: 'teacher_assignments', recordId: 'assignment-1', version: 1, fields: { userId: E2E_USER.id, classId: 'class-1', subjectId: 'subject-1' } },
     { table: 'students', recordId: 'student-1', version: 1, fields: { name: 'Amina Osei', gender: 'F', dob: '2016-01-19' } },
     { table: 'enrolments', recordId: 'enrolment-1', version: 1, fields: { studentId: 'student-1', classId: 'class-1', year: 2025 } },
+    ...E2E_SYNC_CHANGES.filter((change) => change.table === 'terms'),
   ]
 
   await signIn(page, changes)
@@ -241,7 +242,37 @@ test('a newly created assessment survives an offline reload in the local store',
     subjectId: 'subject-1',
     name: 'Offline CAT 3',
     status: 'scheduled',
+    term: 'Term 3',
+    year: 2025,
   })
+})
+
+test('a new assessment takes the open term, and its sitting date must fall in that term\'s year', async ({ page }) => {
+  await signIn(page)
+  await page.getByRole('button', { name: 'Open navigation' }).click()
+  await page.getByRole('button', { name: 'Assessments', exact: true }).click()
+  await page.getByRole('button', { name: 'New' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'New Assessment' })
+  await dialog.getByRole('button', { name: /English/ }).click()
+  await dialog.getByRole('button', { name: 'Continue' }).click()
+  await expect(dialog.getByTestId('open-term')).toContainText('Term 3, 2025')
+  await expect(dialog.getByLabel('Term')).toHaveCount(0)
+  await dialog.getByLabel('Assessment name').fill('CAT 3')
+  await dialog.getByLabel('Assessment date').fill('2026-01-12')
+  await expect(dialog.getByRole('alert')).toHaveText('The sitting date must be in 2025, the year of Term 3, 2025.')
+  await expect(dialog.getByRole('button', { name: 'Continue' })).toBeDisabled()
+  await dialog.getByLabel('Assessment date').fill('2025-10-12')
+  await expect(dialog.getByRole('button', { name: 'Continue' })).toBeEnabled()
+})
+
+test('with no term open, no assessment can be created, and the screen says why', async ({ page }) => {
+  await signIn(page, E2E_SYNC_CHANGES.filter((change) => change.table !== 'terms'))
+  await page.getByRole('button', { name: 'Open navigation' }).click()
+  await page.getByRole('button', { name: 'Assessments', exact: true }).click()
+
+  await expect(page.getByTestId('no-term-open')).toHaveText('No term is open, so no assessment can be created. The school office opens each term.')
+  await expect(page.getByRole('button', { name: 'New' })).toBeDisabled()
 })
 
 test('conflict correction uses the synced criterion maximum', async ({ page }) => {

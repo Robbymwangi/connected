@@ -47,9 +47,9 @@ test('an assigned teacher finalizes an assessment they did not create', function
     expect(DB::table('assessments')->where('id', $g['assessment']->id)->first())->toMatchArray(['created_by' => $g['teacher']->id, 'finalized_by' => $assigned->id]);
 });
 
-test('a teacher who neither created nor teaches it is forbidden, admin or not, at the current base and at a stale one', function (bool $admin) {
+test('a teacher who neither created nor teaches it is forbidden, Director of Studies or not, at the current base and at a stale one', function (bool $directsStudies) {
     $g = buildGraph('School A', '-fin-bystander');
-    $bystander = makeColleague($g, 'bystander-fin@example.com', admin: $admin);
+    $bystander = makeColleague($g, 'bystander-fin@example.com', directsStudies: $directsStudies);
     $current = finalizeEntry($g, $bystander, base: 1);
     $stale = finalizeEntry($g, $bystander, base: 0);
 
@@ -57,7 +57,7 @@ test('a teacher who neither created nor teaches it is forbidden, admin or not, a
 
     expect(array_column($results, 'status'))->toBe(['forbidden', 'forbidden']);
     expect(DB::table('assessments')->where('id', $g['assessment']->id)->value('status'))->toBe('scheduled');
-})->with(['a teacher' => false, 'an admin' => true]);
+})->with(['a teacher' => false, 'a Director of Studies' => true]);
 
 test('finalizedBy naming another user, or missing, is invalid', function () {
     $g = buildGraph('School A', '-fin-by');
@@ -83,13 +83,13 @@ test('a finalizedBy that is not a string is invalid, never compared loosely', fu
     expect(DB::table('assessments')->where('id', $g['assessment']->id)->value('status'))->toBe('scheduled');
 })->with(['an integer' => [5], 'an array' => [['x']], 'a boolean' => [true], 'null' => [null]]);
 
-test('a status other than finalized is invalid, since unlocking is an administrator action', function (mixed $status) {
+test('a status other than finalized is invalid, since unlocking is an online action, never a sync entry', function (mixed $status) {
     $g = buildGraph('School A', '-fin-status');
     $entry = finalizeEntry($g, $g['teacher'], extra: ['status' => $status]);
 
     $result = postedResults(pushEntries($this, tokenFor($g['teacher']), [$entry]))[0];
 
-    expect($result)->toBe(['id' => $entry['id'], 'status' => 'invalid', 'reason' => 'status changes only by finalize; unlocking is an administrator action']);
+    expect($result)->toBe(['id' => $entry['id'], 'status' => 'invalid', 'reason' => 'status changes only by finalize; unlocking is an online action, never a sync entry']);
 })->with(['scheduled' => ['scheduled'], 'reports-generated' => ['reports-generated'], 'junk' => ['x'], 'null' => [null]]);
 
 test('finalize is sent on its own: mixed with a field, or missing a half, it is invalid', function (array $shape) {
@@ -185,9 +185,9 @@ test('finalize at the current version of an already finalized or reports-generat
     expect(DB::table('assessments')->where('id', $g['assessment']->id)->value('status'))->toBe($status);
 })->with(['finalized', 'reports-generated']);
 
-test('a finalize queued before an administrator unlocked it is a conflict carrying the current row, and writes nothing', function () {
+test('a finalize queued before it was unlocked it is a conflict carrying the current row, and writes nothing', function () {
     $g = buildGraph('School A', '-fin-unlocked');
-    $g['teacher']->update(['is_admin' => true]);
+    $g['teacher']->update(['directs_studies' => true]);
     $g['assessment']->finalize($g['teacher']);
     $g['assessment']->unlock($g['teacher']);
     $entry = finalizeEntry($g, $g['teacher'], base: 1);

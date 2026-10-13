@@ -1,2 +1,2 @@
-4
-comments and reports reshaped per student per term, term_closures and comment_generations added (ADR 0012, #58); a non-additive migration
+6
+terms table added with a backfill from existing assessments, and the seeded school given a term calendar with Term 3, 2026 open (ADR 0014); new seed data

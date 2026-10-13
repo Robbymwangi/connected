@@ -8,18 +8,16 @@ use App\Models\User;
 class TermClosurePolicy
 {
     /**
-     * Closing a stream's term is for a teacher assigned to any subject of that stream, or an admin.
-     * Being its class teacher grants nothing (docs/spec/access-model.md, Class teacher).
+     * Closing a stream's term starts its report cards, which is the exams office's decision, not
+     * each subject teacher's (ADR 0014, decision 5): a Director of Studies only. An admin account
+     * never closes a term, and neither assignment nor being class teacher grants it.
      */
     public function create(User $user, SchoolClass $schoolClass): bool
     {
-        if ($user->institution_id !== $schoolClass->institution_id
-            || $user->deactivated_at !== null
-            || $user->trashed()) {
-            return false;
-        }
-
-        return $user->is_admin
-            || $user->teacherAssignments()->where('class_id', $schoolClass->id)->exists();
+        return $user->isTeacher()
+            && $user->directsStudies()
+            && $user->institution_id === $schoolClass->institution_id
+            && $user->deactivated_at === null
+            && ! $user->trashed();
     }
 }

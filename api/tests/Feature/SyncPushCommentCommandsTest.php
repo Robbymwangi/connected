@@ -65,6 +65,7 @@ test('accepting a draft records the acceptor as author', function () {
     $g = buildGraph();
     $other = makeColleague($g, 'acceptor@example.com');
     $comment = commentIn($g, 'draft');
+    $g['class']->update(['class_teacher_id' => $other->id]);
 
     $result = postedResults(pushEntries($this, tokenFor($other), [commentCommand($comment, ['accept' => ['byId' => $other->id]])]))[0];
 
@@ -175,4 +176,69 @@ test('a resend replays the stored outcome', function () {
     expect($again)->toBe([...$first, 'replayed' => true]);
     expect(Comment::query()->sole()->version)->toBe($comment->version + 1);
     expect(CommentGeneration::query()->count())->toBe(0);
+});
+
+/* ADR 0014, decision 6: the remark is the class teacher's, or a Director of Studies'. The graph's own teacher
+   closed the term and so holds the grant; these use other people, each holding exactly one of the two or neither. */
+
+/** A command as the given user would send it. */
+function commandBy(Comment $comment, mixed $user, string $command = 'accept'): array
+{
+    $fields = ['byId' => $user->id, ...($command === 'edit' ? ['body' => 'Written by the class teacher.'] : [])];
+
+    return commentCommand($comment, [$command => $fields]);
+}
+
+test('the stream\'s class teacher may edit, accept, and regenerate its remarks', function (string $command, string $state) {
+    $g = buildGraph('School A', "-ct-{$command}");
+    $comment = commentIn($g, $state);
+    $classTeacher = makeColleague($g, "class-teacher-{$command}@example.com");
+    $g['class']->update(['class_teacher_id' => $classTeacher->id]);
+
+    $result = postedResults(pushEntries($this, tokenFor($classTeacher), [commandBy($comment, $classTeacher, $command)]))[0];
+
+    expect($result['status'])->toBe('accepted');
+})->with([['edit', 'pending'], ['accept', 'draft'], ['regenerate', 'draft']]);
+
+test('a teacher of the stream who is not its class teacher is forbidden, at the current base and at a stale one', function () {
+    $g = buildGraph('School A', '-ct-subject');
+    $comment = commentIn($g, 'draft');
+    $subjectTeacher = makeColleague($g, 'subject-teacher-ct@example.com', assigned: true);
+    $stale = commentCommand($comment, ['accept' => ['byId' => $subjectTeacher->id]], base: $comment->version - 1);
+
+    $results = postedResults(pushEntries($this, tokenFor($subjectTeacher), [commandBy($comment, $subjectTeacher), $stale]));
+
+    expect(array_column($results, 'status'))->toBe(['forbidden', 'forbidden']);
+    expect($comment->fresh()->state)->toBe('draft');
+});
+
+test('a Director of Studies may act on a stream with no class teacher', function () {
+    $g = buildGraph('School A', '-ct-dos');
+    $comment = commentIn($g, 'draft');
+    $g['class']->update(['class_teacher_id' => null]);
+    $director = makeColleague($g, 'dos-ct@example.com', directsStudies: true);
+
+    $result = postedResults(pushEntries($this, tokenFor($director), [commandBy($comment, $director)]))[0];
+
+    expect($result['status'])->toBe('accepted');
+    expect($comment->fresh()->author_id)->toBe($director->id);
+});
+
+test('when the class teacher changes, the remarks pass to the new one', function () {
+    $g = buildGraph('School A', '-ct-change');
+    $comment = commentIn($g, 'pending');
+    $before = makeColleague($g, 'before-ct@example.com');
+    $after = makeColleague($g, 'after-ct@example.com');
+    $g['class']->update(['class_teacher_id' => $before->id]);
+    postedResults(pushEntries($this, tokenFor($before), [commandBy($comment, $before, 'edit')]));
+    $g['class']->update(['class_teacher_id' => $after->id]);
+    app('auth')->forgetGuards();
+
+    $refused = postedResults(pushEntries($this, tokenFor($before), [commandBy($comment->fresh(), $before)]))[0];
+    app('auth')->forgetGuards();
+    $accepted = postedResults(pushEntries($this, tokenFor($after), [commandBy($comment->fresh(), $after)]))[0];
+
+    expect($refused['status'])->toBe('forbidden');
+    expect($accepted['status'])->toBe('accepted');
+    expect($comment->fresh()->only(['state', 'author_id']))->toBe(['state' => 'accepted', 'author_id' => $after->id]);
 });

@@ -8,18 +8,18 @@ use App\Models\User;
 class SchoolClassPolicy
 {
     /**
-     * Allow only administrators to create classes.
+     * Allow only admin accounts, in the panel (ADR 0014), to create classes.
      */
     public function create(User $user): bool
     {
-        return (bool) $user->is_admin;
+        return $user->isAdmin();
     }
 
     /**
-     * Allow only administrators to update classes.
+     * Allow only admin accounts, in the panel (ADR 0014), to update classes.
      */
     public function update(User $user, SchoolClass $schoolClass): bool
     {
-        return (bool) $user->is_admin;
+        return $user->isAdmin();
     }
 }

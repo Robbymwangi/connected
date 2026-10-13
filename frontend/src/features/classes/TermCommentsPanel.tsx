@@ -37,7 +37,7 @@ export function TermCommentsPanel({ classId, year, token, onOpenComments }: Term
     )
   }
 
-  const allowed = mayCloseTerm(user, classId, state.assignments)
+  const allowed = mayCloseTerm(user)
 
   const close = async (term: number) => {
     setClosing(term)

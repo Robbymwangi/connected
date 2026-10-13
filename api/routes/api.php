@@ -13,7 +13,6 @@ use App\Http\Controllers\StudentsController;
 use App\Http\Controllers\SubjectsController;
 use App\Http\Controllers\SyncController;
 use App\Http\Controllers\SyncPushController;
-use App\Http\Controllers\TeachersController;
 use App\Http\Controllers\TermClosuresController;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\ResolveInstitution;
@@ -65,14 +64,9 @@ Route::middleware(['auth:sanctum', EnsureAccountIsActive::class])->group(functio
     Route::get('/subjects', SubjectsController::class)->name('subjects.index');
     Route::get('/students', StudentsController::class)->name('students.index');
     Route::get('/assessments', AssessmentsController::class)->name('assessments.index');
-    // Marks and assessments are written over POST /sync alone (3.2); unlock stays here, an online administrator action.
-    Route::post('/students', [StudentsController::class, 'store'])->name('students.store');
-    Route::put('/students/{student}', [StudentsController::class, 'update'])->name('students.update');
+    // Marks and assessments are written over POST /sync alone (3.2); unlock stays here, online only.
+    // The roster (students, classes, accounts) is written in the admin panel, never here (ADR 0014).
     Route::post('/assessments/{assessment}/unlock', [AssessmentsController::class, 'unlock'])->name('assessments.unlock');
     // Closing a stream's term is online only too, like unlock (docs/spec/workflow.md, Term close).
     Route::post('/term-closures', [TermClosuresController::class, 'store'])->name('term-closures.store');
-    Route::post('/classes', [ClassesController::class, 'store'])->name('classes.store');
-    Route::put('/classes/{schoolClass}', [ClassesController::class, 'update'])->name('classes.update');
-    Route::post('/teachers', [TeachersController::class, 'store'])->name('teachers.store');
-    Route::put('/teachers/{teacher}', [TeachersController::class, 'update'])->name('teachers.update');
 });

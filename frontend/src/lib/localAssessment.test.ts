@@ -12,6 +12,7 @@ const directory = mapSchoolDirectory({
   subjects: [{ id: 'subject-1', version: 1, name: 'English' }],
   teacherAssignments: [],
   users: [],
+  terms: [],
 })
 
 describe('createLocalAssessmentRecord', () => {

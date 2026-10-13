@@ -32,4 +32,16 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
         ];
     }
+
+    /** A back-office account, which signs in to the panel only (ADR 0014). */
+    public function admin(): static
+    {
+        return $this->state(['kind' => User::ADMIN]);
+    }
+
+    /** A teacher holding the Director of Studies grant. */
+    public function directsStudies(): static
+    {
+        return $this->state(['directs_studies' => true]);
+    }
 }
