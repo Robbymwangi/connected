@@ -93,6 +93,35 @@ describe('acknowledged commands', () => {
   })
 })
 
+describe('acknowledged comment commands', () => {
+  const comment = (over: Partial<LocalRecord> = {}): LocalRecord => ({ id: 'k1', version: 2, state: 'draft', body: 'Text.', ...over })
+  const accepted = (over: Partial<OutboxEntry> = {}) => command({ table: 'comments', recordId: 'k1', fields: { accept: { byId: 'u1' } }, ackVersion: 3, ...over })
+
+  it.each([
+    ['the comment has reached the acknowledged version', comment({ version: 3, state: 'accepted' })],
+    ['the comment was withdrawn by an unlock', comment({ deletedAt: AT })],
+    ['the comment is not on this device', null],
+  ])('are dropped once %s', async (_name, row) => {
+    const database = createDatabase()
+    if (row) await database.comments.put(row)
+    await database.outbox.add(accepted())
+
+    await reconcileConflicts(database)
+
+    expect(await database.outbox.count()).toBe(0)
+  })
+
+  it('are kept while the pull has not yet reached the version they were answered at', async () => {
+    const database = createDatabase()
+    await database.comments.put(comment())
+    await database.outbox.add(accepted())
+
+    await reconcileConflicts(database)
+
+    expect(await database.outbox.count()).toBe(1)
+  })
+})
+
 describe('a mark entry retained for a conflict', () => {
   it('is released once the conflict has resolved: the entry goes, the cell takes the settled mark, the flag clears', async () => {
     const database = createDatabase()

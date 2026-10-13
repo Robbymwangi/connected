@@ -54,7 +54,7 @@ export function MarkingGrid({
   const maxTotal = rubric.reduce((sum, c) => sum + c.max, 0)
   const cls = school?.classesForYear(assessment.year).find((item) => item.stream === assessment.stream)
   const roster = cls ? school?.studentsForYear(assessment.year).filter((student) => student.classId === cls.id) ?? [] : []
-  const finalized = assessment.status === 'finalized' || assessment.status === 'reports-generated'
+  const finalized = assessment.status === 'finalized'
 
   const [editing, setEditing] = useState(false)
   const [focus, setFocus] = useState<Focus | null>(null)

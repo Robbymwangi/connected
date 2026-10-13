@@ -535,6 +535,56 @@ same assessment while the first is unread adds none.
 **Replay.** A command resent after the state moved on replays the stored outcome; it is not validated again. A resend
 whose note was edited is a different payload under a used id and is `invalid`.
 
+## Comment commands
+
+A report-card comment (`docs/spec/workflow.md`, Comments) is changed by three commands on
+`table: "comments"`, with `recordId` the comment's id and `baseVersion` its version. Like the conflict
+commands they are never field patches: a `body`, `state`, or `authorId` field is `invalid`. An entry carries
+exactly one of these in `fields`:
+
+```json
+{ "edit":       { "byId": "<me>", "body": "..." } }
+{ "accept":     { "byId": "<me>" } }
+{ "regenerate": { "byId": "<me>" } }
+```
+
+`byId` must be the token's user. An edit's `body` is trimmed and must be non-blank, at most 600 characters,
+with no NUL; 600 characters is what fits the report card.
+
+| | pending | draft | failed | accepted |
+|---|---|---|---|---|
+| edit | allowed | allowed | allowed | invalid |
+| accept | invalid | allowed | invalid | invalid |
+| regenerate | allowed | allowed | allowed | invalid |
+
+**Who.** Any authenticated user of the institution, as grading is unrestricted; another school's comment is
+never found, so it is `forbidden` at a nonzero base. A comment is created only by the term close: an unknown
+id at base 0 is `invalid`.
+
+**Order.** After rule 1: the comment is found and locked; the command's shape and `byId`; a base ahead of the
+comment's version is `invalid`; a base behind it is `conflict` with the comment as `current`, so an acceptance
+never goes through over a body the acceptor did not see; and only at an equal version the state checks
+(`invalid`, including a comment withdrawn by an unlock) and the write.
+
+**What each writes.** An edit sets the body, `draft`, and the editor as author. An accept sets `accepted` and
+the acceptor as author; it is final until an unlock. A regenerate clears the body and the author and sets
+`pending`. An edit or a regenerate supersedes any generation still in flight for the comment, in the same
+transaction, after the comment (the lock order unlock's unwind uses), and a regenerate queues generation for
+the comment's term close once it commits. The outcome is `accepted` at the comment's new version, logged like
+any write.
+
+**Replay.** A resend replays the stored outcome, as for every command.
+
+**On the device** (`frontend/src/lib/commentCommands.ts`). A command is queued against the version of the
+comment the teacher was shown, and only if the comment is on the device, live, and in a state the command
+takes, judged with the device's own earlier commands applied; a body the server would refuse is never queued.
+Nothing is written to the comment row: the screen shows queued, sent, and answered commands on top of the
+pulled row until the pull reaches the version a command was answered at, as for conflict commands. A second
+command waits for the first's answer and takes its version as its base. The outcomes settle as conflict
+commands do: `accepted` is kept until the pull reaches the version it was answered at (or the comment is withdrawn), and the pull then drops it, in the same reconciliation that drops answered conflict commands; `conflict` drops the command with a notice and
+adopts the comment as it stands, with what was queued behind it; `invalid` and `forbidden` fail it and what was
+queued behind it. A comment command belongs to no assessment, so it never holds a finalize back.
+
 ## GET /sync
 
 `GET /sync?since=<cursor>&limit=<n>` returns changes after that cursor:

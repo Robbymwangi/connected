@@ -231,7 +231,7 @@ export function useSessionStore(user: Resolver, directory: SchoolDirectoryState)
     finalizeAssessment: async (id: string) => {
       const assessment = state.assessments.find((item) => item.id === id)
       if (!assessment) throw new Error('Assessment is not available on this device')
-      if (assessment.status === 'finalized' || assessment.status === 'reports-generated') return
+      if (assessment.status === 'finalized') return
 
       const saved = await finalizeAssessmentRecord(database, id, user.id, new Date().toISOString())
       if (!saved) return

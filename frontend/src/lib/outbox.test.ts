@@ -289,6 +289,19 @@ describe('enqueue a conflict command', () => {
       table: 'marks', recordId: MARK, kind: 'command', baseVersion: 2, fields: proposal, at: AT,
     })).rejects.toThrow()
   })
+
+  it('takes the comment commands on the comments table, never a conflict one, and never a comment field patch', async () => {
+    await enqueue(database, { table: 'comments', recordId: 'k1', kind: 'command', baseVersion: 2, fields: { accept: { byId: 'u1' } }, at: AT })
+    await expect(enqueue(database, {
+      table: 'comments', recordId: 'k1', kind: 'command', baseVersion: 2, fields: proposal, at: AT,
+    })).rejects.toThrow()
+    await expect(enqueue(database, {
+      table: 'conflicts', recordId: CONFLICT, kind: 'command', baseVersion: 2, fields: { accept: { byId: 'u1' } }, at: AT,
+    })).rejects.toThrow()
+    await expect(enqueue(database, {
+      table: 'comments', recordId: 'k1', kind: 'patch', baseVersion: 2, fields: { body: 'x' }, at: AT,
+    })).rejects.toThrow('changed by commands')
+  })
 })
 
 describe('enqueue inside the caller transaction', () => {

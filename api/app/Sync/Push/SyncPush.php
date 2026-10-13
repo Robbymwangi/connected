@@ -45,6 +45,7 @@ final class SyncPush
     /** @var array<string, class-string<PushHandler>> */
     private const HANDLERS = [
         'assessments' => AssessmentPushHandler::class,
+        'comments' => CommentPushHandler::class,
         'conflicts' => ConflictPushHandler::class,
         'marks' => MarkPushHandler::class,
         'notifications' => NotificationPushHandler::class,

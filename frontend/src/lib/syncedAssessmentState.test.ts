@@ -41,6 +41,22 @@ describe('mapSyncedAssessmentState', () => {
     expect(state.resultRecords).toEqual([{ studentId: 'student-1', assessmentId: 'assessment-1', total: 14, max: 18, level: 'ME' }])
   })
 
+  it('reads a stored row still holding the retired reports-generated as finalized', () => {
+    const state = mapSyncedAssessmentState({
+      userId: 'teacher-1',
+      directory,
+      assessments: [{
+        id: 'assessment-1', version: 6, classId: 'class-1', subjectId: 'subject-1', name: 'CAT 1',
+        term: 1, year: 2026, date: '2026-05-12', status: 'reports-generated',
+      }],
+      marks: [],
+      conflicts: [],
+      results: [],
+    })
+
+    expect(state.assessments[0].status).toBe('finalized')
+  })
+
   it('orients an active conflict for a party, but keeps author names suitable for moderators', () => {
     const state = mapSyncedAssessmentState({
       userId: 'teacher-2',

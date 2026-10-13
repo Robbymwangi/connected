@@ -3,10 +3,12 @@
 namespace App\Sync;
 
 use App\Models\Assessment;
+use App\Models\Comment;
 use App\Models\Conflict;
 use App\Models\Notification;
 use App\Models\SubjectModeration;
 use App\Models\TeacherAssignment;
+use App\Models\TermClosure;
 use App\Models\User;
 use Illuminate\Support\Str;
 
@@ -93,6 +95,45 @@ final class ServerNotifications
             'Conflict referred to you',
             "{$this->describe($assessment)}: a conflict between two teachers was referred to you. Open Sync to settle it.",
         );
+    }
+
+    /* A comment of a term close failed to generate (docs/spec/workflow.md, Comments): the user who closed
+       the term is told, once per term close while the notice is unread, not once per student. Called by
+       CommentGeneration::settle, the one place a comment becomes failed, inside its transaction. The
+       notice names the stream and term, never a student: it points to the review screen, where the
+       failed comments are. */
+    public function commentsFailed(Comment $comment): void
+    {
+        $closure = TermClosure::query()->with(['schoolClass', 'closedBy'])->find($comment->term_closure_id);
+        $user = $closure?->closedBy;
+
+        if ($user === null || $user->deactivated_at !== null) {
+            return;
+        }
+
+        $alreadyUnread = Notification::query()
+            ->where('user_id', $user->id)
+            ->where('kind', 'comments-failed')
+            ->where('term_closure_id', $closure->id)
+            ->where('unread', true)
+            ->exists();
+
+        if ($alreadyUnread) {
+            return;
+        }
+
+        $stream = "Grade {$closure->schoolClass?->grade} {$closure->schoolClass?->stream}";
+
+        Notification::create([
+            'institution_id' => $closure->institution_id,
+            'user_id' => $user->id,
+            'term_closure_id' => $closure->id,
+            'kind' => 'comments-failed',
+            'tone' => 'warning',
+            'title' => Str::limit("Comments not drafted: {$stream}, Term {$closure->term}", self::TITLE_LIMIT),
+            'body' => "Some comments for {$stream}, Term {$closure->term} {$closure->year} could not be drafted. Open the term's comments to write them or regenerate them.",
+            'unread' => true,
+        ]);
     }
 
     /**

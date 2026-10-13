@@ -93,10 +93,12 @@ describe('finalizeAssessmentRecord', () => {
   it('does nothing for an assessment that is finalized, deleted, or unknown', async () => {
     await database.assessments.bulkPut([
       { id: 'done', version: 2, status: 'finalized' },
+      { id: 'retired', version: 6, status: 'reports-generated' },
       { id: 'gone', version: 2, status: 'scheduled', deletedAt: AT },
     ])
 
     expect(await finalizeAssessmentRecord(database, 'done', 'u1', AT)).toBe(false)
+    expect(await finalizeAssessmentRecord(database, 'retired', 'u1', AT)).toBe(false)
     expect(await finalizeAssessmentRecord(database, 'gone', 'u1', AT)).toBe(false)
     expect(await finalizeAssessmentRecord(database, 'missing', 'u1', AT)).toBe(false)
     expect(await database.outbox.count()).toBe(0)
