@@ -105,8 +105,10 @@ principal signs. Titles vary between schools; the functions do not.
 
 6. **The class teacher owns the report-card remark.** Comment commands (edit, accept,
    regenerate) are allowed to the stream's class teacher (`classes.class_teacher_id`)
-   and to a DOS, as the fallback when a class has none or the class teacher is away;
-   any other teacher is refused with `forbidden`. This reverses "being the class
+   and to a DOS, unconditionally; any other teacher is refused with `forbidden`. The DOS
+   exists in this rule for the class with no class teacher and the class teacher who is
+   away, but the server checks only the grant, not an absence: an "away" state is one
+   nobody would keep current. This reverses "being the class
    teacher grants nothing" for this one capability, and only this one. Grading,
    creating, finalizing, and conflict resolution stay as they are.
 
@@ -147,10 +149,22 @@ in a school the exams office decides when results are final, not each subject te
   push handler checks the class teacher or DOS. Each change ships with tests on the
   server and, where the device anticipates the answer, on the device.
 - **Data:** `users.kind` replaces `is_admin`; `users.directs_studies` is added;
-  `unique(email)` becomes `unique(kind, email)`; the `terms` table is added, and
-  existing assessments' (year, term) pairs are backfilled into ended term rows, with
-  the latest left open. The seeder gains separate admin and teacher accounts, a DOS,
-  class teachers, and an open term, so `DEV_DATA_EPOCH` is bumped.
+  `unique(email)` becomes `unique(kind, email)`; the `terms` table is added. No
+  production data exists yet, only development databases that `DEV_DATA_EPOCH`
+  rebuilds, but the migrations are written as if it did:
+  - **Accounts keep their ids.** An account with `is_admin` becomes `kind = admin` in
+    place, and every other account `kind = teacher`, so every reference to a user
+    (marks, conflicts, finalizes, closes, comments, unlock notes) stays valid. The
+    migration refuses to run if an `is_admin` account also holds a teacher assignment,
+    a moderation link, a class-teacher seat, or authored marks: such a person must be
+    split into two accounts by hand first, the existing row keeping the side its
+    history belongs to, so no history is silently re-attributed.
+  - **No term is opened by the backfill.** Existing assessments' (year, term) pairs
+    become term rows that are all ended; which term a school is in is a fact only an
+    admin can state, so no term is open until one is opened in the panel. The seeder
+    opens one for the demo school.
+  - The seeder gains separate admin and teacher accounts, a DOS, class teachers, and
+    an open term, so `DEV_DATA_EPOCH` is bumped.
 - **Specs updated in the merge requests that implement them:**
   - `access-model.md`: The principle (its lifecycle paragraph already disagrees with
     the code, which allows unlock to admins only), What ADMIN gates, Class teacher,
