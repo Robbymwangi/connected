@@ -71,13 +71,17 @@ test('the migration makes each is_admin account an admin in place, revoking its 
     expect(DB::table('personal_access_tokens')->where('tokenable_id', $g['teacher']->id)->exists())->toBeTrue();
 });
 
-test('the migration refuses an is_admin account that also teaches, rather than choose a side for it', function () {
-    $g = buildGraph('School A', '-mig-refuse');
-    $head = makeColleague($g, 'head-mig-refuse@example.com');
-    TeacherAssignment::create([
-        'institution_id' => $g['institution']->id, 'user_id' => $head->id,
-        'class_id' => $g['class']->id, 'subject_id' => $g['subject']->id,
-    ]);
+test('the migration refuses an is_admin account that also teaches, rather than choose a side for it', function (string $how) {
+    $g = buildGraph('School A', "-mig-refuse-{$how}");
+    $head = makeColleague($g, "head-mig-refuse-{$how}@example.com");
+    match ($how) {
+        'assigned' => TeacherAssignment::create([
+            'institution_id' => $g['institution']->id, 'user_id' => $head->id,
+            'class_id' => $g['class']->id, 'subject_id' => $g['subject']->id,
+        ]),
+        // Creating an assessment needed no assignment, so its creator may hold nothing else.
+        'created an assessment' => DB::table('assessments')->where('id', $g['assessment']->id)->update(['created_by' => $head->id]),
+    };
 
     Artisan::call('migrate:rollback', ['--path' => SEPARATE_ACCOUNTS_MIGRATION, '--force' => true]);
     DB::table('users')->where('id', $head->id)->update(['is_admin' => true]);
@@ -85,4 +89,4 @@ test('the migration refuses an is_admin account that also teaches, rather than c
     expect(fn () => Artisan::call('migrate', ['--path' => SEPARATE_ACCOUNTS_MIGRATION, '--force' => true]))
         ->toThrow(RuntimeException::class, $head->id);
     expect(Schema::hasColumn('users', 'is_admin'))->toBeTrue();
-});
+})->with(['assigned', 'created an assessment']);
