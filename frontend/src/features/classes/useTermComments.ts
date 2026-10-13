@@ -25,7 +25,7 @@ export function useTermComments(userId: string, classId: string, year: number): 
           const closures = await database.term_closures.where('classId').equals(classId).toArray()
           const closureIds = closures.map((row) => row.id)
           const [assessments, comments, assignments, outbox] = await Promise.all([
-            database.assessments.toArray(),
+            database.assessments.where('classId').equals(classId).toArray(),
             closureIds.length ? database.comments.where('termClosureId').anyOf(closureIds).toArray() : Promise.resolve([]),
             database.teacher_assignments.where('classId').equals(classId).toArray(),
             database.outbox.filter((entry) => entry.table === 'comments').toArray() as Promise<OutboxEntry[]>,
