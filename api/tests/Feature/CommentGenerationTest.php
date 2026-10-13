@@ -155,7 +155,7 @@ test('a retry supersedes generations that were never sent, and a comment already
 
 test('an unwound close submits nothing', function () {
     [$g, $closure] = termTwoClosed();
-    $g['teacher']->update(['is_admin' => true]);
+    $g['teacher']->update(['directs_studies' => true]);
     $g['termTwo']->unlock($g['teacher']);
 
     submit($closure);

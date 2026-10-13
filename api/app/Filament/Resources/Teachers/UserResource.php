@@ -20,15 +20,17 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rules\Unique;
 
-/* Teachers, that is accounts (build plan 5.5), with the same fields and rules as POST and PUT
-   /api/teachers. There is no delete action anywhere here: an account is deactivated, never
-   deleted, because its name must still resolve on every mark and comment it wrote. Deactivating
-   revokes its tokens (User::booted) and is refused for oneself and for the last active
-   administrator (User::deactivate). "Revoke devices" signs a lost phone out without deactivating
-   the person. Subject-moderation grants are a relation manager on the account. The panel has one
-   gate, canAccessPanel; there are no finer policies inside it (ADR 0009, decision 3). */
+/* Teacher accounts (build plan 5.5; ADR 0014): the accounts that sign in to the app. Admin
+   accounts are AdminResource; neither screen lists the other kind. There is no delete action
+   anywhere here: an account is deactivated, never deleted, because its name must still resolve on
+   every mark and comment it wrote. Deactivating revokes its tokens (User::booted) and is refused
+   for oneself (User::deactivate). "Sign out of the app" signs a lost phone out without
+   deactivating the person. The two academic grants an admin makes, never holds, are here: subject
+   moderation (HOD) as a relation manager, and the Director of Studies toggle. */
 class UserResource extends Resource
 {
     protected static ?string $model = User::class;
@@ -45,7 +47,9 @@ class UserResource extends Resource
     {
         return $schema->components([
             TextInput::make('name')->required()->maxLength(255),
-            TextInput::make('email')->email()->required()->maxLength(255)->unique(ignoreRecord: true),
+            // Unique within the kind, as the database is (ADR 0014): a head teacher's admin account may share the address.
+            TextInput::make('email')->email()->required()->maxLength(255)
+                ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule) => $rule->where('kind', User::TEACHER)),
             TextInput::make('password')
                 ->password()
                 ->revealable()
@@ -53,11 +57,9 @@ class UserResource extends Resource
                 ->required(fn (string $operation) => $operation === 'create')
                 ->dehydrated(fn (?string $state) => filled($state))
                 ->helperText(fn (string $operation) => $operation === 'edit' ? 'Leave blank to keep the current password.' : null),
-            Toggle::make('is_admin')
-                ->label('Administrator')
-                // Neither oneself nor the last active administrator can lose the flag here, for the same
-                // reason neither can be deactivated. A disabled field is not saved.
-                ->disabled(fn (?User $record) => $record !== null && ($record->is(Auth::guard('admin')->user()) || $record->isLastActiveAdmin())),
+            Toggle::make('directs_studies')
+                ->label('Director of Studies')
+                ->helperText('May unlock any assessment and close terms, in the app.'),
         ]);
     }
 
@@ -67,7 +69,7 @@ class UserResource extends Resource
             ->columns([
                 TextColumn::make('name')->searchable()->sortable(),
                 TextColumn::make('email')->searchable(),
-                IconColumn::make('is_admin')->label('Admin')->boolean(),
+                IconColumn::make('directs_studies')->label('DOS')->boolean(),
                 TextColumn::make('deactivated_at')
                     ->label('Status')
                     ->formatStateUsing(fn ($state) => $state === null ? 'Active' : 'Deactivated')
@@ -79,20 +81,13 @@ class UserResource extends Resource
             ->recordActions([
                 EditAction::make(),
                 self::deactivateAction(),
-                Action::make('reactivate')
-                    ->icon(Heroicon::OutlinedArrowPath)
-                    ->visible(fn (User $record) => $record->deactivated_at !== null)
-                    ->requiresConfirmation()
-                    ->action(fn (User $record) => $record->update(['deactivated_at' => null])),
-                // The app's devices hold Sanctum tokens; an administrator's panel session is a
-                // separate login this does not end. Deactivating the account does: the panel
-                // refuses a deactivated administrator on their next request.
+                self::reactivateAction(),
                 Action::make('revokeDevices')
                     ->label('Sign out of the app')
                     ->icon(Heroicon::OutlinedDevicePhoneMobile)
                     ->color('warning')
                     ->requiresConfirmation()
-                    ->modalDescription('Every phone and computer signed in to the app as this person is signed out, and can sign in again. An administrator\'s session in this panel is not ended; to end it, deactivate the account.')
+                    ->modalDescription('Every phone and computer signed in to the app as this person is signed out, and can sign in again.')
                     ->action(function (User $record): void {
                         $record->tokens()->delete();
                         Notification::make()->title('Signed out of the app')->success()->send();
@@ -100,6 +95,14 @@ class UserResource extends Resource
             ]);
     }
 
+    /** Only teacher accounts; the global institution scope still applies beneath this. */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->where('kind', User::TEACHER);
+    }
+
+    /* Shared with AdminResource: the refusals live in User::deactivate, so both screens apply the
+       same ones. */
     public static function deactivateAction(): Action
     {
         return Action::make('deactivate')
@@ -116,6 +119,15 @@ class UserResource extends Resource
                     Notification::make()->title($refused->getMessage())->danger()->send();
                 }
             });
+    }
+
+    public static function reactivateAction(): Action
+    {
+        return Action::make('reactivate')
+            ->icon(Heroicon::OutlinedArrowPath)
+            ->visible(fn (User $record) => $record->deactivated_at !== null)
+            ->requiresConfirmation()
+            ->action(fn (User $record) => $record->update(['deactivated_at' => null]));
     }
 
     public static function getRelations(): array

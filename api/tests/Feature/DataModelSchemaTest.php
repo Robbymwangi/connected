@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 
 $tables = [
     'institutions' => ['id', 'name'],
-    'users' => ['id', 'institution_id', 'name', 'email', 'password', 'is_admin', 'deactivated_at', 'version', 'deleted_at'],
+    'users' => ['id', 'institution_id', 'name', 'email', 'kind', 'directs_studies', 'password', 'deactivated_at', 'version', 'deleted_at'],
     'subjects' => ['id', 'institution_id', 'name', 'version', 'deleted_at'],
     'criteria' => ['id', 'institution_id', 'subject_id', 'name', 'max_score', 'version', 'deleted_at'],
     'classes' => ['id', 'institution_id', 'grade', 'stream', 'class_teacher_id', 'version', 'deleted_at'],

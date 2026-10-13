@@ -3,6 +3,9 @@ import type { MeResponse } from '../api/auth'
 /* Replaces fixtures/user.ts (build plan 1.7, #45): the same shape, so every
    component that read the fixture keeps working unchanged, but the values
    now come from a real signed-in account. */
+/** The role label of a teacher holding the Director of Studies grant (ADR 0014). */
+export const DIRECTOR_OF_STUDIES = 'Director of Studies'
+
 export type CurrentUser = {
   id: string
   firstName: string
@@ -24,10 +27,11 @@ export function toCurrentUser(me: MeResponse): CurrentUser {
     firstName: firstName ?? me.name,
     fullName: me.name,
     initials: initialsOf(me.name),
-    /* No role string exists server-side, on purpose (docs/spec/access-model.md:
-       capabilities are layered on an account, not one exclusive role). Every
-       account grades unrestricted; is_admin is the one flag worth naming here. */
-    role: me.is_admin ? 'Administrator' : 'Teacher',
+    /* No role string exists server-side, on purpose: a teacher's capabilities
+       are layered (docs/spec/access-model.md). Every teacher grades unrestricted;
+       the Director of Studies grant is the one worth naming here (ADR 0014). An
+       admin account never signs in to the app. */
+    role: me.directs_studies ? DIRECTOR_OF_STUDIES : 'Teacher',
     email: me.email,
     moderatedSubjectIds: me.moderated_subject_ids,
   }

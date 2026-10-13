@@ -207,16 +207,18 @@ function assessmentFields(array $graph, array $overrides = []): array
 }
 
 /**
- * A second user in the graph's institution; optionally an admin, optionally assigned to the graph's class and subject.
+ * A second user in the graph's institution: a teacher unless $admin, optionally the Director of Studies,
+ * optionally assigned to the graph's class and subject.
  */
-function makeColleague(array $graph, string $email, bool $admin = false, bool $assigned = false): User
+function makeColleague(array $graph, string $email, bool $admin = false, bool $assigned = false, bool $directsStudies = false): User
 {
     $user = User::create([
         'institution_id' => $graph['institution']->id,
         'name' => 'A. Colleague',
         'email' => $email,
         'password' => 'a-hashed-password',
-        'is_admin' => $admin,
+        'kind' => $admin ? User::ADMIN : User::TEACHER,
+        'directs_studies' => $directsStudies,
     ]);
 
     if ($assigned) {

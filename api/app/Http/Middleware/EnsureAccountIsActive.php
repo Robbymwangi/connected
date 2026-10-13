@@ -17,12 +17,16 @@ use Symfony\Component\HttpFoundation\Response;
    Raises the same AuthenticationException an invalid or missing token
    would, so the response is indistinguishable from one: a bad token and a
    deactivated account both just stop working, with nothing to tell a
-   caller which. */
+   caller which. An admin account is refused here too (ADR 0014,
+   decision 1): it is never issued a token, and this is the backstop if
+   one ever existed. */
 class EnsureAccountIsActive
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->user()?->deactivated_at !== null) {
+        $user = $request->user();
+
+        if ($user !== null && ($user->deactivated_at !== null || ! $user->isTeacher())) {
             throw new AuthenticationException;
         }
 

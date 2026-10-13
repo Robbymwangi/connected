@@ -14,9 +14,9 @@ test('unlock returns 401 without an authenticated account', function () {
     $this->assertDatabaseCount('unlock_notes', 0);
 });
 
-test('an admin can unlock without reports and receives the unlocked assessment', function () {
+test('a Director of Studies can unlock without reports and receives the unlocked assessment', function () {
     $graph = buildGraph();
-    $graph['teacher']->update(['is_admin' => true]);
+    $graph['teacher']->update(['directs_studies' => true]);
     $graph['assessment']->finalize($graph['teacher']);
 
     $response = $this->withToken(tokenFor($graph['teacher']))->postJson(
@@ -38,11 +38,11 @@ test('an admin can unlock without reports and receives the unlocked assessment',
     $this->assertDatabaseCount('unlock_notes', 0);
 });
 
-test('unlock with a report records the authenticated admin rather than client-supplied audit fields', function () {
+test('unlock with a report records the authenticated account rather than client-supplied audit fields', function () {
     $graph = buildGraph();
     $admin = User::factory()->create([
         'institution_id' => $graph['institution']->id,
-        'is_admin' => true,
+        'directs_studies' => true,
     ]);
     $comment = closeGraphTerm($graph)->comments()->sole();
     $report = issuedReport($graph);
@@ -79,7 +79,7 @@ test('unlock with a report records the authenticated admin rather than client-su
 
 test('unlock returns 422 with a resolution-note error when reports exist', function () {
     $graph = buildGraph();
-    $graph['teacher']->update(['is_admin' => true]);
+    $graph['teacher']->update(['directs_studies' => true]);
     closeGraphTerm($graph);
     $report = issuedReport($graph);
 
@@ -100,7 +100,7 @@ test('unlock returns 422 with a resolution-note error when reports exist', funct
 
 test('unlock returns 422 when the optional note is not a string', function () {
     $graph = buildGraph();
-    $graph['teacher']->update(['is_admin' => true]);
+    $graph['teacher']->update(['directs_studies' => true]);
     $graph['assessment']->finalize($graph['teacher']);
 
     $response = $this->withToken(tokenFor($graph['teacher']))->postJson(
@@ -117,7 +117,7 @@ test('unlock returns 422 when the optional note is not a string', function () {
     $this->assertDatabaseCount('unlock_notes', 0);
 });
 
-test('unlock returns 403 for a non-admin even when they created the assessment', function () {
+test('unlock returns 403 for a teacher without the grant even when they created the assessment', function () {
     $graph = buildGraph();
     $graph['assessment']->finalize($graph['teacher']);
 
@@ -138,7 +138,7 @@ test('unlock returns 404 for an assessment in another institution', function () 
     $graph = buildGraph('School A', '-unlock-a');
     $otherSchool = buildGraph('School B', '-unlock-b');
     $graph['assessment']->finalize($graph['teacher']);
-    $otherSchool['teacher']->update(['is_admin' => true]);
+    $otherSchool['teacher']->update(['directs_studies' => true]);
 
     $response = $this->withToken(tokenFor($otherSchool['teacher']))->postJson(
         '/api/assessments/'.$graph['assessment']->id.'/unlock',
@@ -154,117 +154,20 @@ test('unlock returns 404 for an assessment in another institution', function () 
     $this->assertDatabaseCount('unlock_notes', 0);
 });
 
-test('a non-admin teacher receives 403 when creating a student', function () {
-    $graph = buildGraph('School A', '-student-write');
+test('the roster is not written through the API: the panel is its only writer', function (string $path) {
+    $graph = buildGraph('School A', '-roster-write');
 
-    $response = $this->withToken(tokenFor($graph['teacher']))->postJson('/api/students', [
-        'name' => 'New Student',
-        'gender' => 'F',
-        'dob' => '2015-01-01',
-    ]);
+    $this->withToken(tokenFor($graph['teacher']))->postJson($path, ['name' => 'Anything'])->assertMethodNotAllowed();
+})->with(['/api/students', '/api/classes']);
 
-    $response->assertForbidden();
-    $this->assertDatabaseMissing('students', ['name' => 'New Student']);
-});
-
-test('a non-admin teacher receives 403 when creating a class', function () {
-    $graph = buildGraph('School A', '-class-write');
-
-    $response = $this->withToken(tokenFor($graph['teacher']))->postJson('/api/classes', [
-        'grade' => '5',
-        'stream' => 'East',
-    ]);
-
-    $response->assertForbidden();
-    $this->assertDatabaseMissing('classes', ['grade' => '5', 'stream' => 'East']);
-});
-
-test('a non-admin teacher receives 403 when creating a teacher account', function () {
-    $graph = buildGraph('School A', '-teacher-write');
-
-    $response = $this->withToken(tokenFor($graph['teacher']))->postJson('/api/teachers', [
-        'name' => 'New Teacher',
-        'email' => 'new-teacher@example.com',
-        'password' => 'long-enough-password',
-    ]);
-
-    $response->assertForbidden();
-    $this->assertDatabaseMissing('users', ['email' => 'new-teacher@example.com']);
-});
-
-test('an admin can create a student', function () {
-    $graph = buildGraph('School A', '-admin-student-write');
-    $admin = User::create([
-        'institution_id' => $graph['institution']->id,
-        'name' => 'A. Admin',
-        'email' => 'admin-student-write@example.com',
-        'password' => 'a-hashed-password',
-        'is_admin' => true,
-    ]);
-
-    $response = $this->withToken(tokenFor($admin))->postJson('/api/students', [
-        'name' => 'New Student',
-        'gender' => 'F',
-        'dob' => '2015-01-01',
-    ]);
-
-    $response->assertCreated()->assertJsonPath('data.name', 'New Student');
-    $student = Student::query()->findOrFail($response->json('data.id'));
-    $this->assertModelExists($student);
-    expect($student->institution_id)->toBe($graph['institution']->id);
-});
-
-test('an admin can create a class', function () {
-    $graph = buildGraph('School A', '-admin-class-write');
-    $admin = User::create([
-        'institution_id' => $graph['institution']->id,
-        'name' => 'A. Admin',
-        'email' => 'admin-class-write@example.com',
-        'password' => 'a-hashed-password',
-        'is_admin' => true,
-    ]);
-
-    $response = $this->withToken(tokenFor($admin))->postJson('/api/classes', [
-        'grade' => '5',
-        'stream' => 'East',
-        'class_teacher_id' => $graph['teacher']->id,
-    ]);
-
-    $response->assertCreated()->assertJsonPath('data.stream', 'East');
-    expect($response->json('data.class_teacher.id'))->toBe($graph['teacher']->id);
-});
-
-test('an admin can create a teacher account', function () {
-    $graph = buildGraph('School A', '-admin-teacher-write');
-    $admin = User::create([
-        'institution_id' => $graph['institution']->id,
-        'name' => 'A. Admin',
-        'email' => 'admin-teacher-write@example.com',
-        'password' => 'a-hashed-password',
-        'is_admin' => true,
-    ]);
-
-    $response = $this->withToken(tokenFor($admin))->postJson('/api/teachers', [
-        'name' => 'New Teacher',
-        'email' => 'new-teacher@example.com',
-        'password' => 'long-enough-password',
-    ]);
-
-    $response->assertCreated()->assertJsonPath('data.email', 'new-teacher@example.com');
-    $teacher = User::query()->where('email', 'new-teacher@example.com')->firstOrFail();
-    $this->assertModelExists($teacher);
-    expect($teacher->institution_id)->toBe($graph['institution']->id)
-        ->and($teacher->password)->not->toBe('long-enough-password');
-});
-
-test('write policies allow marks and assessment creation, scope assessment edits to whoever answers for them, and reserve roster records to admins', function () {
+test('write policies give grading and assessments to teachers, scope assessment edits to whoever answers for them, and reserve roster records to admins', function () {
     $graph = buildGraph('School A', '-policy-matrix');
     $admin = User::create([
         'institution_id' => $graph['institution']->id,
         'name' => 'A. Admin',
         'email' => 'admin-policy-matrix@example.com',
         'password' => 'a-hashed-password',
-        'is_admin' => true,
+        'kind' => User::ADMIN,
     ]);
 
     $teacherAbilities = [
@@ -293,9 +196,8 @@ test('write policies allow marks and assessment creation, scope assessment edits
     ];
 
     expect($teacherAbilities)->toBe([true, true, true, true, false, false, false, false, false, false]);
-    // The admin neither created nor teaches the assessment, so editing it is not theirs;
-    // an admin's override is unlock alone (docs/spec/access-model.md), tested elsewhere.
-    expect($adminAbilities)->toBe([true, true, true, false, true, true, true, true, true, true]);
+    // An admin account does no academic work at all (ADR 0014): the roster is all it writes.
+    expect($adminAbilities)->toBe([false, false, false, false, true, true, true, true, true, true]);
 });
 
 test('marks and assessments are written over POST /sync alone: the REST writes are gone', function () {

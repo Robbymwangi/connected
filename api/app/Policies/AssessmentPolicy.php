@@ -8,11 +8,11 @@ use App\Models\User;
 class AssessmentPolicy
 {
     /**
-     * Allow any authenticated user to create assessments; tenancy is enforced separately.
+     * Any teacher account may create assessments; an admin account never does (ADR 0014). Tenancy is enforced separately.
      */
     public function create(User $user): bool
     {
-        return true;
+        return $user->isTeacher();
     }
 
     /**
@@ -32,7 +32,8 @@ class AssessmentPolicy
 
     private function isAnswerableFor(User $user, Assessment $assessment): bool
     {
-        if ($user->institution_id !== $assessment->institution_id
+        if (! $user->isTeacher()
+            || $user->institution_id !== $assessment->institution_id
             || $user->deactivated_at !== null
             || $user->trashed()) {
             return false;
@@ -45,10 +46,14 @@ class AssessmentPolicy
                 ->exists();
     }
 
+    /* Unlocking belongs to the Director of Studies (ADR 0014, decision 3), and to the HOD of the
+       assessment's subject once the app has an unlock screen. Until that merge request, the admin
+       panel's unlock action is the only screen that can do it, so an admin keeps it there; that
+       half is removed with the panel's action. */
     public function unlock(User $user, Assessment $assessment): bool
     {
         return $user->institution_id === $assessment->institution_id
-            && $user->is_admin
+            && ($user->directsStudies() || $user->isAdmin())
             && $user->deactivated_at === null
             && ! $user->trashed();
     }

@@ -19,7 +19,9 @@ use Illuminate\Validation\ValidationException;
    credential", so the request carries only email and password, never an
    institution. A wrong password and a deactivated account produce the same
    rejection: telling them apart would confirm to an attacker that the email
-   belongs to a real, currently-active account. */
+   belongs to a real, currently-active account. Only a teacher account is looked up (ADR 0014,
+   decision 1): an admin's address and password are not an app credential, and the same address
+   may belong to a different account of each kind. */
 class LoginController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
@@ -29,7 +31,7 @@ class LoginController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::withoutGlobalScopes()->where('email', $credentials['email'])->first();
+        $user = User::withoutGlobalScopes()->where('kind', User::TEACHER)->where('email', $credentials['email'])->first();
 
         if (! $user || $user->deactivated_at !== null || ! Hash::check($credentials['password'], $user->password)) {
             throw ValidationException::withMessages([

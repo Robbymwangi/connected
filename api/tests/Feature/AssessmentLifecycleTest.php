@@ -40,11 +40,11 @@ test('an assigned class and subject teacher can finalize another teachers assess
     ]);
 });
 
-test('a same-school teacher without the matching assignment cannot finalize even as an admin', function (bool $isAdmin) {
+test('a same-school teacher without the matching assignment cannot finalize even as Director of Studies', function (bool $directsStudies) {
     $graph = buildGraph();
     $outsider = User::factory()->create([
         'institution_id' => $graph['institution']->id,
-        'is_admin' => $isAdmin,
+        'directs_studies' => $directsStudies,
     ]);
 
     expect(fn () => $graph['assessment']->finalize($outsider))->toThrow(AuthorizationException::class);
@@ -56,7 +56,7 @@ test('a same-school teacher without the matching assignment cannot finalize even
         'finalized_by' => null,
         'version' => 1,
     ]);
-})->with(['teacher' => [false], 'admin without lifecycle scope' => [true]]);
+})->with(['teacher' => [false], 'Director of Studies' => [true]]);
 
 test('a teaching assignment must match both class and subject to allow finalize', function () {
     $graph = buildGraph();
@@ -135,7 +135,7 @@ test('finalization cannot overwrite an existing finalized cycle', function (stri
 test('unlock without reports clears finalization without writing an audit note', function (?string $note) {
     $graph = buildGraph();
     $admin = $graph['teacher'];
-    $admin->update(['is_admin' => true]);
+    $admin->update(['directs_studies' => true]);
     $assessment = $graph['assessment'];
     $assessment->update([
         'status' => 'finalized',
@@ -168,7 +168,7 @@ test('unlock without reports clears finalization without writing an audit note',
 test('unlock with a report rejects a missing or blank note without changing records', function (?string $note) {
     $graph = buildGraph();
     $admin = $graph['teacher'];
-    $admin->update(['is_admin' => true]);
+    $admin->update(['directs_studies' => true]);
     $assessment = $graph['assessment'];
     $assessment->update([
         'status' => 'finalized',
@@ -201,11 +201,11 @@ test('unlock with a report rejects a missing or blank note without changing reco
     'whitespace' => [" \t\n "],
 ]);
 
-test('unlock with reports records the admin note and unwinds the closed term while preserving marks', function (string $status) {
+test('unlock with reports records the unlocking note and unwinds the closed term while preserving marks', function (string $status) {
     $graph = buildGraph();
     $admin = User::factory()->create([
         'institution_id' => $graph['institution']->id,
-        'is_admin' => true,
+        'directs_studies' => true,
     ]);
     $assessment = $graph['assessment'];
     $assessment->update([
@@ -250,7 +250,7 @@ test('unlock with reports records the admin note and unwinds the closed term whi
 
 test('unlock of a closed term with no reports yet unwinds the close without a note', function () {
     $graph = buildGraph();
-    $graph['teacher']->update(['is_admin' => true]);
+    $graph['teacher']->update(['directs_studies' => true]);
     $closure = closeGraphTerm($graph);
     $comment = $closure->comments()->sole();
 
@@ -263,7 +263,7 @@ test('unlock of a closed term with no reports yet unwinds the close without a no
 
 test('an assessment can be finalized again after unlock and historical reports do not require another note', function () {
     $graph = buildGraph();
-    $graph['teacher']->update(['is_admin' => true]);
+    $graph['teacher']->update(['directs_studies' => true]);
     $assessment = $graph['assessment'];
     closeGraphTerm($graph);
     $report = issuedReport($graph);
@@ -297,9 +297,9 @@ test('a non-admin creator cannot unlock a finalized assessment', function () {
     $this->assertDatabaseCount('unlock_notes', 0);
 });
 
-test('an admin cannot unlock a scheduled assessment', function () {
+test('a Director of Studies cannot unlock a scheduled assessment', function () {
     $graph = buildGraph();
-    $graph['teacher']->update(['is_admin' => true]);
+    $graph['teacher']->update(['directs_studies' => true]);
 
     expect(fn () => $graph['assessment']->unlock($graph['teacher']))
         ->toThrow(ValidationException::class, 'Only a finalized assessment can be unlocked.');
@@ -312,18 +312,18 @@ test('an admin cannot unlock a scheduled assessment', function () {
     $this->assertDatabaseCount('unlock_notes', 0);
 });
 
-test('a deactivated creator with admin capability is denied both lifecycle actions', function () {
+test('a deactivated creator holding the Director of Studies grant is denied both lifecycle actions', function () {
     $graph = buildGraph();
-    $graph['teacher']->update(['is_admin' => true, 'deactivated_at' => '2026-10-05 09:00:00']);
+    $graph['teacher']->update(['directs_studies' => true, 'deactivated_at' => '2026-10-05 09:00:00']);
 
     expect(Gate::forUser($graph['teacher'])->allows('finalize', $graph['assessment']))->toBeFalse();
     expect(Gate::forUser($graph['teacher'])->allows('unlock', $graph['assessment']))->toBeFalse();
 });
 
-test('an admin from another institution is denied both lifecycle actions', function () {
+test('a Director of Studies from another institution is denied both lifecycle actions', function () {
     $graph = buildGraph('School A', '-a');
     $otherSchool = buildGraph('School B', '-b');
-    $otherSchool['teacher']->update(['is_admin' => true]);
+    $otherSchool['teacher']->update(['directs_studies' => true]);
 
     expect(Gate::forUser($otherSchool['teacher'])->allows('finalize', $graph['assessment']))->toBeFalse();
     expect(Gate::forUser($otherSchool['teacher'])->allows('unlock', $graph['assessment']))->toBeFalse();
