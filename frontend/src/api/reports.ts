@@ -71,3 +71,8 @@ export function getReportSummary(
 
   return apiFetch(`/api/reports/summary?${params.toString()}`, { token }, fetchImpl)
 }
+/* A short-lived link to a report card's PDF (docs/spec/workflow.md, Report cards). Online only:
+   nothing about the PDF is cached ahead of a request, and the link expires within minutes. */
+export function getReportDownload(reportId: string, token: string, fetchImpl?: FetchImpl): Promise<{ data: { url: string; expiresAt: string } }> {
+  return apiFetch<{ data: { url: string; expiresAt: string } }>(`/api/reports/${encodeURIComponent(reportId)}/download`, { token }, fetchImpl)
+}

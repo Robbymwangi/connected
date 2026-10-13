@@ -11,6 +11,7 @@ const cases: Array<[Location, string]> = [
   [{ screen: 'classes' }, '/classes'],
   [{ screen: 'classes', classId: 'class-4w' }, '/classes/class-4w'],
   [{ screen: 'classes', classId: 'class-4w', studentId: 's1' }, '/classes/class-4w/students/s1'],
+  [{ screen: 'classes', classId: 'class-4w', comments: { year: 2026, term: 2 } }, '/classes/class-4w/comments/2026/2'],
   [{ screen: 'classes', teacherId: 'u-2' }, '/teachers/u-2'],
   [{ screen: 'sync' }, '/sync'],
   [{ screen: 'sync', highlight: 'c-1' }, '/sync?highlight=c-1'],
@@ -30,6 +31,8 @@ describe('pathFor and parseLocation', () => {
     expect(parseLocation('/assessments/a1')).toEqual({ screen: 'assessments' })
     expect(parseLocation('/assessments/a1/edit')).toEqual({ screen: 'assessments' })
     expect(parseLocation('/classes/class-4w/students')).toEqual({ screen: 'classes', classId: 'class-4w' })
+    expect(parseLocation('/classes/class-4w/comments/2026/4')).toEqual({ screen: 'classes', classId: 'class-4w' })
+    expect(parseLocation('/classes/class-4w/comments/next/1')).toEqual({ screen: 'classes', classId: 'class-4w' })
     expect(parseLocation('/teachers')).toEqual({ screen: 'classes' })
   })
   it('encodes ids that need it and decodes them back', () => {

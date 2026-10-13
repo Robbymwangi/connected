@@ -7,6 +7,7 @@ import { initials } from '../../fixtures/students'
 import type { Teacher } from '../../fixtures/teachers'
 import { AssessmentRow } from '../assessments/AssessmentRow'
 import { Panel } from './Panel'
+import { TermCommentsPanel } from './TermCommentsPanel'
 
 type StreamDetailProps = {
   cls: SchoolClass
@@ -14,14 +15,16 @@ type StreamDetailProps = {
   students: Student[]
   teachers: Teacher[]
   store: SessionStore
+  token: string
   onBack: () => void
+  onOpenComments: (year: number, term: number) => void
   onOpenStudent: (studentId: string) => void
   onOpenTeacher: (teacherId: string) => void
   onOpenGrid: (assessmentId: string) => void
   onOpenReport: (assessmentId: string) => void
 }
 
-export function StreamDetail({ cls, year, students, teachers: schoolTeachers, store, onBack, onOpenStudent, onOpenTeacher, onOpenGrid, onOpenReport }: StreamDetailProps) {
+export function StreamDetail({ cls, year, students, teachers: schoolTeachers, store, token, onBack, onOpenComments, onOpenStudent, onOpenTeacher, onOpenGrid, onOpenReport }: StreamDetailProps) {
   const roster = students.filter((student) => student.classId === cls.id)
   const assessments = store.assessments.filter((a) => a.stream === cls.stream && a.year === year)
   const teachers = schoolTeachers.filter((teacher) => cls.stream in teacher.subjectsByStream)
@@ -66,6 +69,8 @@ export function StreamDetail({ cls, year, students, teachers: schoolTeachers, st
             ))}
           </div>
         </Panel>
+
+        <TermCommentsPanel classId={cls.id} year={year} token={token} onOpenComments={onOpenComments} />
 
         <Panel title="Teachers" aside={`${teachers.length}`}>
           <div className="divide-y divide-border/40">
