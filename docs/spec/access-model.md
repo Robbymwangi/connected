@@ -88,12 +88,14 @@ command), not a role and not a screen; see Tokens, below.
 
 ## Class teacher
 
-Being the class teacher of a stream is a fact recorded for the dashboard, not a
-permission. It decides which stream a teacher's own dashboard highlights by
-default. It grants nothing and restricts nothing: a teacher who is not the class
-teacher of a stream may still grade it, create assessments for it, and, subject
-to the lifecycle scoping above, manage its assessments if they teach the relevant
-subject there.
+Being the class teacher of a stream decides which stream a teacher's own
+dashboard highlights by default, and grants exactly one thing (ADR 0014, decision
+6): the stream's report-card remarks are the class teacher's to edit, accept, and
+regenerate, with a Director of Studies able to act on any stream's. It restricts
+nothing else: a teacher who is not the class teacher of a stream may still grade
+it, create assessments for it, and, subject to the lifecycle scoping above, manage
+its assessments if they teach the relevant subject there. The class teacher who
+counts is the one recorded when a command arrives, so remarks pass with the role.
 
 ## Moderation
 

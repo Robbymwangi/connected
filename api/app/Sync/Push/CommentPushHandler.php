@@ -6,6 +6,8 @@ use App\Jobs\GenerateReportCard;
 use App\Jobs\SubmitCommentBatch;
 use App\Models\Comment;
 use App\Models\CommentGeneration;
+use App\Models\SchoolClass;
+use App\Models\TermClosure;
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
 
@@ -21,8 +23,9 @@ use LogicException;
      commit. Allowed while pending, draft, or failed.
 
    Edit and regenerate supersede any generation still in flight, after the comment is saved, so the lock order is
-   the comment, then its generations, as unwind() has it. Any authenticated user of the institution may act,
-   consistent with grading being unrestricted; the global scope means another school's comment is never found. */
+   the comment, then its generations, as unwind() has it. Only the stream's class teacher, or a Director of
+   Studies, may act (ADR 0014, decision 6): the remark on a Kenyan report form is the class teacher's. The
+   global scope means another school's comment is never found. */
 final class CommentPushHandler extends PushHandler
 {
     /** A remark that fits the report card. */
@@ -70,9 +73,21 @@ final class CommentPushHandler extends PushHandler
         return ($lock ? $query->lockForUpdate() : $query)->find($recordId);
     }
 
+    /* The class teacher is the stream's as it stands when the command arrives, read through the comment's
+       term close (soft deleted or not, so a withdrawn comment still answers as withdrawn rather than as
+       forbidden). A Director of Studies acts on any stream, which covers a class with no class teacher and
+       one whose class teacher is away; the server checks the grant, never an absence. With no record there
+       is nothing to own, and check() refuses it as invalid. */
     public function authorize(?Model $record): bool
     {
-        return true;
+        if ($record === null || $this->user->directsStudies()) {
+            return true;
+        }
+
+        $closure = TermClosure::withTrashed()->find($record->term_closure_id);
+        $classTeacherId = $closure === null ? null : SchoolClass::query()->whereKey($closure->class_id)->value('class_teacher_id');
+
+        return $classTeacherId !== null && (string) $classTeacherId === (string) $this->user->id;
     }
 
     /* The shape, before any version rule: one command, byId the signed-in user, and for an edit a body that fits. */

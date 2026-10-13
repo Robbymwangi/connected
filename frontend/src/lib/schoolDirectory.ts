@@ -144,6 +144,7 @@ export function mapSchoolDirectory(source: SchoolDirectorySource): SchoolDirecto
       grade: stringField(cls, 'grade'),
       stream: stringField(cls, 'stream'),
       teacher: teacherId ? stringField(userById.get(teacherId) ?? ({} as LocalRecord), 'name') : 'Unassigned',
+      teacherId: teacherId || null,
       enrolment: enrolments.filter((record) => record.classId === classId && record.year === year).length,
       subjects: [...(subjectsByClass.get(classId) ?? [])].sort(),
       assessments: assessments.filter((record) => record.classId === classId && record.year === year).length,

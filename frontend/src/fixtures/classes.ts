@@ -4,6 +4,8 @@ export type SchoolClass = {
   grade: string
   stream: string
   teacher: string
+  /* The class teacher's account, when the class has one: who owns its report-card remarks (ADR 0014). */
+  teacherId?: string | null
   enrolment: number
   subjects: string[]
   assessments: number

@@ -548,7 +548,8 @@ exactly one of these in `fields`:
 { "regenerate": { "byId": "<me>" } }
 ```
 
-`byId` must be the token's user. An edit's `body` is trimmed and must be non-blank, at most 600 characters,
+`byId` must be the token's user, and that user must be the class teacher of the comment's stream (through its
+term close) or a Director of Studies; anyone else is `forbidden`, before any version rule. An edit's `body` is trimmed and must be non-blank, at most 600 characters,
 with no NUL; 600 characters is what fits the report card.
 
 | | pending | draft | failed | accepted |

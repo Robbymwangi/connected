@@ -112,6 +112,12 @@ export function closable(view: TermView): boolean {
   return view.closureId === null && view.assessments > 0 && view.finalized === view.assessments
 }
 
+/* Whether the server would take a comment command from this user (CommentPushHandler::authorize, ADR 0014,
+   decision 6): the stream's class teacher, or a Director of Studies. Everyone else reads. */
+export function mayWriteRemarks(user: { id: string; role: string }, classTeacherId: string | null | undefined): boolean {
+  return user.role === DIRECTOR_OF_STUDIES || (classTeacherId != null && classTeacherId === user.id)
+}
+
 export function actionsFor(comment: CommentView): Array<CommentCommand['kind']> {
   return (['edit', 'accept', 'regenerate'] as const).filter((kind) => canApply(comment.state, kind))
 }

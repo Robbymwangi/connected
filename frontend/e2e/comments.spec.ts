@@ -71,3 +71,16 @@ test('a comment is edited and accepted offline, survives a reload, and syncs in 
   await expect(page.getByTestId('sync-line')).toHaveAttribute('data-sync-category', 'synced', { timeout: 30_000 })
   await expect(card.getByText('Accepted', { exact: true })).toBeVisible()
 })
+
+test('a teacher who is not the class teacher reads the remarks but is offered no way to change them (ADR 0014)', async ({ page }) => {
+  const otherClassTeacher: E2ESyncChange[] = CLOSED_TERM.map((change) => change.recordId === 'class-1'
+    ? { ...change, version: 2, fields: { ...change.fields, classTeacherId: 'teacher-2' } }
+    : change)
+  await signIn(page, [...otherClassTeacher, { table: 'users', recordId: 'teacher-2', version: 1, fields: { name: 'Peter Kariuki', email: 'p.kariuki@example.test' } }])
+
+  await page.goto('/classes/class-1/comments/2025/2')
+  const card = page.getByRole('article').filter({ hasText: 'Amina Osei' })
+  await expect(card.getByText('Amina reads with growing confidence.')).toBeVisible()
+  await expect(page.getByTestId('remarks-owner')).toHaveText('Remarks for Stream 4W are written by its class teacher, Peter Kariuki, or the Director of Studies.')
+  await expect(card.getByRole('button')).toHaveCount(0)
+})

@@ -8,7 +8,7 @@ import type { Student } from '../../fixtures/students'
 import type { Teacher } from '../../fixtures/teachers'
 import { COMMENT_BODY_LIMIT, CommentMovedError, commentBodyProblem, enqueueCommentCommand, type CommentCommand } from '../../lib/commentCommands'
 import { localDatabaseFor } from '../../lib/localDatabase'
-import { actionsFor, type CommentView } from '../../lib/termComments'
+import { actionsFor, mayWriteRemarks, type CommentView } from '../../lib/termComments'
 import { useTermComments } from './useTermComments'
 
 type CommentReviewProps = {
@@ -60,6 +60,8 @@ export function CommentReview({ cls, year, term, students, teachers, onBack, onB
   const view = state.status === 'ready' ? state.terms.find((item) => item.term === term) : undefined
   const comments = [...(view?.comments ?? [])].sort((a, b) => nameOf(a.studentId).localeCompare(nameOf(b.studentId)))
   const accepted = comments.filter((comment) => comment.state === 'accepted').length
+  const canWrite = mayWriteRemarks(user, cls.teacherId)
+  const owner = cls.teacherId ? `its class teacher, ${cls.teacher},` : 'its class teacher'
 
   return (
     <div className="px-5 pt-6 pb-12 lg:px-8">
@@ -73,6 +75,11 @@ export function CommentReview({ cls, year, term, students, teachers, onBack, onB
           Stream {cls.stream} · {year} · {accepted} of {comments.length} accepted
         </p>
       </div>
+      {!canWrite && comments.length > 0 && (
+        <p className="mb-4 rounded-xl border border-border bg-muted/40 px-4 py-2 text-sm text-muted-foreground" data-testid="remarks-owner">
+          Remarks for Stream {cls.stream} are written by {owner} or the Director of Studies.
+        </p>
+      )}
       {notice && <p className="mb-4 rounded-xl border border-warning/30 bg-warning/10 px-4 py-2 text-sm text-foreground" role="status">{notice}</p>}
 
       {state.status === 'loading' && <p className="text-sm text-muted-foreground" role="status">Loading…</p>}
@@ -94,6 +101,7 @@ export function CommentReview({ cls, year, term, students, teachers, onBack, onB
             onSend={(command) => send(comment, command)}
             onAccept={() => setAccepting(comment)}
             userId={user.id}
+            canWrite={canWrite}
           />
         ))}
       </div>
@@ -122,15 +130,16 @@ export function CommentReview({ cls, year, term, students, teachers, onBack, onB
       >
         <p className="text-sm leading-relaxed text-foreground">
           {accepting ? nameOf(accepting.studentId) : ''}'s comment becomes final and their Term {term} report card is generated. Only an
-          administrator's unlock can change it after that.
+          unlock by the Director of Studies or the subject's head of department can change it after that.
         </p>
       </Modal>
     </div>
   )
 }
 
-function CommentCard({ comment, student, author, userId, onSend, onAccept }: {
+function CommentCard({ comment, student, author, userId, canWrite, onSend, onAccept }: {
   comment: CommentView
+  canWrite: boolean
   student: string
   author: string | null
   userId: string
@@ -139,7 +148,7 @@ function CommentCard({ comment, student, author, userId, onSend, onAccept }: {
 }) {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState('')
-  const actions = actionsFor(comment)
+  const actions = canWrite ? actionsFor(comment) : []
   const problem = commentBodyProblem(text)
   const length = [...text.trim()].length
 
