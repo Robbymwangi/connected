@@ -60,6 +60,21 @@ return [
             'report' => false,
         ],
 
+        // The s3 disk as a browser reaches it, used only to presign report card URLs
+        // (ReportsController). Same as s3 unless AWS_PUBLIC_ENDPOINT says otherwise, as under Sail,
+        // where the API reaches MinIO as minio:9000 and the browser as localhost:9000.
+        's3-public' => [
+            'driver' => 's3',
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION'),
+            'bucket' => env('AWS_BUCKET'),
+            'endpoint' => env('AWS_PUBLIC_ENDPOINT', env('AWS_ENDPOINT')),
+            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*

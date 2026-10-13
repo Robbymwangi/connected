@@ -3,10 +3,12 @@
 namespace App\Sync;
 
 use App\Models\Assessment;
+use App\Models\Comment;
 use App\Models\Conflict;
 use App\Models\Notification;
 use App\Models\SubjectModeration;
 use App\Models\TeacherAssignment;
+use App\Models\TermClosure;
 use App\Models\User;
 use Illuminate\Support\Str;
 
@@ -93,6 +95,83 @@ final class ServerNotifications
             'Conflict referred to you',
             "{$this->describe($assessment)}: a conflict between two teachers was referred to you. Open Sync to settle it.",
         );
+    }
+
+    /* A comment of a term close failed to generate (docs/spec/workflow.md, Comments): the user who closed
+       the term is told, once per term close while the notice is unread, not once per student. Called by
+       CommentGeneration::settle, the one place a comment becomes failed, inside its transaction. The
+       notice names the stream and term, never a student: it points to the review screen, where the
+       failed comments are. */
+    public function commentsFailed(Comment $comment): void
+    {
+        $closure = TermClosure::query()->with(['schoolClass', 'closedBy'])->find($comment->term_closure_id);
+
+        if ($closure === null) {
+            return;
+        }
+
+        $stream = $this->stream($closure);
+
+        $this->notifyCloser(
+            $closure,
+            'comments-failed',
+            'warning',
+            "Comments not drafted: {$stream}, Term {$closure->term}",
+            "Some comments for {$stream}, Term {$closure->term} {$closure->year} could not be drafted. Open the term's comments to write them or regenerate them.",
+        );
+    }
+
+    /* Every student of a term close has a report card (docs/spec/workflow.md, Report cards): the user
+       who closed the term is told, by the report job that wrote the last card, inside its transaction. */
+    public function reportsReady(TermClosure $closure): void
+    {
+        $closure->loadMissing(['schoolClass', 'closedBy']);
+        $stream = $this->stream($closure);
+
+        $this->notifyCloser(
+            $closure,
+            'report-ready',
+            'success',
+            "Report cards ready: {$stream}, Term {$closure->term}",
+            "Every report card for {$stream}, Term {$closure->term} {$closure->year} has been generated.",
+        );
+    }
+
+    /* One unread notice per kind and term close, to the closer, unless they have been deactivated. */
+    private function notifyCloser(TermClosure $closure, string $kind, string $tone, string $title, string $body): void
+    {
+        $user = $closure->closedBy;
+
+        if ($user === null || $user->deactivated_at !== null) {
+            return;
+        }
+
+        $alreadyUnread = Notification::query()
+            ->where('user_id', $user->id)
+            ->where('kind', $kind)
+            ->where('term_closure_id', $closure->id)
+            ->where('unread', true)
+            ->exists();
+
+        if ($alreadyUnread) {
+            return;
+        }
+
+        Notification::create([
+            'institution_id' => $closure->institution_id,
+            'user_id' => $user->id,
+            'term_closure_id' => $closure->id,
+            'kind' => $kind,
+            'tone' => $tone,
+            'title' => Str::limit($title, self::TITLE_LIMIT),
+            'body' => $body,
+            'unread' => true,
+        ]);
+    }
+
+    private function stream(TermClosure $closure): string
+    {
+        return "Grade {$closure->schoolClass?->grade} {$closure->schoolClass?->stream}";
     }
 
     /**

@@ -107,12 +107,13 @@ make dev       # frontend on http://localhost:5173
 
 The first `make setup` builds the Sail image and takes a few minutes. The API answers
 on http://localhost:8000 (`GET /api/user` returns 401 until you have a token; that is
-the success case). Run `make` alone to list every target.
+the success case). The admin panel is on http://localhost:8000/admin, for an
+administrator account (ADR 0009). Run `make` alone to list every target.
 
 ### Day to day
 
 ```sh
-make up        # start API, Postgres, and the queue worker (data kept between runs)
+make up        # start API, Postgres, MinIO, and the queue worker (data kept between runs)
 make dev       # frontend dev server, live reload, no service worker
 make offline   # production build on :4173, the app as installed; test offline here
 make check     # typecheck, lint, Vitest, and Pest: what must pass before a commit
@@ -151,6 +152,29 @@ Anything Sail can do is available from `api/` as `./vendor/bin/sail <command>`
 (`sail artisan`, `sail composer`, `sail shell`, `sail logs`); the Makefile only wraps
 the common ones. Read [`frontend/README.md`](frontend/README.md) for the npm scripts
 and how to try the offline behaviour.
+
+### Comments and report cards locally
+
+Comment drafts come from the Anthropic batch API when `ANTHROPIC_API_KEY` is set in
+`api/.env`; without it, drafts are templated stand-ins marked `[Stand-in]`. Never commit
+the key.
+
+Report card PDFs go to S3. Under Sail, MinIO stands in for it: `make up` starts it and
+creates the bucket, and its console is on http://localhost:8900. Point the API at it in
+`api/.env`:
+
+```sh
+AWS_ACCESS_KEY_ID=sail
+AWS_SECRET_ACCESS_KEY=password
+AWS_DEFAULT_REGION=us-east-1
+AWS_BUCKET=reports
+AWS_ENDPOINT=http://minio:9000
+AWS_PUBLIC_ENDPOINT=http://localhost:9000
+AWS_USE_PATH_STYLE_ENDPOINT=true
+```
+
+`AWS_ENDPOINT` is how the API container reaches MinIO; `AWS_PUBLIC_ENDPOINT` is how your
+browser does, and is the host a download link is signed for.
 
 ### Windows with WSL2
 
