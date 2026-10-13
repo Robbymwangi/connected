@@ -24,7 +24,7 @@ describe('filterAssessments', () => {
   const list = [
     make('a', { year: 2025, status: 'in-progress', term: 'Term 1', subject: 'English' }),
     make('b', { year: 2025, status: 'complete', term: 'Term 2', subject: 'Maths' }),
-    make('c', { year: 2024, status: 'reports-generated', term: 'Term 2', subject: 'English' }),
+    make('c', { year: 2024, status: 'finalized', term: 'Term 2', subject: 'English' }),
   ]
 
   it('always narrows by year', () => {
@@ -44,10 +44,10 @@ describe('filterAssessments', () => {
 
 describe('sortQueue', () => {
   it('puts what needs the teacher first and keeps order within a group', () => {
-    const statuses: LifecycleStatus[] = ['reports-generated', 'scheduled', 'in-progress', 'complete', 'in-progress', 'finalized']
+    const statuses: LifecycleStatus[] = ['finalized', 'scheduled', 'in-progress', 'complete', 'in-progress', 'finalized']
     const list = statuses.map((status, i) => make(`${i}`, { status }))
     expect(sortQueue(list).map((a) => a.status)).toEqual([
-      'complete', 'in-progress', 'in-progress', 'scheduled', 'finalized', 'reports-generated',
+      'complete', 'in-progress', 'in-progress', 'scheduled', 'finalized', 'finalized',
     ])
     expect(sortQueue(list).filter((a) => a.status === 'in-progress').map((a) => a.id)).toEqual(['2', '4'])
   })
