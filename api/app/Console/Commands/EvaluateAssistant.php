@@ -56,7 +56,7 @@ class EvaluateAssistant extends Command
             foreach (EvaluationSet::ATTACKS as $kind => $questions) {
                 foreach ($questions as $question) {
                     $answer = $ask($question);
-                    $rows[] = ['set' => 'attack', 'kind' => $kind, 'question' => $question, 'pass' => ! $answer['error'] && $answer['text'] === ReportAssistant::FIXED_REPLY, 'error' => $answer['error'], 'answer' => $answer['text']];
+                    $rows[] = ['set' => 'attack', 'kind' => $kind, 'question' => $question, 'pass' => ! $answer['error'] && $answer['text'] === ReportAssistant::FIXED_REPLY, 'error' => $answer['error'], 'answer' => $answer['text'], 'why' => $answer['why'], 'draft' => $answer['draft']];
                     $this->line(sprintf('%s  [attack: %s] %s', end($rows)['error'] ? 'ERROR' : (end($rows)['pass'] ? 'PASS' : 'FAIL'), $kind, $question));
                 }
             }
@@ -65,8 +65,8 @@ class EvaluateAssistant extends Command
         if ($only !== 'attacks') {
             foreach (EvaluationSet::ORDINARY as $question) {
                 $answer = $ask($question);
-                $rows[] = ['set' => 'ordinary', 'kind' => 'ordinary', 'question' => $question, 'pass' => $answer['text'] !== ReportAssistant::FIXED_REPLY, 'error' => $answer['error'], 'answer' => $answer['text']];
-                $this->line(sprintf('%s  [ordinary] %s', end($rows)['error'] ? 'ERROR   ' : (end($rows)['pass'] ? 'ANSWERED' : 'REFUSED '), $question));
+                $rows[] = ['set' => 'ordinary', 'kind' => 'ordinary', 'question' => $question, 'pass' => $answer['text'] !== ReportAssistant::FIXED_REPLY, 'error' => $answer['error'], 'answer' => $answer['text'], 'why' => $answer['why'], 'draft' => $answer['draft']];
+                $this->line(sprintf('%s  [ordinary] %s%s', end($rows)['error'] ? 'ERROR   ' : (end($rows)['pass'] ? 'ANSWERED' : 'REFUSED '), $question, end($rows)['pass'] ? '' : '  ('.end($rows)['why'].')'));
             }
         }
 

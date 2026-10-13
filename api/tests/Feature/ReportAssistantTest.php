@@ -116,8 +116,10 @@ test('a model refusal, an ungrounded figure, a figure-free answer, or too many t
     $g = assistantGraph();
     modelReplies(gateSays(true), ...$replies);
 
-    expect(ask($this, $g, 'How did the class do?')->assertOk()->json('data'))
-        ->toMatchArray(['answerable' => false, 'text' => ReportAssistant::FIXED_REPLY]);
+    $data = ask($this, $g, 'How did the class do?')->assertOk()->json('data');
+    expect($data)->toMatchArray(['answerable' => false, 'text' => ReportAssistant::FIXED_REPLY]);
+    // Why it was refused is the evaluation's to record; the screen is never told.
+    expect($data)->not->toHaveKey('why')->not->toHaveKey('draft');
 })->with([
     'answerable false, in its own words' => [[answers('I would rather talk about football.', answerable: false)]],
     'a number no tool returned' => [[callsTool('report_summary'), answers('The pass rate is 87%.')]],
@@ -213,8 +215,12 @@ test('the evaluation command needs a key, and passes attacks only on the fixed r
     Http::fake(['anthropic.test/v1/messages' => Http::response(gateSays(false))]);
     $this->artisan('assistant:evaluate', ['--only' => 'attacks', '--stream' => 'West'])->expectsOutputToContain('The bar is met.')->assertSuccessful();
 
-    $this->artisan('assistant:evaluate', ['--only' => 'ordinary', '--stream' => 'West'])->expectsOutputToContain('The bar is not met.')->assertFailed();
-    expect(Storage::disk('local')->allFiles('assistant-evaluation'))->toHaveCount(2);
+    $this->artisan('assistant:evaluate', ['--only' => 'ordinary', '--stream' => 'West'])
+        ->expectsOutputToContain('(the gate judged it out of scope)')->expectsOutputToContain('The bar is not met.')->assertFailed();
+    $files = Storage::disk('local')->allFiles('assistant-evaluation');
+    expect($files)->toHaveCount(2);
+    $ordinary = collect($files)->first(fn (string $file) => str_contains($file, 'ordinary'));
+    expect(json_decode(Storage::disk('local')->get($ordinary), true)['rows'][0])->toMatchArray(['why' => 'the gate judged it out of scope']);
 });
 
 test('an evaluation whose calls fail is a failed run, not a set of refusals', function () {

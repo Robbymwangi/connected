@@ -70,31 +70,33 @@ final class ReportAssistant
     ) {}
 
     /**
-     * The answer for the screen. `error` is for the evaluation only: it tells a fixed reply that
-     * came from a failed call apart from one that was a refusal, and the controller never sends it.
+     * The answer for the screen. `error`, `why`, and `draft` are for the evaluation only, and the
+     * controller never sends them: `error` tells a fixed reply that came from a failed call apart
+     * from a refusal, `why` names the step that refused, and `draft` is the model's own answer when
+     * a check refused it.
      *
-     * @return array{answerable: bool, text: string, chart: ?string, error: bool}
+     * @return array{answerable: bool, text: string, chart: ?string, error: bool, why: ?string, draft: ?string}
      */
     public function answer(string $question, AnalyticsFilters $filters, Conversation $conversation): array
     {
-        $fixed = ['answerable' => false, 'text' => self::FIXED_REPLY, 'chart' => null, 'error' => false];
+        $fixed = ['answerable' => false, 'text' => self::FIXED_REPLY, 'chart' => null, 'error' => false, 'why' => null, 'draft' => null];
 
         try {
             $question = $conversation->handles->conceal($question, $this->roster($filters));
 
             if (! $this->inScope($question)) {
-                return $fixed;
+                return [...$fixed, 'why' => 'the gate judged it out of scope'];
             }
 
             $outcome = $this->loop($question, $filters, $conversation);
         } catch (Throwable $exception) {
             Log::warning('report assistant failed', ['error' => $exception->getMessage()]);
 
-            return [...$fixed, 'error' => true];
+            return [...$fixed, 'error' => true, 'why' => $exception->getMessage()];
         }
 
-        if ($outcome === null) {
-            return $fixed;
+        if (isset($outcome['refused'])) {
+            return [...$fixed, 'why' => $outcome['refused'], 'draft' => $outcome['draft'] ?? null];
         }
 
         $conversation->remember($question, $outcome['text']);
@@ -105,6 +107,8 @@ final class ReportAssistant
             'text' => $conversation->handles->restore($outcome['text'], $names),
             'chart' => $outcome['chart'],
             'error' => false,
+            'why' => null,
+            'draft' => null,
         ];
     }
 
@@ -149,11 +153,11 @@ final class ReportAssistant
     }
 
     /**
-     * Step 2 and 3. Null means the fixed reply.
+     * Step 2 and 3. A `refused` outcome, naming the check, means the fixed reply.
      *
-     * @return array{text: string, chart: ?string}|null
+     * @return array{text: string, chart: ?string}|array{refused: string, draft?: string}
      */
-    private function loop(string $question, AnalyticsFilters $filters, Conversation $conversation): ?array
+    private function loop(string $question, AnalyticsFilters $filters, Conversation $conversation): array
     {
         $tools = new ReportTools($this->analytics, $filters, $conversation->handles);
         $results = [];
@@ -180,14 +184,14 @@ final class ReportAssistant
             $stop = $message['stop_reason'] ?? null;
 
             if ($stop !== 'tool_use') {
-                return $stop === 'end_turn' ? self::accept(self::finalJson($message), $results) : null;
+                return $stop === 'end_turn' ? self::accept(self::finalJson($message), $results) : ['refused' => "the model stopped for {$stop}"];
             }
 
             $uses = array_values(array_filter($message['content'] ?? [], fn (array $block) => ($block['type'] ?? null) === 'tool_use'));
             $calls += count($uses);
 
             if ($uses === [] || $calls > self::MAX_TOOL_CALLS) {
-                return null;
+                return ['refused' => $uses === [] ? 'the model stopped for a tool but named none' : 'the model asked for more than '.self::MAX_TOOL_CALLS.' tool calls'];
             }
 
             $messages[] = ['role' => 'assistant', 'content' => self::echoed($message['content'])];
@@ -234,14 +238,24 @@ final class ReportAssistant
      *
      * @param  array<string, mixed>|null  $answer
      * @param  list<array<string, mixed>>  $results
-     * @return array{text: string, chart: ?string}|null
+     * @return array{text: string, chart: ?string}|array{refused: string, draft?: string}
      */
-    private static function accept(?array $answer, array $results): ?array
+    private static function accept(?array $answer, array $results): array
     {
         $text = is_string($answer['text'] ?? null) ? trim($answer['text']) : '';
 
-        if (($answer['answerable'] ?? null) !== true || $text === '' || ! Grounding::holds($text, $results)) {
-            return null;
+        if (($answer['answerable'] ?? null) !== true) {
+            return ['refused' => 'the model marked it unanswerable', 'draft' => $text];
+        }
+
+        if ($text === '') {
+            return ['refused' => 'the answer was empty'];
+        }
+
+        $ungrounded = Grounding::ungrounded($text, $results);
+
+        if ($ungrounded !== null) {
+            return ['refused' => $ungrounded === [] ? 'the answer cites no figure' : 'figures not in any tool result: '.implode(', ', $ungrounded), 'draft' => $text];
         }
 
         $chart = $answer['chart'] ?? 'none';

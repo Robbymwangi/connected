@@ -17,10 +17,22 @@ final class Grounding
      */
     public static function holds(string $text, array $toolResults): bool
     {
+        return self::ungrounded($text, $toolResults) === null;
+    }
+
+    /**
+     * Why an answer fails the check, for the evaluation's record: null when it holds, an empty list
+     * when the answer cites no figure, otherwise the cited figures no tool result contains.
+     *
+     * @param  list<mixed>  $toolResults
+     * @return list<float>|null
+     */
+    public static function ungrounded(string $text, array $toolResults): ?array
+    {
         $cited = self::numbersIn($text);
 
         if ($cited === []) {
-            return false;
+            return [];
         }
 
         $known = [];
@@ -32,13 +44,9 @@ final class Grounding
             }
         });
 
-        foreach ($cited as $number) {
-            if (! self::matchesAny($number, $known)) {
-                return false;
-            }
-        }
+        $missing = array_values(array_filter($cited, fn (float $number) => ! self::matchesAny($number, $known)));
 
-        return true;
+        return $missing === [] ? null : $missing;
     }
 
     /** @return list<float> */

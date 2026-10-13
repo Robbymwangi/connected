@@ -13,6 +13,11 @@ test('an answer is grounded only when every number it cites came from a tool res
     expect(Grounding::holds('40% are below.', $results))->toBeTrue();
     expect(Grounding::holds('62.5% passed, up from 55% last year.', $results))->toBeFalse();
     expect(Grounding::holds('Most students passed.', $results))->toBeFalse();
+
+    // For the evaluation's record: which figures failed, or none cited at all.
+    expect(Grounding::ungrounded('62.5% passed, up from 55% last year.', $results))->toBe([55.0]);
+    expect(Grounding::ungrounded('Most students passed.', $results))->toBe([]);
+    expect(Grounding::ungrounded('62.5% passed.', $results))->toBeNull();
 });
 
 test('handles and term numbers are not figures', function () {
