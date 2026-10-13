@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
+import { useCurrentUser } from '../../app/AuthContext'
 import type { SessionStore } from '../../app/useSessionStore'
 import type { SchoolDirectoryState } from '../../app/useSchoolDirectory'
 import { Modal } from '../../components/Modal'
@@ -10,6 +11,7 @@ import { AssessmentReport } from './AssessmentReport'
 import { BrowseTree } from './BrowseTree'
 import { CreateAssessmentDialog, type NewAssessment } from './CreateAssessmentDialog'
 import { QueueList } from './QueueList'
+import { useTermClosures } from './useTermClosures'
 
 type View = 'queue' | 'browse'
 
@@ -44,6 +46,7 @@ export function AssessmentsScreen({
   onCreateClosed,
 }: AssessmentsScreenProps) {
   const { assessments: list, conflicts } = store
+  const closures = useTermClosures(useCurrentUser().id)
   const [listView, setListView] = useState<View>('queue')
   const [filters, setFilters] = useState<QueueFilters>(() => defaultFilters())
   const [creating, setCreating] = useState(creatingOnArrival)
@@ -207,6 +210,7 @@ export function AssessmentsScreen({
         classes={termClasses}
         subjects={school?.subjects ?? []}
         criteriaBySubject={school?.criteriaBySubject ?? {}}
+        closures={closures}
         onClose={() => {
           setCreating(false)
           onCreateClosed?.()
