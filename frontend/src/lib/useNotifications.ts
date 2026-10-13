@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import type { StatusTone } from '../components/StatusPill'
 import { localDatabaseFor, type LocalRecord } from './localDatabase'
 
-export type NotificationKind = 'sync-conflict' | 'submission' | 'report-ready' | 'enrolment' | 'edit-blocked'
+export type NotificationKind = 'sync-conflict' | 'submission' | 'report-ready' | 'enrolment' | 'edit-blocked' | 'comments-failed'
 
 export type NotificationItem = {
   id: string
@@ -19,7 +19,7 @@ export type NotificationsState =
   | { status: 'ready'; items: NotificationItem[] }
   | { status: 'error'; items: NotificationItem[] }
 
-const KINDS = new Set<NotificationKind>(['sync-conflict', 'submission', 'report-ready', 'enrolment', 'edit-blocked'])
+const KINDS = new Set<NotificationKind>(['sync-conflict', 'submission', 'report-ready', 'enrolment', 'edit-blocked', 'comments-failed'])
 const TONES = new Set<StatusTone>(['success', 'info', 'neutral', 'warning', 'danger', 'primary'])
 
 type NotificationSnapshot = {

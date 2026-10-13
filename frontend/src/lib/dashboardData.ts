@@ -29,7 +29,7 @@ export function classWorkload(schoolClass: SchoolClass, assessments: Assessment[
     scheduled: sittings.filter((assessment) => assessment.status === 'scheduled').length,
     inProgress: sittings.filter((assessment) => assessment.status === 'in-progress').length,
     needsFinalizing: sittings.filter((assessment) => assessment.status === 'complete').length,
-    closed: sittings.filter((assessment) => assessment.status === 'finalized' || assessment.status === 'reports-generated').length,
+    closed: sittings.filter((assessment) => assessment.status === 'finalized').length,
   }
 }
 
@@ -38,7 +38,6 @@ const QUEUE_ORDER: Record<Assessment['status'], number> = {
   'in-progress': 1,
   scheduled: 2,
   finalized: 3,
-  'reports-generated': 4,
 }
 
 export function pendingAssessmentsForDashboard(assessments: Assessment[]): Assessment[] {

@@ -131,7 +131,9 @@ comment is live, and its state is still `pending`. That one rule covers a
 regenerate while a batch is in flight, an edit that overtakes generation, an unlock
 mid-batch, and a duplicate submit after a crash. A failed or expired generation
 sets the comment `failed` and writes a `comments-failed` notification to the user
-who closed the term, once per term close.
+who closed the term, once per term close: a second failure while that notice is
+unread adds nothing, and one after it is read writes a new notice. It names the
+stream and term, never a student, and is not sent to a deactivated user.
 
 ## Report cards
 

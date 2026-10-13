@@ -96,7 +96,8 @@ async function freeze(database: LocalDatabase, limit: number): Promise<OutboxEnt
     /* Which assessment an entry belongs to, so a finalize can wait behind anything of
        its assessment that is held back. A command reaches its assessment through the
        conflict's mark. */
-    const commandConflicts = await database.conflicts.bulkGet(open.filter((entry) => entry.kind === 'command').map((entry) => entry.recordId))
+    const isConflictCommand = (entry: OutboxEntry) => entry.kind === 'command' && entry.table === 'conflicts'
+    const commandConflicts = await database.conflicts.bulkGet(open.filter(isConflictCommand).map((entry) => entry.recordId))
     const markOfConflict = new Map(commandConflicts.flatMap((row) => (row && typeof row.markId === 'string' ? [[row.id, row.markId] as const] : [])))
     const markIds = [
       ...open.filter((entry) => entry.table === 'marks').map((entry) => entry.recordId),
@@ -106,7 +107,7 @@ async function freeze(database: LocalDatabase, limit: number): Promise<OutboxEnt
     const assessmentOfMark = new Map(markRows.flatMap((row) => (row && typeof row.assessmentId === 'string' ? [[row.id, row.assessmentId] as const] : [])))
     const assessmentOf = (entry: OutboxEntry): string | null => {
       if (entry.table === 'assessments') return entry.recordId
-      if (entry.kind === 'command') {
+      if (isConflictCommand(entry)) {
         const markId = markOfConflict.get(entry.recordId)
         return markId ? assessmentOfMark.get(markId) ?? null : null
       }
@@ -115,9 +116,10 @@ async function freeze(database: LocalDatabase, limit: number): Promise<OutboxEnt
       return assessmentOfMark.get(entry.recordId) ?? (typeof fromFields === 'string' ? fromFields : null)
     }
 
-    /* A held command whose assessment cannot be worked out (its conflict or the mark
-       behind it is not on this device) might belong to any assessment, so every finalize
-       waits behind it: the server refuses a finalize while a mark conflict is open. */
+    /* A held conflict command whose assessment cannot be worked out (its conflict or the
+       mark behind it is not on this device) might belong to any assessment, so every
+       finalize waits behind it: the server refuses a finalize while a mark conflict is
+       open. A comment command belongs to no assessment and holds nothing back. */
     const UNKNOWN = '*'
     const held = new Set<string>()
     const selected: OutboxEntry[] = []
@@ -129,7 +131,7 @@ async function freeze(database: LocalDatabase, limit: number): Promise<OutboxEnt
         selected.length < limit
       if (ready) selected.push(entry)
       else if (assessmentId !== null) held.add(assessmentId)
-      else if (entry.kind === 'command') held.add(UNKNOWN)
+      else if (isConflictCommand(entry)) held.add(UNKNOWN)
     }
 
     await database.outbox.bulkUpdate(
@@ -248,24 +250,27 @@ async function discardRefusedCreate(database: LocalDatabase, entry: OutboxEntry,
   }
 }
 
-const BEHIND_REFUSED = 'an earlier action on this conflict was refused'
+const BEHIND_REFUSED = 'an earlier action on this record was refused'
 
 function noticeFor(entry: OutboxEntry, current: Record<string, unknown> | null): SyncNotice {
   return { id: entry.id, table: entry.table, recordId: entry.recordId, kind: 'conflict', sent: entry.fields, current, at: entry.at }
 }
 
-/* A command acts on a conflict, not on a record this device edited, so it leaves the
-   conflict row and every pending flag alone: the conflict changes only when the server's
-   version of it is pulled. What a command can come back as:
+/* A command acts on a conflict or a comment by naming what to do, not by sending field
+   values, so it leaves the row and every pending flag alone: the row changes only when the
+   server's version of it is pulled. Both tables settle the same way. What a command can
+   come back as:
    - accepted: kept as acknowledged, which drives the display until the pull catches up;
      the command queued behind it can now be sent against the version the server answered.
-   - a stale base: the conflict moved on without this device (the other party proposed, a
-     moderator resolved). The command is dropped with a notice and the fresh conflict
-     adopted, so the teacher decides again with what is now true; commands queued behind
-     it were decided on a state that never existed, and go with it.
+   - a stale base: the row moved on without this device (the other party proposed, a
+     moderator resolved; a colleague edited or accepted the comment). The command is
+     dropped with a notice and the fresh row adopted, so the teacher decides again with
+     what is now true; commands queued behind it were decided on a state that never
+     existed, and go with it.
    - refused: failed with its reason, and so is everything queued behind it. */
 async function settleCommand(database: LocalDatabase, entry: OutboxEntry, result: PushResult, notices: SyncNotice[]): Promise<void> {
-  const behind = (await entriesForRecord(database, 'conflicts', entry.recordId))
+  const table = database.table(entry.table)
+  const behind = (await entriesForRecord(database, entry.table, entry.recordId))
     .filter((other) => other.kind === 'command' && (other.seq as number) > (entry.seq as number) && other.state === 'queued')
 
   if (result.status === 'accepted') {
@@ -279,9 +284,9 @@ async function settleCommand(database: LocalDatabase, entry: OutboxEntry, result
   if (result.status === 'conflict') {
     await database.outbox.delete(entry.seq as number)
     notices.push(noticeFor(entry, result.current?.fields ?? null))
-    const row = await database.conflicts.get(entry.recordId)
+    const row = await table.get(entry.recordId)
     if (result.current && (!row || result.current.version >= row.version)) {
-      await database.conflicts.put(applyServerRow(row, result.current))
+      await table.put(applyServerRow(row, result.current))
     }
     for (const other of behind) {
       await database.outbox.delete(other.seq as number)

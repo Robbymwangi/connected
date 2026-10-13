@@ -32,7 +32,7 @@ describe('dashboardData', () => {
       assessment('draft', 'scheduled'),
       assessment('active', 'in-progress'),
       assessment('done', 'complete'),
-      assessment('closed', 'reports-generated'),
+      assessment('closed', 'finalized'),
       assessment('other-year', 'scheduled', { year: 2025 }),
       assessment('other-stream', 'scheduled', { stream: '5B' }),
     ], 2026)).toEqual({ assessmentCount: 4, scheduled: 1, inProgress: 1, needsFinalizing: 1, closed: 1 })
