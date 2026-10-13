@@ -4,7 +4,7 @@ Date: 2026-10-12
 
 ## Status
 
-Proposed.
+Accepted 2026-10-12. Implemented by the comment generation jobs (#151).
 
 ## Context
 
