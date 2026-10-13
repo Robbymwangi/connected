@@ -35,6 +35,7 @@ describe('mapSchoolDirectory', () => {
         grade: 'Grade 4',
         stream: '4W',
         teacher: 'Jane Teacher',
+        teacherId: 'user-1',
         enrolment: 1,
         subjects: ['English'],
         assessments: 1,

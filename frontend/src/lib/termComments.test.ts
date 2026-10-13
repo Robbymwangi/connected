@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { LocalRecord } from './localDatabase'
 import type { OutboxEntry } from './outbox'
-import { actionsFor, closable, commentView, mayCloseTerm, mayUnlock, termViews } from './termComments'
+import { actionsFor, closable, commentView, mayCloseTerm, mayUnlock, mayWriteRemarks, termViews } from './termComments'
 import { DIRECTOR_OF_STUDIES } from './session'
 
 const AT = '2026-10-12T08:00:00.000Z'
@@ -59,5 +59,14 @@ describe('mayCloseTerm and mayUnlock', () => {
     expect(mayUnlock({ role: 'Teacher', moderatedSubjectIds: ['maths'] }, 'maths')).toBe(true)
     expect(mayUnlock({ role: 'Teacher', moderatedSubjectIds: ['maths'] }, 'science')).toBe(false)
     expect(mayUnlock({ role: 'Teacher', moderatedSubjectIds: [] }, undefined)).toBe(false)
+  })
+})
+
+describe('mayWriteRemarks', () => {
+  it('lets the stream\'s class teacher or a Director of Studies act on its remarks, and nobody else', () => {
+    expect(mayWriteRemarks({ id: 'u1', role: 'Teacher' }, 'u1')).toBe(true)
+    expect(mayWriteRemarks({ id: 'u9', role: DIRECTOR_OF_STUDIES }, null)).toBe(true)
+    expect(mayWriteRemarks({ id: 'u2', role: 'Teacher' }, 'u1')).toBe(false)
+    expect(mayWriteRemarks({ id: 'u2', role: 'Teacher' }, null)).toBe(false)
   })
 })

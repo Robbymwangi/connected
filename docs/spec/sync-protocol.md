@@ -548,7 +548,8 @@ exactly one of these in `fields`:
 { "regenerate": { "byId": "<me>" } }
 ```
 
-`byId` must be the token's user. An edit's `body` is trimmed and must be non-blank, at most 600 characters,
+`byId` must be the token's user, and that user must be the class teacher of the comment's stream (through its
+term close) or a Director of Studies; anyone else is `forbidden`, before any version rule. An edit's `body` is trimmed and must be non-blank, at most 600 characters,
 with no NUL; 600 characters is what fits the report card.
 
 | | pending | draft | failed | accepted |
@@ -557,11 +558,13 @@ with no NUL; 600 characters is what fits the report card.
 | accept | invalid | allowed | invalid | invalid |
 | regenerate | allowed | allowed | allowed | invalid |
 
-**Who.** Any authenticated user of the institution, as grading is unrestricted; another school's comment is
-never found, so it is `forbidden` at a nonzero base. A comment is created only by the term close: an unknown
-id at base 0 is `invalid`.
+**Who.** The class teacher of the comment's stream, read through its term close as it stands when the command
+arrives, or a Director of Studies (ADR 0014, decision 6); any other teacher is `forbidden`. Another school's
+comment is never found, so it is `forbidden` at a nonzero base. A comment is created only by the term close: an
+unknown id at base 0 is `invalid`.
 
-**Order.** After rule 1: the comment is found and locked; the command's shape and `byId`; a base ahead of the
+**Order.** After rule 1: the comment is found and locked; who may act (`forbidden` otherwise, before any version
+rule, so a refused command never sits as a conflict); the command's shape and `byId`; a base ahead of the
 comment's version is `invalid`; a base behind it is `conflict` with the comment as `current`, so an acceptance
 never goes through over a body the acceptor did not see; and only at an equal version the state checks
 (`invalid`, including a comment withdrawn by an unlock) and the write.

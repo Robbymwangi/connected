@@ -113,9 +113,12 @@ drafts are templated from the same figures and labelled as stand-ins, as the
 assistant's are: the body starts with `[Stand-in]`, so the label travels with the
 text wherever it appears.
 
-Any authenticated user may edit, accept, or regenerate a comment that is not yet
-accepted, not only a particular teacher, consistent with grading itself being
-unrestricted. These are commands, not field patches, so that a stale `accepted`
+The stream's class teacher, or a Director of Studies, may edit, accept, or
+regenerate a comment that is not yet accepted (ADR 0014, decision 6): on a Kenyan
+report form the remark is the class teacher's. Any other teacher reads them and is
+refused with `forbidden`. The Director of Studies covers a class with no class
+teacher and one whose class teacher is away; the server checks the grant, never
+an absence. These are commands, not field patches, so that a stale `accepted`
 can never merge over a body the acceptor did not see. Editing keeps and changes the
 text and supersedes any generation in flight; it is allowed on a `failed` comment
 too. Regenerating discards the text and requests a new one. Accepting moves the
