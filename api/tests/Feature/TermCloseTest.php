@@ -7,6 +7,7 @@ use App\Models\CommentGeneration;
 use App\Models\Enrolment;
 use App\Models\SchoolClass;
 use App\Models\TeacherAssignment;
+use App\Models\Term;
 use App\Models\TermClosure;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
@@ -199,7 +200,9 @@ test('the term must be 1, 2, or 3 and the year an integer', function (array $ove
 ]);
 
 test('while the term is closed, an assessment cannot be created in it over sync', function () {
+    // A close is allowed while its term is still open (ADR 0014, decision 5): report forms go home on closing day.
     $g = buildGraph('School A', '-closed-create');
+    Term::query()->where('institution_id', $g['institution']->id)->update(['term' => 1]);
     closeGraphTerm($g);
     $id = Str::uuid7()->toString();
 

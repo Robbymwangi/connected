@@ -33,6 +33,7 @@ const directory = mapSchoolDirectory({
   subjects: [{ id: 'subject-1', version: 1, name: 'English' }],
   teacherAssignments: [],
   users: [{ id: 'teacher-1', version: 1, name: 'Teacher One', email: 'teacher@example.test' }],
+  terms: [],
 })
 
 const assessment: Assessment = {
