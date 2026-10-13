@@ -1,5 +1,7 @@
 <?php
 
+use App\Filament\Resources\Admins\Pages\CreateAdmin;
+use App\Filament\Resources\Admins\Pages\ListAdmins;
 use App\Filament\Resources\Assessments\Pages\ListAssessments;
 use App\Filament\Resources\Students\Pages\CreateStudent;
 use App\Filament\Resources\Teachers\Pages\EditUser;
@@ -169,12 +171,14 @@ test('an administrator cannot deactivate themselves, nor the last active adminis
     $this->actingAs($admin, 'admin');
     asPanelRequestFor($admin);
 
-    Livewire::test(ListUsers::class)->callTableAction('deactivate', $admin)->assertNotified('You cannot deactivate your own account.');
+    Livewire::test(ListAdmins::class)->callTableAction('deactivate', $admin)->assertNotified('You cannot deactivate your own account.');
     expect($admin->fresh()->deactivated_at)->toBeNull();
 
     $second = adminOf($g, 'second@example.com');
-    $admin->update(['is_admin' => false]);
-    expect(fn () => $second->deactivate($g['teacher']))->toThrow(DomainException::class, 'only active administrator');
+    Livewire::test(ListAdmins::class)->callTableAction('deactivate', $second)->assertNotified('Account deactivated');
+    $second->refresh()->update(['deactivated_at' => null]);
+    $admin->update(['deactivated_at' => now()]);
+    expect(fn () => $second->deactivate($admin))->toThrow(DomainException::class, 'only active administrator');
     expect($second->fresh()->deactivated_at)->toBeNull();
 });
 
@@ -191,6 +195,71 @@ test('the account pages offer no delete, and revoking devices signs a teacher ou
     expect($g['teacher']->fresh()->deactivated_at)->toBeNull();
     $this->app['auth']->forgetGuards();
     $this->withToken($token)->getJson('/api/me')->assertUnauthorized();
+});
+
+test('a head teacher\'s two accounts on one address: the panel signs in only the admin', function () {
+    $g = buildGraph();
+    $teacher = makeColleague($g, 'head@example.com');
+    $teacher->update(['password' => 'the-teaching-password']);
+    $admin = adminOf($g, 'head@example.com');
+    $admin->update(['password' => 'the-office-password']);
+    asPanelRequestFor(null);
+
+    Livewire::test(Login::class)
+        ->fillForm(['email' => 'head@example.com', 'password' => 'the-teaching-password'])
+        ->call('authenticate')
+        ->assertHasFormErrors(['email']);
+    expect(auth('admin')->check())->toBeFalse();
+
+    $this->app['auth']->forgetGuards();
+    Livewire::test(Login::class)
+        ->fillForm(['email' => 'head@example.com', 'password' => 'the-office-password'])
+        ->call('authenticate')
+        ->assertHasNoFormErrors();
+    expect(auth('admin')->id())->toBe($admin->id);
+});
+
+test('the Teachers screen lists teacher accounts and the Admins screen admin accounts, neither the other', function () {
+    $g = buildGraph();
+    $admin = adminOf($g);
+
+    $this->actingAs($admin, 'admin')->get('/admin/teachers')->assertOk()->assertSee($g['teacher']->email)->assertDontSee($admin->email);
+    $this->actingAs($admin, 'admin')->get('/admin/admins')->assertOk()->assertSee($admin->email)->assertDontSee($g['teacher']->email);
+    $this->actingAs($admin, 'admin')->get("/admin/teachers/{$admin->id}/edit")->assertNotFound();
+});
+
+test('an admin made in the panel is an admin account, and its address need be unique only among admins', function () {
+    $g = buildGraph();
+    $admin = adminOf($g);
+    $this->actingAs($admin, 'admin');
+    asPanelRequestFor($admin);
+
+    Livewire::test(CreateAdmin::class)
+        ->fillForm(['name' => 'Head Teacher', 'email' => $g['teacher']->email, 'password' => 'a-long-enough-password'])
+        ->call('create')
+        ->assertHasNoFormErrors();
+    Livewire::test(CreateAdmin::class)
+        ->fillForm(['name' => 'Someone Else', 'email' => $admin->email, 'password' => 'a-long-enough-password'])
+        ->call('create')
+        ->assertHasFormErrors(['email' => 'unique']);
+
+    $made = User::query()->where('name', 'Head Teacher')->sole();
+    expect($made->kind)->toBe(User::ADMIN)->and($made->institution_id)->toBe($g['institution']->id);
+});
+
+test('the Director of Studies grant is made and revoked on a teacher account', function () {
+    $g = buildGraph();
+    $admin = adminOf($g);
+    $this->actingAs($admin, 'admin');
+    asPanelRequestFor($admin);
+
+    Livewire::test(EditUser::class, ['record' => $g['teacher']->getRouteKey()])
+        ->fillForm(['directs_studies' => true])->call('save')->assertHasNoFormErrors();
+    expect($g['teacher']->fresh()->directsStudies())->toBeTrue();
+
+    Livewire::test(EditUser::class, ['record' => $g['teacher']->getRouteKey()])
+        ->fillForm(['directs_studies' => false])->call('save')->assertHasNoFormErrors();
+    expect($g['teacher']->fresh()->directsStudies())->toBeFalse();
 });
 
 test('a moderation grant is made and revoked on the account', function () {

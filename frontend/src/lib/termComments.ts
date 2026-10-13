@@ -1,6 +1,7 @@
 import { canApply, overlayCommentRow, type CommentCommand, type CommentState } from './commentCommands'
 import type { LocalRecord } from './localDatabase'
 import type { OutboxEntry } from './outbox'
+import { DIRECTOR_OF_STUDIES } from './session'
 
 /* What the device knows about a stream's terms for comments and report cards: whether each
    term is closed, whether it can be closed, and each student's comment as this device shows
@@ -91,11 +92,11 @@ export function termViews(input: {
   })
 }
 
-/* Whether the server would let this user close the stream's term (TermClosurePolicy): an
-   administrator, or a teacher assigned to any subject of the stream. Being its class teacher
+/* Whether the server would let this user close the stream's term (TermClosurePolicy): a
+   Director of Studies, or a teacher assigned to any subject of the stream. Being its class teacher
    grants nothing on its own. The server checks again; this only decides whether to offer it. */
 export function mayCloseTerm(user: { id: string; role: string }, classId: string, assignments: readonly LocalRecord[]): boolean {
-  if (user.role === 'Administrator') return true
+  if (user.role === DIRECTOR_OF_STUDIES) return true
   return assignments.some((row) => live(row) && row.userId === user.id && row.classId === classId)
 }
 

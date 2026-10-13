@@ -1,2 +1,2 @@
-4
-comments and reports reshaped per student per term, term_closures and comment_generations added (ADR 0012, #58); a non-additive migration
+5
+users.is_admin replaced by kind and directs_studies, unique(kind, email), seeded admin no longer moderates, a Director of Studies added (ADR 0014); a non-additive migration

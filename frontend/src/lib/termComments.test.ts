@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { LocalRecord } from './localDatabase'
 import type { OutboxEntry } from './outbox'
 import { actionsFor, closable, commentView, mayCloseTerm, termViews } from './termComments'
+import { DIRECTOR_OF_STUDIES } from './session'
 
 const AT = '2026-10-12T08:00:00.000Z'
 const comment = (over: Partial<LocalRecord> = {}): LocalRecord => ({
@@ -51,7 +52,7 @@ describe('mayCloseTerm', () => {
   const assignments: LocalRecord[] = [{ id: 'ta1', version: 1, userId: 'u1', classId: 'c1' }, { id: 'ta2', version: 1, userId: 'u2', classId: 'c1', deletedAt: AT }]
 
   it('lets an administrator or a teacher assigned to the stream close it, and nobody else', () => {
-    expect(mayCloseTerm({ id: 'u9', role: 'Administrator' }, 'c1', [])).toBe(true)
+    expect(mayCloseTerm({ id: 'u9', role: DIRECTOR_OF_STUDIES }, 'c1', [])).toBe(true)
     expect(mayCloseTerm({ id: 'u1', role: 'Teacher' }, 'c1', assignments)).toBe(true)
     expect(mayCloseTerm({ id: 'u2', role: 'Teacher' }, 'c1', assignments)).toBe(false)
     expect(mayCloseTerm({ id: 'u1', role: 'Teacher' }, 'c2', assignments)).toBe(false)

@@ -9,7 +9,7 @@ const meResponse = {
   id: 'u-1',
   name: 'Mercy Achieng',
   email: 'm.achieng@greenvalley.test',
-  is_admin: false,
+  directs_studies: false,
   moderated_subject_ids: [],
 }
 

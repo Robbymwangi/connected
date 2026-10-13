@@ -8,7 +8,7 @@ export type MeResponse = {
   id: string
   name: string
   email: string
-  is_admin: boolean
+  directs_studies: boolean
   moderated_subject_ids: string[]
 }
 

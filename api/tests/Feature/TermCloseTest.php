@@ -10,6 +10,7 @@ use App\Models\TeacherAssignment;
 use App\Models\TermClosure;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 /* 4.3, the term close (ADR 0012): POST /api/term-closures closes one stream's term once every
@@ -72,12 +73,19 @@ test('the close queues generation for its closure once, and a no-op close queues
         && $job->institutionId === $g['institution']->id);
 });
 
-test('an admin closes a term without teaching the stream', function () {
+test('a Director of Studies closes a term without teaching the stream', function () {
     $g = buildGraph();
-    $admin = makeColleague($g, 'admin-close@example.com', admin: true);
+    $director = makeColleague($g, 'dos-close@example.com', directsStudies: true);
     finalizeGraph($g);
 
-    closeTermRequest($this, $g, $admin)->assertCreated()->assertJsonPath('data.closed_by', $admin->id);
+    closeTermRequest($this, $g, $director)->assertCreated()->assertJsonPath('data.closed_by', $director->id);
+});
+
+test('an admin account cannot close a term, even reaching the policy without the API door', function () {
+    $g = buildGraph();
+    $admin = makeColleague($g, 'admin-close@example.com', admin: true);
+
+    expect(Gate::forUser($admin)->allows('create', [TermClosure::class, $g['class']]))->toBeFalse();
 });
 
 test('being the class teacher grants nothing: an unassigned class teacher is forbidden', function () {
@@ -105,7 +113,7 @@ test('a teacher assigned to another stream only is forbidden', function () {
 test('another school\'s stream does not resolve', function () {
     $g = buildGraph('School A', '-close-a');
     $b = buildGraph('School B', '-close-b');
-    $b['teacher']->update(['is_admin' => true]);
+    $b['teacher']->update(['directs_studies' => true]);
     finalizeGraph($g);
 
     closeTermRequest($this, $g, $b['teacher'])->assertUnprocessable()->assertInvalid(['class_id']);
@@ -227,7 +235,7 @@ test('while the term is closed, an assessment cannot be moved into it or out of 
 
 test('the unlock unwinds the close: closure, comments, and reports soft deleted, generations in flight superseded', function () {
     $g = buildGraph();
-    $g['teacher']->update(['is_admin' => true]);
+    $g['teacher']->update(['directs_studies' => true]);
     $closure = closeGraphTerm($g);
     $comment = $closure->comments()->sole();
     $inFlight = CommentGeneration::create(['institution_id' => $g['institution']->id, 'comment_id' => $comment->id, 'status' => 'submitted']);
@@ -244,7 +252,7 @@ test('the unlock unwinds the close: closure, comments, and reports soft deleted,
 
 test('after an unlock, closing again writes a new closure and new comments beside the soft deleted history', function () {
     $g = buildGraph();
-    $g['teacher']->update(['is_admin' => true]);
+    $g['teacher']->update(['directs_studies' => true]);
     $first = closeGraphTerm($g);
     $firstComment = $first->comments()->sole();
     $g['assessment']->unlock($g['teacher']);
@@ -261,7 +269,7 @@ test('after an unlock, closing again writes a new closure and new comments besid
 
 test('unlocking an assessment of another term leaves a closed term alone', function () {
     $g = buildGraph();
-    $g['teacher']->update(['is_admin' => true]);
+    $g['teacher']->update(['directs_studies' => true]);
     $closure = closeGraphTerm($g);
     $later = Assessment::create([
         'institution_id' => $g['institution']->id, 'class_id' => $g['class']->id, 'subject_id' => $g['subject']->id,

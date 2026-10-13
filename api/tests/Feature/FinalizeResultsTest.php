@@ -97,7 +97,7 @@ test('max leaves out absent criteria, counts empty and unentered ones, and ignor
 
 test('unlock soft deletes the results and the next finalize writes new rows from the marks as they stand', function () {
     $g = buildGraph();
-    $g['teacher']->update(['is_admin' => true]);
+    $g['teacher']->update(['directs_studies' => true]);
     $g['assessment']->finalize($g['teacher']);
     $first = Result::query()->where('assessment_id', $g['assessment']->id)->sole();
 

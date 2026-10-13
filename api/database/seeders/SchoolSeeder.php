@@ -68,13 +68,13 @@ class SchoolSeeder extends Seeder
         DB::transaction(function () {
             $institution = Institution::create(['name' => 'Green Valley Primary School']);
 
-            [$admin, $classTeachers] = $this->seedStaff($institution);
+            [$directorOfStudies, $classTeachers] = $this->seedStaff($institution);
             $subjects = $this->seedSubjectsAndCriteria($institution);
             $classes = $this->seedClasses($institution, $classTeachers);
 
             $this->seedClassSubjects($institution, $classes, $subjects);
             $this->seedTeacherAssignments($institution, $classes, $subjects, $classTeachers);
-            $this->seedSubjectModerations($institution, $admin, $subjects);
+            $this->seedSubjectModerations($institution, $directorOfStudies, $subjects);
 
             $studentsByClass = $this->seedStudentsAndEnrolments($institution, $classes);
 
@@ -86,17 +86,28 @@ class SchoolSeeder extends Seeder
         });
     }
 
+    /* Two kinds of account (ADR 0014): the back office signs in to the panel as an admin, and
+       teaches nothing; the Director of Studies is a teacher with the grant, who signs in to the app. */
+
     /**
      * @return array{0: User, 1: array<string, User>}
      */
     private function seedStaff(Institution $institution): array
     {
-        $admin = User::create([
+        User::create([
             'institution_id' => $institution->id,
             'name' => 'Grace Wanjiru',
             'email' => 'admin@greenvalley.test',
             'password' => 'password',
-            'is_admin' => true,
+            'kind' => User::ADMIN,
+        ]);
+
+        $directorOfStudies = User::create([
+            'institution_id' => $institution->id,
+            'name' => 'Ruth Njeri',
+            'email' => 'dos@greenvalley.test',
+            'password' => 'password',
+            'directs_studies' => true,
         ]);
 
         $classTeachers = [
@@ -106,7 +117,7 @@ class SchoolSeeder extends Seeder
             '5B' => User::create(['institution_id' => $institution->id, 'name' => 'Esther Chebet', 'email' => 'e.chebet@greenvalley.test', 'password' => 'password']),
         ];
 
-        return [$admin, $classTeachers];
+        return [$directorOfStudies, $classTeachers];
     }
 
     /**
@@ -212,12 +223,12 @@ class SchoolSeeder extends Seeder
     /**
      * @param  array<string, array{subject: Subject, criteria: array<int, Criterion>}>  $subjects
      */
-    private function seedSubjectModerations(Institution $institution, User $admin, array $subjects): void
+    private function seedSubjectModerations(Institution $institution, User $moderator, array $subjects): void
     {
         foreach (['Maths', 'Science'] as $name) {
             SubjectModeration::create([
                 'institution_id' => $institution->id,
-                'user_id' => $admin->id,
+                'user_id' => $moderator->id,
                 'subject_id' => $subjects[$name]['subject']->id,
             ]);
         }

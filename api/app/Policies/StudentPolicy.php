@@ -8,18 +8,18 @@ use App\Models\User;
 class StudentPolicy
 {
     /**
-     * Allow only administrators to create students.
+     * Allow only admin accounts, in the panel (ADR 0014), to create students.
      */
     public function create(User $user): bool
     {
-        return (bool) $user->is_admin;
+        return $user->isAdmin();
     }
 
     /**
-     * Allow only administrators to update students.
+     * Allow only admin accounts, in the panel (ADR 0014), to update students.
      */
     public function update(User $user, Student $student): bool
     {
-        return (bool) $user->is_admin;
+        return $user->isAdmin();
     }
 }

@@ -54,10 +54,13 @@ something #36 requires.
 - **`institutions`**: `id` (UUIDv7), `name`. The tenant boundary itself; not
   scoped by `institution_id` and not synchronisable, since a device belongs to
   exactly one and never needs another's row.
-- **`users`**: `id`, `institution_id`, `name`, `email`, credentials, `is_admin`
-  (boolean), `deactivated_at` (nullable). Always server- or admin-created,
-  never offline; `is_admin` and the moderation grants below are the only
-  capabilities, per #36's "layered, not exclusive" decision. Deactivation is
+- **`users`**: `id`, `institution_id`, `name`, `email`, credentials, `kind`
+  (`teacher` or `admin`, exclusive, ADR 0014), `directs_studies` (boolean,
+  teachers only, enforced by a check constraint), `deactivated_at` (nullable).
+  Email is unique per kind, `unique(kind, email)`, so one person's teacher and
+  admin accounts may share an address. Always server- or admin-created, never
+  offline; within a teacher account, `directs_studies` and the moderation grants
+  below are the only capabilities, layered rather than exclusive. Deactivation is
   deliberately not `deleted_at`: a deactivated account still has to resolve to
   a name wherever it's referenced (a mark's `last_edited_by`, a conflict side,
   a resolution), so it stays synced and visible; it just can't authenticate or

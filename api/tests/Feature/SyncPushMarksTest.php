@@ -115,7 +115,7 @@ test('a finalized or reports-generated assessment makes a mark edit invalid, eve
 
 test('after an unlock the same edit is accepted', function () {
     $g = buildGraph('School A', '-mk-unlock');
-    $g['teacher']->update(['is_admin' => true]);
+    $g['teacher']->update(['directs_studies' => true]);
     $g['assessment']->finalize($g['teacher']);
     $g['assessment']->unlock($g['teacher']);
     $entry = markUpdate($g, ['score' => 9]);

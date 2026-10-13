@@ -7,7 +7,7 @@ export const E2E_USER = {
   id: 'e2e-teacher',
   name: 'Jane Teacher',
   email: 'jane@example.test',
-  is_admin: false,
+  directs_studies: false,
   moderated_subject_ids: [] as string[],
 }
 
