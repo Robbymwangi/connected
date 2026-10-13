@@ -3,7 +3,9 @@ import { useState, type ReactNode } from 'react'
 import { Modal } from '../../components/Modal'
 import type { SchoolClass } from '../../fixtures/classes'
 import type { Criterion, Subject } from '../../fixtures/rubrics'
+import type { LocalRecord } from '../../lib/localDatabase'
 import { termLabel, type OpenTerm } from '../../lib/schoolDirectory'
+import { isTermClosed } from '../../lib/termClosures'
 
 export type NewAssessment = {
   subject: Subject
@@ -31,6 +33,8 @@ type CreateAssessmentDialogProps = {
   classes: SchoolClass[]
   subjects: string[]
   criteriaBySubject: Record<string, Criterion[]>
+  /* The term closures this device holds; a stream closed for the open term cannot be chosen. */
+  closures: readonly LocalRecord[]
   onClose: () => void
   onCreate: (assessment: NewAssessment) => void | Promise<void>
 }
@@ -39,7 +43,7 @@ type CreateAssessmentDialogProps = {
    complete before the next; the export let name and date through empty. The term is not
    a choice: it is the open term, shown as a fact, and the sitting date must fall in its
    year, which the server checks too. */
-export function CreateAssessmentDialog({ open, term, classes, subjects, criteriaBySubject, onClose, onCreate }: CreateAssessmentDialogProps) {
+export function CreateAssessmentDialog({ open, term, classes, subjects, criteriaBySubject, closures, onClose, onCreate }: CreateAssessmentDialogProps) {
   const [step, setStep] = useState(0)
   const [draft, setDraft] = useState<Draft>(EMPTY)
   const [saving, setSaving] = useState(false)
@@ -58,10 +62,19 @@ export function CreateAssessmentDialog({ open, term, classes, subjects, criteria
   }
 
   const dateOutsideYear = draft.date !== '' && !draft.date.startsWith(`${term.year}-`)
+  /* A DOS can close a stream's term while the school calendar still has it open (ADR 0014), and the
+     server then refuses a new assessment for that stream. The close reaches this device on its last
+     sync, so a closed stream is shown as unavailable here instead of failing after the marks are
+     entered. A device that has not synced since the close does not know; the server stays the
+     authority. The chosen list is filtered at use, not trusted, since a close can arrive while
+     the dialog is open. */
+  const isClosed = (classId: string) => isTermClosed(closures, classId, term.year, term.term)
+  const chosenClassIds = draft.classIds.filter((id) => !isClosed(id))
+
   const canContinue =
     step === 0 ? draft.subject !== null
     : step === 1 ? draft.name.trim() !== '' && draft.date !== '' && !dateOutsideYear
-    : step === 2 ? draft.classIds.length > 0
+    : step === 2 ? chosenClassIds.length > 0
     : true
 
   /* Only classes that teach the chosen subject can sit it. */
@@ -79,7 +92,7 @@ export function CreateAssessmentDialog({ open, term, classes, subjects, criteria
         name: draft.name.trim(),
         term,
         date: draft.date,
-        classIds: draft.classIds,
+        classIds: chosenClassIds,
       })
       setStep(3)
     } catch {
@@ -194,11 +207,13 @@ export function CreateAssessmentDialog({ open, term, classes, subjects, criteria
           <p className="mb-1 text-sm font-semibold text-foreground">Select streams</p>
           {saveError && <p className="text-sm text-danger" role="alert">{saveError}</p>}
           {eligibleClasses.map((c) => {
-            const selected = draft.classIds.includes(c.id)
+            const closed = isClosed(c.id)
+            const selected = !closed && draft.classIds.includes(c.id)
             return (
               <button
                 key={c.id}
                 type="button"
+                disabled={closed}
                 onClick={() =>
                   setDraft((d) => ({
                     ...d,
@@ -206,10 +221,15 @@ export function CreateAssessmentDialog({ open, term, classes, subjects, criteria
                   }))
                 }
                 aria-pressed={selected}
-                className={choiceClass(selected)}
+                className={`${choiceClass(selected)} disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 <span>
                   {c.grade} · Stream {c.stream}
+                  {closed && (
+                    <span className="mt-0.5 block text-xs font-normal text-muted-foreground" data-testid="stream-closed">
+                      Term {term.term} is closed for this stream; the Director of Studies or the subject&apos;s head of department must unlock it first.
+                    </span>
+                  )}
                 </span>
                 {selected && <Check className="size-4 text-primary" />}
               </button>
@@ -227,8 +247,8 @@ export function CreateAssessmentDialog({ open, term, classes, subjects, criteria
           <p className="text-sm text-muted-foreground">
             <strong>{draft.name}</strong> · {draft.subject}
             <br />
-            {termLabel(term)} · {draft.classIds.length} stream
-            {draft.classIds.length !== 1 ? 's' : ''} · {draft.date}
+            {termLabel(term)} · {chosenClassIds.length} stream
+            {chosenClassIds.length !== 1 ? 's' : ''} · {draft.date}
           </p>
         </div>
       )}
