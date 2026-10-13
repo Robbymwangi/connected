@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToInstitution;
 use App\Models\Concerns\Syncable;
 use Database\Factories\UserFactory;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -27,10 +29,46 @@ use Laravel\Sanctum\HasApiTokens;
    own Notification model instead. */
 #[Fillable(['id', 'institution_id', 'name', 'email', 'password', 'is_admin', 'deactivated_at'])]
 #[Hidden(['password'])]
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
     use BelongsToInstitution, HasApiTokens, HasFactory, Syncable;
+
+    /* Deactivating an account revokes every device token it holds, in the same save (build plan
+       5.5): the next API call with an old token is a 401 at once, not whenever EnsureAccountIsActive
+       next looks. A model event, so it fires on a User save; a query-level bulk update fires none,
+       which is why every deactivation goes through deactivate() below. */
+    protected static function booted(): void
+    {
+        static::updated(function (User $user): void {
+            if ($user->wasChanged('deactivated_at') && $user->deactivated_at !== null) {
+                $user->tokens()->delete();
+            }
+        });
+    }
+
+    /** Whether this is the institution's only active administrator, whom no one may deactivate or demote. */
+    public function isLastActiveAdmin(): bool
+    {
+        return $this->is_admin && $this->deactivated_at === null
+            && ! self::query()->whereKeyNot($this->getKey())->where('is_admin', true)->whereNull('deactivated_at')->exists();
+    }
+
+    /* The one way an account is deactivated (build plan 5.5). Refused for oneself, so an
+       administrator cannot lock themselves out mid-session, and for the last active administrator,
+       so the school always keeps someone who can reactivate others. */
+    public function deactivate(User $by): void
+    {
+        if ($by->is($this)) {
+            throw new \DomainException('You cannot deactivate your own account.');
+        }
+
+        if ($this->isLastActiveAdmin()) {
+            throw new \DomainException('This is the only active administrator; make someone else an administrator first.');
+        }
+
+        $this->update(['deactivated_at' => now()]);
+    }
 
     protected function casts(): array
     {
@@ -39,6 +77,15 @@ class User extends Authenticatable
             'is_admin' => 'boolean',
             'deactivated_at' => 'datetime',
         ];
+    }
+
+    /* The admin panel's one gate (ADR 0009, decision 3): an administrator whose account is active.
+       Filament asks on every request, not only at login, so a session open when the account is
+       deactivated is refused on its next request; and a refusal reads the same as a wrong
+       password from outside. */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return $this->is_admin && $this->deactivated_at === null;
     }
 
     public function institution(): BelongsTo

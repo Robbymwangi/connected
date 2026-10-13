@@ -225,8 +225,10 @@ export function mapSyncedAssessmentState(source: Source): SyncedAssessmentState 
 
     const entered = Object.values(grid).flatMap((student) => Object.values(student)).filter((cell) => cell.mark.kind !== 'empty').length
     const rawStatus = text(row, 'status')
+    /* reports-generated is retired (ADR 0012, decision 4) but not migrated away, since
+       migrations are additive only: a row still holding it is finalized. */
     const status: LifecycleStatus = rawStatus === 'reports-generated' || rawStatus === 'finalized'
-      ? rawStatus
+      ? 'finalized'
       : entered === 0 ? 'scheduled'
       : entered < total ? 'in-progress'
       : 'complete'

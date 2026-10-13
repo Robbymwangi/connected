@@ -6,6 +6,8 @@ use App\Models\Assessment;
 use App\Models\Comment;
 use App\Models\CommentGeneration;
 use App\Models\Mark;
+use App\Models\Notification;
+use App\Models\SyncChange;
 use App\Models\TermClosure;
 use App\Support\Comments\CommentFacts;
 use App\Support\Comments\CommentPrompt;
@@ -243,4 +245,55 @@ test('a job runs as its institution and leaves the caller\'s institution as it w
 
     expect(app(CurrentInstitution::class)->id())->toBe($other['institution']->id);
     expect(Comment::withoutGlobalScopes()->find($closure->comments()->withoutGlobalScopes()->sole()->id)->state)->toBe('draft');
+});
+
+test('a failure tells the user who closed the term, once per term close while unread', function () {
+    config(['services.anthropic.key' => 'sk-test']);
+    [$g, $closure] = termTwoClosed(students: 3);
+    $generations = $closure->comments()->orderBy('id')->get()->map(fn (Comment $comment) => $comment->generations()->create([
+        'institution_id' => $g['institution']->id, 'status' => 'submitted', 'batch_id' => 'msgbatch_8',
+    ]));
+    fakeEndedBatch('msgbatch_8', [
+        batchResult($generations[0], succeeded('A steady term in Maths.')),
+        batchResult($generations[1], ['type' => 'expired']),
+    ]);
+
+    (new CollectCommentBatch('msgbatch_8', $g['institution']->id))->handle(app(CurrentInstitution::class));
+
+    $notice = Notification::query()->where('kind', 'comments-failed')->sole();
+    expect($notice->only(['user_id', 'term_closure_id', 'tone', 'unread']))->toBe([
+        'user_id' => $g['teacher']->id, 'term_closure_id' => $closure->id, 'tone' => 'warning', 'unread' => true,
+    ]);
+    expect($notice->title.$notice->body)->not->toContain($g['student']->name);
+    expect(SyncChange::query()->where('table', 'notifications')->where('record_id', $notice->id)->exists())->toBeTrue();
+});
+
+test('a later failure after the notice is read writes a new one; a draft writes none', function () {
+    [$g, $closure] = termTwoClosed(students: 2);
+    [$first, $second] = $closure->comments()->orderBy('id')->get()->all();
+    $settle = fn (Comment $comment, string $status) => DB::transaction(fn () => $comment->generations()->create([
+        'institution_id' => $g['institution']->id, 'status' => 'submitted', 'batch_id' => 'msgbatch_9',
+    ])->settle($status, $status === 'succeeded' ? 'Fine.' : null));
+
+    $settle($first, 'succeeded');
+    expect(Notification::query()->where('kind', 'comments-failed')->count())->toBe(0);
+
+    $settle($second, 'errored');
+    Notification::query()->where('kind', 'comments-failed')->sole()->update(['unread' => false]);
+    $second->refresh()->update(['state' => 'pending']);
+    $settle($second, 'expired');
+
+    expect(Notification::query()->where('kind', 'comments-failed')->count())->toBe(2);
+});
+
+test('no notice goes to a closer who has been deactivated', function () {
+    [$g, $closure] = termTwoClosed();
+    $g['teacher']->update(['deactivated_at' => now()]);
+
+    DB::transaction(fn () => $closure->comments()->sole()->generations()->create([
+        'institution_id' => $g['institution']->id, 'status' => 'submitted', 'batch_id' => 'msgbatch_10',
+    ])->settle('errored'));
+
+    expect($closure->comments()->sole()->state)->toBe('failed');
+    expect(Notification::query()->where('kind', 'comments-failed')->exists())->toBeFalse();
 });

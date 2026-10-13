@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToInstitution;
 use App\Models\Concerns\HasUuidv7;
+use App\Sync\ServerNotifications;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -33,7 +34,8 @@ class CommentGeneration extends Model
        still pending. That covers a regenerate while a batch is in flight, an edit that overtook
        generation, an unlock mid-batch, and a duplicate submit after a crash. Applying text makes
        the comment a draft with no author; applying a failure makes it failed. Otherwise the
-       generation is superseded and the comment is untouched. The comment is written through
+       generation is superseded and the comment is untouched. A failure also tells the user who closed
+       the term (ServerNotifications::commentsFailed). The comment is written through
        Syncable, so its version moves and a device sees the change by pull.
 
        Call inside SyncLog::transaction, and never across an HTTP call (ADR 0007): the comment row
@@ -63,6 +65,7 @@ class CommentGeneration extends Model
             $comment->update(['body' => $text, 'state' => 'draft', 'author_id' => null]);
         } else {
             $comment->update(['state' => 'failed']);
+            app(ServerNotifications::class)->commentsFailed($comment);
         }
 
         $generation->update(['status' => $status, 'error' => $error]);
