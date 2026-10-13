@@ -136,11 +136,18 @@ async function openConflictCount(database: LocalDatabase, assessmentId: string):
   return open
 }
 
+/* A stored assessment row's status, finalized or not. reports-generated is retired (ADR 0012,
+   decision 4) and nothing writes it, but it is not migrated away, since migrations are
+   additive only; a row still holding it is finalized. */
+function isFinalizedStatus(status: unknown): boolean {
+  return status === 'finalized' || status === 'reports-generated'
+}
+
 export function finalizeAssessmentRecord(database: LocalDatabase, id: string, userId: string, at: string): Promise<boolean> {
   return database.transaction('rw', [database.assessments, database.outbox, database.conflicts, database.marks], async () => {
     const current = await database.assessments.get(id)
     if (!current || current.deletedAt != null) return false
-    if (current.status === 'finalized' || current.status === 'reports-generated') return false
+    if (isFinalizedStatus(current.status)) return false
 
     const open = await openConflictCount(database, id)
     if (open > 0) throw new OpenConflictsError(open)
@@ -165,7 +172,7 @@ export function writeMarkCells(
   return database.transaction('rw', [database.marks, database.assessments, database.outbox, database.metadata], async () => {
     const assessment = await database.assessments.get(assessmentId)
     if (!assessment || assessment.deletedAt != null) throw new Error('Assessment is not available on this device')
-    if (assessment.status === 'finalized' || assessment.status === 'reports-generated') {
+    if (isFinalizedStatus(assessment.status)) {
       throw new Error('A finalized assessment takes no further marks')
     }
 

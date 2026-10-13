@@ -131,24 +131,39 @@ comment is live, and its state is still `pending`. That one rule covers a
 regenerate while a batch is in flight, an edit that overtakes generation, an unlock
 mid-batch, and a duplicate submit after a crash. A failed or expired generation
 sets the comment `failed` and writes a `comments-failed` notification to the user
-who closed the term, once per term close.
+who closed the term, once per term close: a second failure while that notice is
+unread adds nothing, and one after it is read writes a new notice. It names the
+stream and term, never a student, and is not sent to a deactivated user.
 
 ## Report cards
 
 Per student per term (ADR 0012), triggered on that student's comment being
 accepted, not batched and not waiting for the rest of the class. The job renders
 the PDF with Dompdf, writes it to S3, and records `generated_at` and the S3 key on
-that student's `reports` row. The device downloads it through a presigned URL when
-online; nothing about the PDF is cached ahead of a request.
+that student's `reports` row. The key is named by the report's own id
+(`reports/{institution}/{report}.pdf`), never by the student. The device downloads it
+through a presigned URL when online (`GET /api/reports/{report}/download`, valid for ten
+minutes, any authenticated user of the institution); nothing about the PDF is cached
+ahead of a request.
 
 The card shows, for each subject, the performance level for Terms 1, 2, and
-3 of the year so far, a term not yet closed being blank. A term's level is the level of
+3 of the year so far, a term not yet closed being blank. A term counts as closed when
+a live term closure exists for it in a stream the student was enrolled in that year,
+so a student who changed stream keeps the terms closed in the earlier one. A term's level is the level of
 the subject's mean for that term, worked out from the mean percentage, which is not
 shown. That mean is of the term's assessment percentages (each result's total over
 its max), so every sitting weighs the same whatever its maximum; a sitting the student
-missed entirely has no result and does not count. The comment prompt reads the same
+missed entirely has no result and does not count. A sitting the student was absent
+for in part counts with its reduced max (the result's own `max`, which excludes absent
+criteria), as the comment prompt has since 4.3. Analytics treats such a result
+differently: its outcome is `absent` and it is left out of every analytics denominator
+(`docs/spec/analytics.md`). The card follows
+the result's figures rather than that label, because the student did sit the rest of
+the paper, and a partial sitting left out of the card would let a single missed
+criterion remove a whole sitting from the family's view of the term. The comment prompt reads the same
 levels, so the remark and the card cannot disagree. The card also carries a compact history of earlier
-years drawn from the student's enrolments, the teacher's remark, and the
+years drawn from the student's enrolments (per year, the stream and each subject's
+level for the year, the mean of that year's term means), the teacher's remark, and the
 school and student identifiers. It never shows a percentage, a class position, a
 rank, or a class size. Position and percentages remain on the teacher's screens only.
 
@@ -156,7 +171,10 @@ A report job carries the identity of the comment it was queued for and checks it
 at its final write: the comment must still be live and `accepted`, and the term
 closure for that stream and term must still be live. A job that finds either
 missing, because an unlock unwound the cycle after the comment was accepted, writes
-nothing and ends. Otherwise a stale job could produce a report for a cycle that no
+nothing and ends, deleting the object it had already written. The job writes to S3
+before that check, outside any transaction, and records the row in a short one after
+it; a crash between the two leaves an unnamed object no row points to, which a retry
+does not reuse. Otherwise a stale job could produce a report for a cycle that no
 longer exists, beside the new cycle's own.
 
 When the last student of the stream's term has a report, the server writes a
