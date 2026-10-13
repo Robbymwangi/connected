@@ -7,10 +7,12 @@ import { initials, type Student } from '../../fixtures/students'
 import { resultsForStudent, trendBySubject } from '../../lib/results'
 import { formatLongDate, parseLocalDate } from '../../lib/time'
 import { Panel } from './Panel'
+import { ReportCardsPanel } from './ReportCardsPanel'
 
 type StudentProfileProps = {
   student: Student
   cls: SchoolClass
+  token: string
   store: SessionStore
   onBack: () => void
   onBackToList: () => void
@@ -19,7 +21,7 @@ type StudentProfileProps = {
 /* Reached from a stream, never from the sidebar: the third level the two-level
    navigation cap allows contextually. Results come from the live grid where a
    complete row exists, otherwise from the records on file. */
-export function StudentProfile({ student, cls, store, onBack, onBackToList }: StudentProfileProps) {
+export function StudentProfile({ student, cls, token, store, onBack, onBackToList }: StudentProfileProps) {
   const results = resultsForStudent(student.id, cls.stream, store.assessments, store.marks, store.resultRecords, store.criteriaBySubject)
   const trends = trendBySubject(results)
 
@@ -86,9 +88,7 @@ export function StudentProfile({ student, cls, store, onBack, onBackToList }: St
           ),
         )}
 
-        <Panel title="Generated reports">
-          <p className="px-5 py-6 text-center text-sm text-muted-foreground">No reports generated yet for this student.</p>
-        </Panel>
+        <ReportCardsPanel key={student.id} studentId={student.id} token={token} />
       </div>
     </div>
   )

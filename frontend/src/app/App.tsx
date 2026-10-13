@@ -100,10 +100,13 @@ function AuthenticatedApp({ user, token, onSignOut }: { user: CurrentUser; token
           <ClassesScreen
             store={store}
             directory={directory}
+            token={token}
             classId={location.classId}
             studentId={location.studentId}
             teacherId={location.teacherId}
+            comments={location.comments}
             onOpenClass={(classId) => setLocation({ screen: 'classes', classId })}
+            onOpenComments={(classId, year, term) => setLocation({ screen: 'classes', classId, comments: { year, term } })}
             onOpenStudent={(classId, studentId) => setLocation({ screen: 'classes', classId, studentId })}
             onOpenTeacher={(teacherId) => setLocation({ screen: 'classes', teacherId })}
             onBackToList={() => setLocation({ screen: 'classes' })}

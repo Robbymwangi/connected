@@ -12,6 +12,7 @@ export function pathFor(loc: Location): string {
       return loc.creating ? '/assessments?new' : '/assessments'
     case 'classes':
       if (loc.teacherId) return `/teachers/${enc(loc.teacherId)}`
+      if (loc.classId && loc.comments) return `/classes/${enc(loc.classId)}/comments/${loc.comments.year}/${loc.comments.term}`
       if (loc.classId && loc.studentId) return `/classes/${enc(loc.classId)}/students/${enc(loc.studentId)}`
       if (loc.classId) return `/classes/${enc(loc.classId)}`
       return '/classes'
@@ -37,8 +38,14 @@ export function parseLocation(pathname: string, search = ''): Location {
       return params.has('new') ? { screen: 'assessments', creating: true } : { screen: 'assessments' }
     }
     case 'classes': {
-      const [, classId, students, studentId] = parts
+      const [, classId, students, studentId, termPart] = parts
       if (classId && students === 'students' && studentId) return { screen: 'classes', classId, studentId }
+      if (classId && students === 'comments') {
+        const year = Number(studentId)
+        const term = Number(termPart)
+        if (Number.isInteger(year) && year > 0 && [1, 2, 3].includes(term)) return { screen: 'classes', classId, comments: { year, term } }
+        return { screen: 'classes', classId }
+      }
       if (classId) return { screen: 'classes', classId }
       return { screen: 'classes' }
     }

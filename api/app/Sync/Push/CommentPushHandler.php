@@ -2,6 +2,7 @@
 
 namespace App\Sync\Push;
 
+use App\Jobs\GenerateReportCard;
 use App\Jobs\SubmitCommentBatch;
 use App\Models\Comment;
 use App\Models\CommentGeneration;
@@ -15,7 +16,7 @@ use LogicException;
 
    - edit: the teacher's text replaces the body; the comment becomes a draft with them as author. Allowed while
      pending, draft, or failed.
-   - accept: a draft becomes accepted with the acceptor as author. Final until an unlock.
+   - accept: a draft becomes accepted with the acceptor as author, and the student's report card is queued. Final until an unlock.
    - regenerate: the body and author are cleared and the comment is pending again; generation is queued after
      commit. Allowed while pending, draft, or failed.
 
@@ -134,6 +135,8 @@ final class CommentPushHandler extends PushHandler
     public function written(PushEntry $entry, Model $saved): void
     {
         if ($this->command === 'accept') {
+            GenerateReportCard::dispatch($saved->id, $saved->institution_id)->afterCommit();
+
             return;
         }
 
