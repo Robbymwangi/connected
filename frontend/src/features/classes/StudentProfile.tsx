@@ -88,7 +88,7 @@ export function StudentProfile({ student, cls, token, store, onBack, onBackToLis
           ),
         )}
 
-        <ReportCardsPanel studentId={student.id} token={token} />
+        <ReportCardsPanel key={student.id} studentId={student.id} token={token} />
       </div>
     </div>
   )
