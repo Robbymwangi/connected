@@ -62,6 +62,9 @@ exhaustive; nothing outside it is admin work.
   never holds them.
 - Creating and editing admin accounts. An admin cannot deactivate themselves or
   the last active admin of the institution.
+- Keeping the term calendar: opening a term when the school opens, ending the
+  current term for the holidays, and withdrawing a term opened by mistake
+  (ADR 0014, decision 4; the rules are in `docs/spec/data-model.md`, `terms`).
 - In the interim only, unlocking a finalized assessment, with the note the
   workflow requires (The principle, above).
 

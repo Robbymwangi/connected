@@ -19,7 +19,7 @@ command's rules are in `docs/spec/workflow.md`, Comments. A notification's
 other synchronisable table in `docs/spec/data-model.md` (#34), classes,
 `class_subjects`, subjects, criteria, students, `enrolments`,
 `teacher_assignments`, `subject_moderations`, users, results,
-`term_closures`, reports, is pull-only: a device reads it and never proposes a change.
+`terms`, `term_closures`, reports, is pull-only: a device reads it and never proposes a change.
 `institutions`, `unlock_notes`, and `comment_generations` aren't synchronisable at all (#34's
 Conventions) and never appear on either verb.
 
