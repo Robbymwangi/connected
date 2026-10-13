@@ -4,7 +4,7 @@ import type { SessionStore } from '../../app/useSessionStore'
 import type { SchoolDirectoryState } from '../../app/useSchoolDirectory'
 import { Modal } from '../../components/Modal'
 import type { Assessment } from '../../fixtures/assessments'
-import { DEFAULT_FILTERS, filterAssessments, type QueueFilters } from '../../lib/assessmentQueue'
+import { defaultFilters, filterAssessments, type QueueFilters } from '../../lib/assessmentQueue'
 import { MarkingGrid } from './grid/MarkingGrid'
 import { AssessmentReport } from './AssessmentReport'
 import { BrowseTree } from './BrowseTree'
@@ -45,7 +45,7 @@ export function AssessmentsScreen({
 }: AssessmentsScreenProps) {
   const { assessments: list, conflicts } = store
   const [listView, setListView] = useState<View>('queue')
-  const [filters, setFilters] = useState<QueueFilters>(DEFAULT_FILTERS)
+  const [filters, setFilters] = useState<QueueFilters>(() => defaultFilters())
   const [creating, setCreating] = useState(creatingOnArrival)
   const [deleteCandidate, setDeleteCandidate] = useState<Assessment | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
