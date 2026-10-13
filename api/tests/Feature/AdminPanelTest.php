@@ -1,5 +1,6 @@
 <?php
 
+use App\Filament\Auth\Login;
 use App\Filament\Resources\Admins\Pages\CreateAdmin;
 use App\Filament\Resources\Admins\Pages\ListAdmins;
 use App\Filament\Resources\Students\Pages\CreateStudent;
@@ -11,7 +12,6 @@ use App\Models\Student;
 use App\Models\SubjectModeration;
 use App\Models\User;
 use App\Support\CurrentInstitution;
-use Filament\Auth\Pages\Login;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
@@ -49,6 +49,22 @@ test('an administrator signs in at the panel although the institution is unknown
         ->assertHasNoFormErrors();
 
     expect(auth('admin')->id())->toBe($admin->id);
+});
+
+test('signing in never writes a remember token, so a login does not touch the synchronisable users row', function () {
+    $g = buildGraph();
+    $admin = adminOf($g);
+    $admin->update(['password' => 'a-long-enough-password']);
+    $versionBefore = $admin->fresh()->version;
+    asPanelRequestFor(null);
+
+    Livewire::test(Login::class)
+        ->fillForm(['email' => $admin->email, 'password' => 'a-long-enough-password', 'remember' => true])
+        ->call('authenticate')
+        ->assertHasNoFormErrors();
+
+    expect(auth('admin')->id())->toBe($admin->id)
+        ->and($admin->fresh()->version)->toBe($versionBefore);
 });
 
 test('a non-admin, a deactivated admin, and a wrong password fail the same way', function () {
