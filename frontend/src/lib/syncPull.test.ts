@@ -453,6 +453,27 @@ describe('pullSync', () => {
     expect(await store.database.comments.where('[studentId+year+term]').equals(['s1', 2026, 1]).first()).toMatchObject({ id: 'cm1', state: 'pending' })
   })
 
+  it('stores the term calendar, an ended term and the open one (ADR 0014)', async () => {
+    const store = createDatabase()
+    await store.setCursor('user-1', 40)
+    const fetchMock = vi.fn().mockResolvedValue(
+      json({
+        changes: [
+          { table: 'terms', recordId: 't2', version: 2, fields: { year: 2026, term: 2, openedAt: '2026-05-04T05:00:00.000000Z', openedBy: 'a1', endedAt: '2026-08-21T10:00:00.000000Z', endedBy: 'a1' } },
+          { table: 'terms', recordId: 't3', version: 1, fields: { year: 2026, term: 3, openedAt: '2026-09-01T05:00:00.000000Z', openedBy: 'a1' } },
+        ],
+        cursor: 42,
+        more: false,
+      }),
+    )
+
+    const result = await pullSync('token', 'user-1', asFetch(fetchMock), store.database)
+
+    expect(result).toMatchObject({ changesApplied: 2, cursor: 42 })
+    expect(await store.database.terms.where('[year+term]').equals([2026, 3]).first()).toMatchObject({ id: 't3', openedBy: 'a1' })
+    expect(await store.row('terms', 't2')).toMatchObject({ endedBy: 'a1', version: 2 })
+  })
+
   it('rejects unknown tables without advancing the cursor', async () => {
     const store = createDatabase()
     const fetchMock = vi.fn().mockResolvedValue(

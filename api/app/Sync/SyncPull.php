@@ -18,6 +18,7 @@ use App\Models\Subject;
 use App\Models\SubjectModeration;
 use App\Models\SyncChange;
 use App\Models\TeacherAssignment;
+use App\Models\Term;
 use App\Models\TermClosure;
 use App\Models\User;
 use App\Support\SyncLog;
@@ -62,6 +63,7 @@ final class SyncPull
         Subject::class,
         SubjectModeration::class,
         TeacherAssignment::class,
+        Term::class,
         TermClosure::class,
         User::class,
     ];

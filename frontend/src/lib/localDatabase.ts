@@ -19,6 +19,7 @@ export const SYNC_TABLES = [
   'subjects',
   'subject_moderations',
   'teacher_assignments',
+  'terms',
   'term_closures',
   'users',
 ] as const
@@ -54,6 +55,7 @@ export class LocalDatabase extends Dexie {
   subjects!: EntityTable<LocalRecord, 'id'>
   subject_moderations!: EntityTable<LocalRecord, 'id'>
   teacher_assignments!: EntityTable<LocalRecord, 'id'>
+  terms!: EntityTable<LocalRecord, 'id'>
   term_closures!: EntityTable<LocalRecord, 'id'>
   users!: EntityTable<LocalRecord, 'id'>
   metadata!: EntityTable<MetadataRecord, 'key'>
@@ -110,6 +112,13 @@ export class LocalDatabase extends Dexie {
       comments: '&id, studentId, termClosureId, authorId, [studentId+year+term]',
       reports: '&id, studentId, [studentId+year+term]',
       term_closures: '&id, classId, [classId+year+term]',
+    })
+
+    /* The term calendar an admin keeps (ADR 0014, decision 4), pull-only. The server backfills
+       term rows as soon as it is deployed, and a pull that meets a table this list lacks is
+       refused, so an app still running the previous build fails its pulls until it updates. */
+    this.version(5).stores({
+      terms: '&id, [year+term]',
     })
   }
 }

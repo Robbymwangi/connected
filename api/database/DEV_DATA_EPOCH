@@ -1,2 +1,2 @@
-5
-users.is_admin replaced by kind and directs_studies, unique(kind, email), seeded admin no longer moderates, a Director of Studies added (ADR 0014); a non-additive migration
+6
+terms table added with a backfill from existing assessments, and the seeded school given a term calendar with Term 3, 2026 open (ADR 0014); new seed data
