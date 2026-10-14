@@ -1,0 +1,25 @@
+/* The marking grid's pinned Student column. Its cells sit over the marks that scroll
+   beneath them, so they must be opaque, but --card and --muted are translucent glass.
+   Each pinned cell paints the same layers the rest of the grid shows (the hover or
+   header tint, then card, then the page's solid background), so it looks the same and
+   nothing shows through. A hairline on the right marks where the columns slide under. */
+.grid-pinned {
+  background:
+    linear-gradient(var(--card), var(--card)),
+    var(--background);
+  box-shadow: 1px 0 0 var(--border);
+}
+
+.grid-pinned-header {
+  background:
+    linear-gradient(var(--muted), var(--muted)),
+    linear-gradient(var(--card), var(--card)),
+    var(--background);
+}
+
+.group:hover > .grid-pinned {
+  background:
+    linear-gradient(var(--muted), var(--muted)),
+    linear-gradient(var(--card), var(--card)),
+    var(--background);
+}

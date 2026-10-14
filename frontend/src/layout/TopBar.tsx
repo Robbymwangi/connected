@@ -11,10 +11,11 @@ type TopBarProps = {
   conflictsNeedingYou: number
   menuPinned: boolean
   onMenuHover: () => void
+  onMenuHoverEnd: () => void
   onMenuClick: () => void
 }
 
-export function TopBar({ conflictsNeedingYou, menuPinned, onMenuHover, onMenuClick }: TopBarProps) {
+export function TopBar({ conflictsNeedingYou, menuPinned, onMenuHover, onMenuHoverEnd, onMenuClick }: TopBarProps) {
   const { theme, toggleTheme } = useTheme()
   const { isOnline, toggleOverride } = useConnectivity()
   const sync = useSyncState(useCurrentUser().id, conflictsNeedingYou)
@@ -23,10 +24,11 @@ export function TopBar({ conflictsNeedingYou, menuPinned, onMenuHover, onMenuCli
 
   return (
     <header className="topbar-glass sticky top-0 z-30 flex h-16 items-stretch border-b border-border/60 backdrop-blur-md transition-colors">
-      {/* Hover peeks the sidebar; click pins it. */}
+      {/* Resting on it peeks the sidebar; click pins it. */}
       <button
         type="button"
         onMouseEnter={onMenuHover}
+        onMouseLeave={onMenuHoverEnd}
         onClick={onMenuClick}
         aria-label={menuPinned ? 'Close navigation' : 'Open navigation'}
         aria-expanded={menuPinned}
