@@ -1,5 +1,6 @@
 import { CloudOff, TriangleAlert, Undo2, UserX } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import './grid.css'
 import { BackNav } from '../../../components/BackNav'
 import { LevelBadge } from '../../../components/LevelBadge'
 import { StatusPill } from '../../../components/StatusPill'
@@ -249,11 +250,14 @@ export function MarkingGrid({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
+      {/* The scroll padding is the pinned column's width and a little more, so a cell the keyboard
+          moves to (Shift+Tab back to the first criterion) is scrolled clear of the names rather than
+          stopping underneath them. */}
+      <div className="scroll-pl-52 overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-border/60 bg-muted/30">
-              <th scope="col" className="sticky left-0 z-10 min-w-40 bg-muted/40 px-4 py-3 text-left text-xs font-bold tracking-wide text-muted-foreground uppercase">
+              <th scope="col" className="grid-pinned grid-pinned-header sticky left-0 z-20 w-48 min-w-48 max-w-48 px-4 py-3 text-left text-xs font-bold tracking-wide text-muted-foreground uppercase">
                 Student
               </th>
               {rubric.map((c) => (
@@ -278,7 +282,7 @@ export function MarkingGrid({
               const allAbsent = rubric.every((c) => row[c.id].mark.kind === 'absent')
               return (
                 <tr key={student.id} className="group transition-colors hover:bg-muted/20">
-                  <th scope="row" className="sticky left-0 z-10 bg-card px-4 py-2.5 text-left font-normal transition-colors group-hover:bg-muted/20">
+                  <th scope="row" className="grid-pinned sticky left-0 z-20 w-48 min-w-48 max-w-48 px-4 py-2.5 text-left font-normal">
                     <div className="flex items-center gap-2.5">
                       <div className="flex size-7 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-[10px] font-bold text-primary">
                         {initials(student.name)}
