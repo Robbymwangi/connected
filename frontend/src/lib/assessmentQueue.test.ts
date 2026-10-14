@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Assessment, LifecycleStatus } from '../fixtures/assessments'
-import { ALL_SUBJECTS, ALL_TERMS, defaultFilters, filterAssessments, queueYears, sortQueue } from './assessmentQueue'
+import { ALL_SUBJECTS, ALL_TERMS, defaultFilters, filterAssessments, groupByTerm, queueYears, sortQueue } from './assessmentQueue'
 
 const make = (id: string, over: Partial<Assessment> = {}): Assessment => ({
   id,
@@ -72,5 +72,22 @@ describe('the year filter', () => {
   it('also offers a year a record carries that falls outside that window', () => {
     const list = [make('a', { year: 2021 }), make('b', { year: 2027 }), make('c', { year: 2026 })]
     expect(queueYears(list, october2026)).toEqual(['2027', '2026', '2025', '2024', '2021'])
+  })
+})
+
+describe('groupByTerm', () => {
+  it('groups by term, newest term first, in date order within a term', () => {
+    const list = [
+      make('t1-end', { term: 'Term 1', year: 2026, date: '2026-04-13', name: 'End of Term' }),
+      make('t3-cat', { term: 'Term 3', year: 2026, date: '2026-09-14', name: 'CAT 1' }),
+      make('t1-cat', { term: 'Term 1', year: 2026, date: '2026-02-16', name: 'CAT 1' }),
+      make('old', { term: 'Term 3', year: 2025, date: '2025-09-10', name: 'CAT 1' }),
+    ]
+
+    expect(groupByTerm(list).map((group) => [group.label, group.assessments.map((a) => a.id)])).toEqual([
+      ['Term 3, 2026', ['t3-cat']],
+      ['Term 1, 2026', ['t1-cat', 't1-end']],
+      ['Term 3, 2025', ['old']],
+    ])
   })
 })

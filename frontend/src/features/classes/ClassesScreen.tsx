@@ -87,6 +87,7 @@ export function ClassesScreen(props: ClassesScreenProps) {
         year={Number(year)}
         students={students}
         teachers={teachers}
+        school={data}
         store={store}
         token={token}
         onBack={onBackToList}

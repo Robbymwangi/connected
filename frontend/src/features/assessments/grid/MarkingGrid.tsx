@@ -15,6 +15,7 @@ import { unlockAssessment } from '../../../api/assessments'
 import { useCurrentUser } from '../../../app/AuthContext'
 import type { SchoolDirectoryState } from '../../../app/useSchoolDirectory'
 import { useConnectivity } from '../../../lib/connectivity'
+import { pullAfterServerChange } from '../../../lib/syncRunner'
 import { mayUnlock } from '../../../lib/termComments'
 import { ABSENT, EMPTY, performanceLevel, rowTotal, type Mark } from '../../../lib/grading'
 import { STATUS_META } from '../statusMeta'
@@ -66,6 +67,9 @@ export function MarkingGrid({
   const finalized = assessment.status === 'finalized'
   const subjectId = Object.entries(school?.subjectNameById ?? {}).find(([, name]) => name === assessment.subject)?.[0]
   const canUnlock = finalized && mayUnlock(user, subjectId)
+  /* Finalizing is the creator's or an assigned teacher's (docs/spec/access-model.md); offering it
+     to anyone else only queues a change the server refuses. */
+  const canFinalize = school ? school.answerableFor(user.id, assessment.id) : true
 
   const [editing, setEditing] = useState(false)
   const [focus, setFocus] = useState<Focus | null>(null)
@@ -146,12 +150,13 @@ export function MarkingGrid({
      while one is, so the control says so instead of letting it look finalized and revert. */
   const finalizeBlock = describeFinalizeBlock(conflicts.filter((conflict) => conflict.assessmentId === assessment.id).length)
 
-  /* The server unlocks it; the reopened assessment reaches this device with the next pull, as a
-     term close's comments do, so the grid stays as it is until then and says so. */
+  /* The server unlocks it, and the reopened assessment reaches this device by pull, as a term
+     close's comments do. The pull is asked for at once, and until it lands the grid says so. */
   const unlock = async (note: string) => {
     await unlockAssessment(assessment.id, note, token)
     setUnlockOpen(false)
     setUnlocked(true)
+    pullAfterServerChange(user.id)
   }
 
   const finalize = async () => {
@@ -198,7 +203,7 @@ export function MarkingGrid({
               {editing ? 'Done' : 'Edit'}
             </button>
           )}
-          {!finalized && assessment.status !== 'scheduled' && (
+          {!finalized && assessment.status !== 'scheduled' && canFinalize && (
             <button
               type="button"
               onClick={() => setFinalizeOpen(true)}
@@ -227,9 +232,9 @@ export function MarkingGrid({
         </div>
       </div>
 
-      {unlocked && (
+      {unlocked && finalized && (
         <p className="mb-3 rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-foreground" role="status">
-          Unlocked. It reopens for marking on this device after the next sync.
+          Unlocked. Reopening it for marking on this device…
         </p>
       )}
 

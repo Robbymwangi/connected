@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { closeTerm } from '../../api/termClosures'
 import { useCurrentUser } from '../../app/AuthContext'
 import { useConnectivity } from '../../lib/connectivity'
+import { pullAfterServerChange } from '../../lib/syncRunner'
 import { closable, mayCloseTerm, type TermView } from '../../lib/termComments'
 import { Panel } from './Panel'
 import { useTermComments } from './useTermComments'
@@ -45,7 +46,9 @@ export function TermCommentsPanel({ classId, year, token, onOpenComments }: Term
     try {
       const { meta } = await closeTerm({ classId, year, term }, token)
       const skipped = meta.skipped ? `, ${meta.skipped} already had one from another stream` : ''
-      setMessage({ term, tone: 'ok', text: `Term closed: ${meta.comments} comments requested${skipped}. They appear here after the next sync.` })
+      setMessage({ term, tone: 'ok', text: `Term closed: ${meta.comments} comments requested${skipped}. Updating this device…` })
+      /* The close reaches this device by pull; ask for one now rather than at the next tick. */
+      pullAfterServerChange(user.id)
     } catch (error) {
       setMessage({ term, tone: 'error', text: error instanceof Error ? error.message : 'The term could not be closed.' })
     } finally {
@@ -63,7 +66,8 @@ export function TermCommentsPanel({ classId, year, token, onOpenComments }: Term
             canClose={allowed && closable(view)}
             isOnline={isOnline}
             closing={closing === view.term}
-            message={message?.term === view.term ? message : null}
+            /* The close's own note gives way to the closed row once the pull has brought it. */
+            message={message?.term === view.term && !(message.tone === 'ok' && view.closureId) ? message : null}
             onClose={() => void close(view.term)}
             onOpen={() => onOpenComments(year, view.term)}
           />

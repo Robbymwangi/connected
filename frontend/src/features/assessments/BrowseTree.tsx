@@ -5,12 +5,15 @@ import type { Crumb } from '../../components/Breadcrumb'
 import { CompletionBar } from '../../components/CompletionBar'
 import type { Assessment } from '../../fixtures/assessments'
 import type { SchoolClass } from '../../fixtures/classes'
+import { groupByTerm } from '../../lib/assessmentQueue'
+import type { SchoolDirectory } from '../../lib/schoolDirectory'
 import { AssessmentRow } from './AssessmentRow'
 
 type BrowseTreeProps = {
   assessments: Assessment[]
   classes: SchoolClass[]
   grades: string[]
+  school: SchoolDirectory | null
   onOpenGrid: (id: string) => void
   onOpenReport: (id: string) => void
   onDelete: (id: string) => void
@@ -19,7 +22,7 @@ type BrowseTreeProps = {
 /* Grade, then stream, then that stream's assessments. This is a scoped filter with
    a breadcrumb, inside the Assessments level; the grid beneath is the second and
    last navigation level. */
-export function BrowseTree({ assessments, classes, grades, onOpenGrid, onOpenReport, onDelete }: BrowseTreeProps) {
+export function BrowseTree({ assessments, classes, grades, school, onOpenGrid, onOpenReport, onDelete }: BrowseTreeProps) {
   const [grade, setGrade] = useState<string | null>(null)
   const [stream, setStream] = useState<string | null>(null)
 
@@ -82,17 +85,26 @@ export function BrowseTree({ assessments, classes, grades, onOpenGrid, onOpenRep
         </div>
       )}
 
+      {/* The stream's assessments as a mark book reads them: under each term, newest first. */}
       {grade && stream && (
-        <div className="flex flex-col gap-2">
-          {inStream(stream).map((a) => (
-            <AssessmentRow
-              key={a.id}
-              assessment={a}
-              compact
-              onOpenGrid={() => onOpenGrid(a.id)}
-              onOpenReport={() => onOpenReport(a.id)}
-              onDelete={() => onDelete(a.id)}
-            />
+        <div className="flex flex-col gap-5">
+          {groupByTerm(inStream(stream)).map((group) => (
+            <section key={group.label} aria-label={group.label}>
+              <h2 className="mb-2 text-xs font-bold tracking-wide text-muted-foreground uppercase">{group.label}</h2>
+              <div className="flex flex-col gap-2">
+                {group.assessments.map((a) => (
+                  <AssessmentRow
+                    key={a.id}
+                    assessment={a}
+                    school={school}
+                    compact
+                    onOpenGrid={() => onOpenGrid(a.id)}
+                    onOpenReport={() => onOpenReport(a.id)}
+                    onDelete={() => onDelete(a.id)}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}

@@ -10,6 +10,7 @@ import {
   type QueueFilters,
   type StatusGroup,
 } from '../../lib/assessmentQueue'
+import type { SchoolDirectory } from '../../lib/schoolDirectory'
 import { AssessmentRow } from './AssessmentRow'
 
 /* Derived from the same list the create dialog offers, so every term a record can
@@ -19,6 +20,7 @@ const STATUSES = Object.keys(STATUS_GROUPS) as StatusGroup[]
 
 type QueueListProps = {
   assessments: Assessment[]
+  school: SchoolDirectory | null
   subjects: string[]
   filters: QueueFilters
   onFiltersChange: (update: (f: QueueFilters) => QueueFilters) => void
@@ -28,7 +30,7 @@ type QueueListProps = {
 }
 
 /* Filters live in the screen so the header can report how many rows they left. */
-export function QueueList({ assessments, subjects, filters, onFiltersChange: setFilters, onOpenGrid, onOpenReport, onDelete }: QueueListProps) {
+export function QueueList({ assessments, school, subjects, filters, onFiltersChange: setFilters, onOpenGrid, onOpenReport, onDelete }: QueueListProps) {
   const rows = sortQueue(filterAssessments(assessments, filters))
   const years = queueYears(assessments)
   const subjectOptions = [ALL_SUBJECTS, ...subjects] as const
@@ -72,6 +74,7 @@ export function QueueList({ assessments, subjects, filters, onFiltersChange: set
           <AssessmentRow
             key={a.id}
             assessment={a}
+            school={school}
             onOpenGrid={() => onOpenGrid(a.id)}
             onOpenReport={() => onOpenReport(a.id)}
             onDelete={() => onDelete(a.id)}

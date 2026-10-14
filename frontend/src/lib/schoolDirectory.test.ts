@@ -78,6 +78,32 @@ describe('mapSchoolDirectory', () => {
     expect(directory.teachers).toEqual([])
   })
 })
+describe('answerableFor', () => {
+  it('offers edit and finalize to the creator and to a teacher assigned to the class and subject, and no one else', () => {
+    const directory = mapSchoolDirectory({
+      classes: [], classSubjects: [], criteria: [], enrolments: [], students: [], subjects: [], users: [], terms: [],
+      teacherAssignments: [
+        row('assignment-1', { userId: 'assigned', classId: 'class-1', subjectId: 'maths' }),
+        row('assignment-2', { userId: 'elsewhere', classId: 'class-2', subjectId: 'maths' }),
+        row('assignment-3', { userId: 'removed', classId: 'class-1', subjectId: 'maths', deletedAt: '2026-01-01' }),
+      ],
+      assessments: [
+        row('cat', { classId: 'class-1', subjectId: 'maths', createdBy: 'creator' }),
+        row('made-here', { classId: 'class-1', subjectId: 'maths' }),
+      ],
+    })
+
+    expect(directory.answerableFor('creator', 'cat')).toBe(true)
+    expect(directory.answerableFor('assigned', 'cat')).toBe(true)
+    expect(directory.answerableFor('elsewhere', 'cat')).toBe(false)
+    expect(directory.answerableFor('removed', 'cat')).toBe(false)
+    expect(directory.answerableFor('director', 'cat')).toBe(false)
+    /* Not yet synced, so no creator on the device: offered, and the server decides. */
+    expect(directory.answerableFor('anyone', 'made-here')).toBe(true)
+    expect(directory.answerableFor('anyone', 'unknown')).toBe(true)
+  })
+})
+
 describe('openTermOf', () => {
   it('is the live term with no end, and none when every term has ended or been withdrawn', () => {
     const ended = row('t2', { year: 2026, term: 2, endedAt: '2026-08-21T10:00:00Z' })

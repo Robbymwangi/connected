@@ -85,19 +85,54 @@ export function dismissFailedEntry(database: LocalDatabase, seq: number): Promis
   })
 }
 
-export function describeFailedEntry(entry: OutboxEntry): { reason: string; action: string } {
+/* What the device knows about an assessment, to name it in a failed change. */
+export type NamedAssessment = { id: string; subject: string; name: string; stream: string; term: string }
+
+const NOT_RETRIED = 'This request was not applied and will not be retried. Use the reason above to decide what to do, or dismiss this failed attempt.'
+
+/* A failed change in a teacher's words: what was being done, to what, and why the server said
+   no. An entry carries only the fields it changed (a finalize is just {status}), so the record it
+   was about is looked up among the assessments this device holds. The server's own reason is kept
+   wherever there is no plainer way to say it. */
+export function describeFailedEntry(entry: OutboxEntry, assessments: readonly NamedAssessment[] = []): { title: string; reason: string; action: string } {
+  const assessmentId = entry.table === 'assessments' ? entry.recordId
+    : typeof entry.fields.assessmentId === 'string' ? entry.fields.assessmentId : null
+  const assessment = assessments.find((a) => a.id === assessmentId)
+  const label = assessment ? `${assessment.subject} ${assessment.name} (${assessment.stream}, ${assessment.term})`
+    : typeof entry.fields.name === 'string' ? entry.fields.name : null
+  const finalizing = entry.table === 'assessments' && entry.fields.status === 'finalized'
+
+  const title = entry.table === 'assessments'
+    ? `${finalizing ? 'Finalizing' : entry.baseVersion === 0 ? 'Creating' : 'Changing'} ${label ?? 'an assessment'}`
+    : entry.table === 'marks' ? `A mark${label ? ` in ${label}` : ''}`
+      : entry.table === 'comments' ? 'A report-card remark'
+        : `${entry.table.replaceAll('_', ' ')} change`
+
   if (entry.table === 'assessments' && entry.reason === 'term must be 1, 2, or 3') {
     const term = typeof entry.fields.term === 'string' ? ` (${entry.fields.term})` : ''
     return {
+      title,
       reason: `Your selected term${term} was valid, but this older assessment request sent it as text instead of a number.`,
       action: 'Dismiss this failed request and recreate the assessment. New assessments send the term in the correct format.',
     }
   }
 
-  return {
-    reason: entry.reason ?? 'The server refused this change.',
-    action: 'This request was not applied and will not be retried. Use the reason above to decide what to do, or dismiss this failed attempt.',
+  return { title, reason: plainReason(entry, assessment, finalizing), action: NOT_RETRIED }
+}
+
+function plainReason(entry: OutboxEntry, assessment: NamedAssessment | undefined, finalizing: boolean): string {
+  if (entry.reason === 'forbidden') {
+    if (entry.table === 'assessments') {
+      const who = assessment ? `a teacher of ${assessment.subject} in ${assessment.stream}` : 'a teacher of its class and subject'
+      return `Only the teacher who created it, or ${who}, can ${finalizing ? 'finalize' : 'change'} it.`
+    }
+    if (entry.table === 'comments') return "Only the stream's class teacher or the Director of Studies can act on its remarks."
+    return 'You are not allowed to make this change.'
   }
+  if (entry.table === 'marks' && entry.reason === 'assessmentId does not resolve') {
+    return 'The assessment this mark belongs to was refused or removed, so the mark could not be saved.'
+  }
+  return entry.reason ?? 'The server refused this change.'
 }
 
 export type SyncCategory = 'loading' | 'syncing' | 'waiting' | 'attention' | 'synced' | 'never' | 'stopped'

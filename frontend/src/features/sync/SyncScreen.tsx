@@ -6,7 +6,7 @@ import { FilterDropdown } from '../../components/FilterDropdown'
 import type { ActiveConflict } from '../../fixtures/conflicts'
 import { describeConflictHeading } from '../../lib/conflicts'
 import type { OutboxEntry } from '../../lib/outbox'
-import { describeFailedEntry } from '../../lib/syncState'
+import { describeFailedEntry, type NamedAssessment } from '../../lib/syncState'
 import { useSyncState } from '../../lib/useSyncState'
 import { ActiveConflictCard } from './ActiveConflictCard'
 import { HistoricalConflictCard } from './HistoricalConflictCard'
@@ -116,13 +116,13 @@ export function SyncScreen({ store, highlight, onOpenGrid }: SyncScreenProps) {
           )}
         </div>
       ) : (
-        <FailedChanges entries={sync.failedEntries} onDismiss={sync.dismissFailed} />
+        <FailedChanges entries={sync.failedEntries} assessments={store.assessments} onDismiss={sync.dismissFailed} />
       )}
     </div>
   )
 }
 
-function FailedChanges({ entries, onDismiss }: { entries: OutboxEntry[]; onDismiss: (seq: number) => Promise<boolean> }) {
+function FailedChanges({ entries, assessments, onDismiss }: { entries: OutboxEntry[]; assessments: readonly NamedAssessment[]; onDismiss: (seq: number) => Promise<boolean> }) {
   const [dismissing, setDismissing] = useState<number | null>(null)
   const [dismissError, setDismissError] = useState<string | null>(null)
 
@@ -148,17 +148,15 @@ function FailedChanges({ entries, onDismiss }: { entries: OutboxEntry[]; onDismi
       <p className="text-sm text-muted-foreground">The server refused these changes, and they were not applied. Each entry shows why. If the reason can be fixed, repeat the action from the screen where you made it; otherwise dismiss the failed entry.</p>
       {dismissError && <p className="text-sm text-danger" role="alert">{dismissError}</p>}
       {entries.map((entry) => (
-        <FailedChange key={entry.seq ?? entry.id} entry={entry} dismissDisabled={dismissing !== null} onDismiss={() => entry.seq !== undefined && void dismiss(entry.seq)} />
+        <FailedChange key={entry.seq ?? entry.id} entry={entry} assessments={assessments} dismissDisabled={dismissing !== null} onDismiss={() => entry.seq !== undefined && void dismiss(entry.seq)} />
       ))}
     </div>
   )
 }
 
-function FailedChange({ entry, dismissDisabled, onDismiss }: { entry: OutboxEntry; dismissDisabled: boolean; onDismiss: () => void }) {
-  const guidance = describeFailedEntry(entry)
-  const title = typeof entry.fields.name === 'string'
-    ? `${entry.table === 'assessments' ? 'Assessment' : 'Change'}: ${entry.fields.name}`
-    : `${entry.table.replaceAll('_', ' ')} change`
+function FailedChange({ entry, assessments, dismissDisabled, onDismiss }: { entry: OutboxEntry; assessments: readonly NamedAssessment[]; dismissDisabled: boolean; onDismiss: () => void }) {
+  const guidance = describeFailedEntry(entry, assessments)
+  const title = guidance.title
   const term = typeof entry.fields.term === 'number' && entry.fields.term >= 1 && entry.fields.term <= 3
     ? `Term ${entry.fields.term}`
     : typeof entry.fields.term === 'string' ? entry.fields.term : null

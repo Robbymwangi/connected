@@ -113,7 +113,7 @@ describe('runSyncPass', () => {
     expect(d.pull).not.toHaveBeenCalled()
   })
 
-  it.each([['reachable'], ['visible'], ['tick'], ['session']] as const)('pulls for a %s trigger', async (reason) => {
+  it.each([['reachable'], ['visible'], ['tick'], ['session'], ['server-change']] as const)('pulls for a %s trigger', async (reason) => {
     const d = deps([pushed(0)])
 
     await runSyncPass(d, reasons(reason))
@@ -339,6 +339,21 @@ describe('createSyncRunner', () => {
     h.runner.onReachability(true)
     await flush()
     expect(h.push).toHaveBeenCalledTimes(3)
+    expect(h.status()).toMatchObject({ phase: 'idle', nextAttemptAt: null })
+  })
+
+  it('cuts a backoff short for a server change: the server just answered this device', async () => {
+    let failing = true
+    const h = harness({ push: async () => { if (failing) throw new TypeError('Failed to fetch'); return pushed(0) } })
+    h.runner.trigger('session')
+    await flush()
+    expect(h.status()).toMatchObject({ phase: 'backoff' })
+
+    failing = false
+    h.runner.trigger('server-change')
+    await flush()
+    expect(h.push).toHaveBeenCalledTimes(2)
+    expect(h.pull).toHaveBeenCalledTimes(1)
     expect(h.status()).toMatchObject({ phase: 'idle', nextAttemptAt: null })
   })
 

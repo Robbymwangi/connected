@@ -2,6 +2,7 @@ import { ChevronRight } from 'lucide-react'
 import type { SessionStore } from '../../app/useSessionStore'
 import { BackNav } from '../../components/BackNav'
 import type { SchoolClass } from '../../fixtures/classes'
+import type { SchoolDirectory } from '../../lib/schoolDirectory'
 import type { Student } from '../../fixtures/students'
 import { initials } from '../../fixtures/students'
 import type { Teacher } from '../../fixtures/teachers'
@@ -14,6 +15,7 @@ type StreamDetailProps = {
   year: number
   students: Student[]
   teachers: Teacher[]
+  school: SchoolDirectory
   store: SessionStore
   token: string
   onBack: () => void
@@ -24,7 +26,7 @@ type StreamDetailProps = {
   onOpenReport: (assessmentId: string) => void
 }
 
-export function StreamDetail({ cls, year, students, teachers: schoolTeachers, store, token, onBack, onOpenComments, onOpenStudent, onOpenTeacher, onOpenGrid, onOpenReport }: StreamDetailProps) {
+export function StreamDetail({ cls, year, students, teachers: schoolTeachers, school, store, token, onBack, onOpenComments, onOpenStudent, onOpenTeacher, onOpenGrid, onOpenReport }: StreamDetailProps) {
   const roster = students.filter((student) => student.classId === cls.id)
   const assessments = store.assessments.filter((a) => a.stream === cls.stream && a.year === year)
   const teachers = schoolTeachers.filter((teacher) => cls.stream in teacher.subjectsByStream)
@@ -65,7 +67,7 @@ export function StreamDetail({ cls, year, students, teachers: schoolTeachers, st
               <p className="py-6 text-center text-sm text-muted-foreground">No assessments for {year}.</p>
             )}
             {assessments.map((a) => (
-              <AssessmentRow key={a.id} assessment={a} compact onOpenGrid={() => onOpenGrid(a.id)} onOpenReport={() => onOpenReport(a.id)} />
+              <AssessmentRow key={a.id} assessment={a} school={school} compact onOpenGrid={() => onOpenGrid(a.id)} onOpenReport={() => onOpenReport(a.id)} />
             ))}
           </div>
         </Panel>

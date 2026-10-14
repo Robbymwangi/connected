@@ -50,6 +50,29 @@ describe('summarizeSync', () => {
 })
 
 describe('describeFailedEntry', () => {
+  const held = [{ id: 'cat', subject: 'Maths', name: 'End of Term', stream: '4W', term: 'Term 2' }]
+  const failed = (over: Partial<OutboxEntry>): OutboxEntry => ({
+    id: 'e', table: 'assessments', recordId: 'cat', kind: 'patch', baseVersion: 3, fields: {}, at: 'x', state: 'failed', reason: 'forbidden', ...over,
+  })
+
+  it('names a refused finalize and says who may finalize, instead of "assessments change: forbidden"', () => {
+    expect(describeFailedEntry(failed({ fields: { status: 'finalized' } }), held)).toMatchObject({
+      title: 'Finalizing Maths End of Term (4W, Term 2)',
+      reason: 'Only the teacher who created it, or a teacher of Maths in 4W, can finalize it.',
+    })
+    expect(describeFailedEntry(failed({ fields: { date: '2026-05-01' } }), held)).toMatchObject({
+      title: 'Changing Maths End of Term (4W, Term 2)',
+      reason: 'Only the teacher who created it, or a teacher of Maths in 4W, can change it.',
+    })
+  })
+
+  it('explains a refused remark and a mark whose assessment was refused', () => {
+    expect(describeFailedEntry(failed({ table: 'comments', recordId: 'k1', fields: { accept: {} } }), held).reason)
+      .toBe("Only the stream's class teacher or the Director of Studies can act on its remarks.")
+    expect(describeFailedEntry(failed({ table: 'marks', recordId: 'm1', baseVersion: 0, fields: { assessmentId: 'cat', score: 4 }, reason: 'assessmentId does not resolve' }), held))
+      .toMatchObject({ title: 'A mark in Maths End of Term (4W, Term 2)', reason: 'The assessment this mark belongs to was refused or removed, so the mark could not be saved.' })
+  })
+
   it('explains the old assessment term payload without blaming the teacher', () => {
     const entry: OutboxEntry = {
       id: 'failed-create', table: 'assessments', recordId: 'assessment-1', kind: 'patch', baseVersion: 0,
@@ -57,6 +80,7 @@ describe('describeFailedEntry', () => {
     }
 
     expect(describeFailedEntry(entry)).toEqual({
+      title: 'Creating an assessment',
       reason: 'Your selected term (Term 1) was valid, but this older assessment request sent it as text instead of a number.',
       action: 'Dismiss this failed request and recreate the assessment. New assessments send the term in the correct format.',
     })
@@ -69,6 +93,7 @@ describe('describeFailedEntry', () => {
     }
 
     expect(describeFailedEntry(entry)).toEqual({
+      title: 'A mark',
       reason: 'score exceeds criterion maximum',
       action: 'This request was not applied and will not be retried. Use the reason above to decide what to do, or dismiss this failed attempt.',
     })
