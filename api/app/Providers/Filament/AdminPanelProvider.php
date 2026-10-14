@@ -3,7 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Auth\Login;
-use App\Http\Middleware\ResolveInstitution;
+use App\Http\Middleware\ResolveAdminInstitution;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -22,10 +22,11 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /* The admin panel (ADR 0009): roster management for administrators, online only and server
    rendered, beside the API in the same application. It signs in through its own session guard,
-   `admin`. Tenancy is the same global scope as everywhere else: ResolveInstitution runs with that
-   guard as persistent middleware, after the session has started, so a page load and every
-   Livewire update after it (a table search, a form save) are scoped to the signed-in account's
-   institution, and an unauthenticated request matches no rows. */
+   `admin`. Tenancy is the same global scope as everywhere else: ResolveAdminInstitution
+   (ResolveInstitution with that guard) runs as persistent middleware, after the session has
+   started, so a page load and every Livewire update after it (a table search, a form save) are
+   scoped to the signed-in account's institution, and an unauthenticated request matches no rows.
+   It must carry no ":argument": Livewire would not match it, and updates would run unscoped. */
 class AdminPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
@@ -59,7 +60,7 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->middleware([
-                ResolveInstitution::class.':admin',
+                ResolveAdminInstitution::class,
             ], isPersistent: true)
             ->authMiddleware([
                 Authenticate::class,
