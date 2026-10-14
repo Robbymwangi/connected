@@ -8,7 +8,8 @@ namespace App\Support\Assistant;
 
    "Appears" allows the rounding a sentence uses: a figure written to n decimals matches a returned
    value within half a unit of its last place, so 62.5 may be written 62.5, 63, or 62, 51.25 may
-   be 51.2 or 51.3, and a share of 0.625 may be 62.5 or 63 percent. Nothing else is allowed: a
+   be 51.2 or 51.3, and a share of 0.625 may be 62.5 or 63 percent. A difference a tool returned
+   may be written without its sign, as "6.2 points behind" for -6.2. Nothing else is allowed: a
    difference, total, or count the model worked out itself is ungrounded, however simple.
 
    Names are not figures. A number glued to letters (S12, 4W, 5A) is a label, as are Term 2 and T3,
@@ -99,7 +100,7 @@ final class Grounding
         $tolerance = 0.5 * 10 ** -$decimals + 1e-9;
 
         foreach ($known as $value) {
-            foreach ([$value, $value * 100] as $candidate) {
+            foreach ([$value, $value * 100, abs($value)] as $candidate) {
                 if (abs($candidate - $number) <= $tolerance) {
                     return true;
                 }

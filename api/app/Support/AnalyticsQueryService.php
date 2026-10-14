@@ -288,6 +288,227 @@ final class AnalyticsQueryService
             ->all();
     }
 
+    /**
+     * Every student with a scored outcome in scope, highest mean first: the whole class, where the
+     * attention list is only its tail.
+     *
+     * @return list<array{studentId: string, meanScore: float, latestScore: float, level: string, scored: int}>
+     */
+    public function studentStandings(AnalyticsFilters $filters): array
+    {
+        $ranked = $this->scoredOutcomes($filters)
+            ->select('student_id', 'pct', 'level', 'assessment_date', 'assessment_id')
+            ->selectRaw(
+                'avg(pct) over (partition by student_id) as mean_pct, '.
+                'count(*) over (partition by student_id) as scored_count, '.
+                'row_number() over (partition by student_id order by assessment_date desc, assessment_id desc) as latest_row'
+            );
+
+        return DB::query()->fromSub($ranked, 'ranked')
+            ->where('latest_row', 1)
+            ->orderByDesc('mean_pct')
+            ->orderBy('student_id')
+            ->get()
+            ->map(fn (object $row): array => [
+                'studentId' => $row->student_id,
+                'meanScore' => (float) $row->mean_pct,
+                'latestScore' => (float) $row->pct,
+                'level' => $row->level,
+                'scored' => (int) $row->scored_count,
+            ])
+            ->all();
+    }
+
+    /**
+     * The mirror of the decline list: students whose latest percentage rose at least ten points
+     * above their own earlier mean.
+     *
+     * @return list<array{studentId: string, latestScore: float, priorMean: float}>
+     */
+    public function improvementList(AnalyticsFilters $filters): array
+    {
+        $ranked = $this->scoredOutcomes($filters)
+            ->select('student_id', 'pct', 'assessment_date', 'assessment_id')
+            ->selectRaw(
+                'avg(pct) over (partition by student_id order by assessment_date, assessment_id '.
+                'rows between unbounded preceding and 1 preceding) as prior_mean, '.
+                'count(*) over (partition by student_id) as scored_count, '.
+                'row_number() over (partition by student_id order by assessment_date desc, assessment_id desc) as latest_row'
+            );
+
+        return DB::query()->fromSub($ranked, 'ranked')
+            ->where('latest_row', 1)
+            ->where('scored_count', '>=', 2)
+            ->whereRaw('pct >= prior_mean + 10')
+            ->orderByRaw('pct - prior_mean desc')
+            ->orderBy('student_id')
+            ->get()
+            ->map(fn (object $row): array => [
+                'studentId' => $row->student_id,
+                'latestScore' => (float) $row->pct,
+                'priorMean' => (float) $row->prior_mean,
+            ])
+            ->all();
+    }
+
+    /**
+     * Per assessment in scope, how many enrolled students were scored, absent, or not yet entered.
+     *
+     * @return list<array{subject: string, assessment: string, date: string, expected: int, scored: int, absent: int, missing: int}>
+     */
+    public function entryGaps(AnalyticsFilters $filters): array
+    {
+        return DB::query()->fromSub($this->outcomes($filters), 'outcomes')
+            ->select('assessment_id', 'assessment_name', 'subject_name', 'assessment_date')
+            ->selectRaw(
+                'count(*) as expected_count, '.
+                'count(*) filter (where outcome_status = ?) as scored_count, '.
+                'count(*) filter (where outcome_status = ?) as absent_count, '.
+                'count(*) filter (where outcome_status = ?) as missing_count',
+                ['scored', 'absent', 'missing']
+            )
+            ->groupBy('assessment_id', 'assessment_name', 'subject_name', 'assessment_date')
+            ->orderBy('assessment_date')
+            ->orderBy('subject_name')
+            ->orderBy('assessment_name')
+            ->get()
+            ->map(fn (object $row): array => [
+                'subject' => $row->subject_name,
+                'assessment' => $row->assessment_name,
+                'date' => (string) $row->assessment_date,
+                'expected' => (int) $row->expected_count,
+                'scored' => (int) $row->scored_count,
+                'absent' => (int) $row->absent_count,
+                'missing' => (int) $row->missing_count,
+            ])
+            ->all();
+    }
+
+    /**
+     * Students marked absent on more than one assessment in scope, most absences first.
+     *
+     * @return list<array{studentId: string, absences: int}>
+     */
+    public function repeatedAbsences(AnalyticsFilters $filters): array
+    {
+        return DB::query()->fromSub($this->outcomes($filters), 'outcomes')
+            ->where('outcome_status', 'absent')
+            ->select('student_id')
+            ->selectRaw('count(*) as absences')
+            ->groupBy('student_id')
+            ->havingRaw('count(*) >= 2')
+            ->orderByDesc('absences')
+            ->orderBy('student_id')
+            ->get()
+            ->map(fn (object $row): array => ['studentId' => $row->student_id, 'absences' => (int) $row->absences])
+            ->all();
+    }
+
+    /**
+     * Each student's mean percentage per subject in scope; the filters' subject is the caller's
+     * to clear when every subject is wanted.
+     *
+     * @return list<array{studentId: string, subjectId: string, subject: string, meanScore: float, scored: int}>
+     */
+    public function subjectMeansByStudent(AnalyticsFilters $filters): array
+    {
+        return $this->scoredOutcomes($filters)
+            ->select('student_id', 'subject_id', 'subject_name')
+            ->selectRaw('avg(pct) as mean_pct, count(*) as scored_count')
+            ->groupBy('student_id', 'subject_id', 'subject_name')
+            ->orderBy('student_id')
+            ->orderBy('subject_name')
+            ->get()
+            ->map(fn (object $row): array => [
+                'studentId' => $row->student_id,
+                'subjectId' => $row->subject_id,
+                'subject' => $row->subject_name,
+                'meanScore' => (float) $row->mean_pct,
+                'scored' => (int) $row->scored_count,
+            ])
+            ->all();
+    }
+
+    /**
+     * The subjects with at least one scored outcome in scope, by name.
+     *
+     * @return list<array{id: string, name: string}>
+     */
+    public function scoredSubjects(AnalyticsFilters $filters): array
+    {
+        return $this->scoredOutcomes($filters)
+            ->select('subject_id', 'subject_name')
+            ->distinct()
+            ->orderBy('subject_name')
+            ->get()
+            ->map(fn (object $row): array => ['id' => $row->subject_id, 'name' => $row->subject_name])
+            ->all();
+    }
+
+    /**
+     * Group figures for girls and for boys: how many students, their mean, pass rate, and levels.
+     * Totals only; no row names a student.
+     *
+     * @return array<'F'|'M', array{students: int, meanScore: ?float, passRate: ?float, levels: array{EE: int, ME: int, AE: int, BE: int}}>
+     */
+    public function genderBreakdown(AnalyticsFilters $filters): array
+    {
+        $rows = $this->scoredOutcomes($filters)
+            ->select('gender')
+            ->selectRaw(
+                'count(distinct student_id) as student_count, count(*) as scored_count, avg(pct) as mean_pct, '.
+                'sum(case when pct >= ? then 1 else 0 end) as passed_count, '.
+                "count(*) filter (where level = 'EE') as ee, count(*) filter (where level = 'ME') as me, ".
+                "count(*) filter (where level = 'AE') as ae, count(*) filter (where level = 'BE') as be",
+                [self::PASS_MARK_PCT]
+            )
+            ->groupBy('gender')
+            ->get()
+            ->keyBy('gender');
+
+        $groups = [];
+        foreach (['F', 'M'] as $gender) {
+            $row = $rows[$gender] ?? null;
+            $scored = $row === null ? 0 : (int) $row->scored_count;
+            $groups[$gender] = [
+                'students' => $row === null ? 0 : (int) $row->student_count,
+                'meanScore' => $scored === 0 ? null : (float) $row->mean_pct,
+                'passRate' => $scored === 0 ? null : (float) $row->passed_count / $scored * 100,
+                'levels' => [
+                    'EE' => (int) ($row->ee ?? 0), 'ME' => (int) ($row->me ?? 0),
+                    'AE' => (int) ($row->ae ?? 0), 'BE' => (int) ($row->be ?? 0),
+                ],
+            ];
+        }
+
+        return $groups;
+    }
+
+    /**
+     * The other streams of the same grade as this one, in this school: the only streams a
+     * comparison may reach.
+     *
+     * @return list<string>
+     */
+    public function sisterStreams(string $institutionId, string $stream): array
+    {
+        $grades = DB::table('classes')
+            ->where('institution_id', $institutionId)
+            ->where('stream', $stream)
+            ->whereNull('deleted_at')
+            ->select('grade');
+
+        return DB::table('classes')
+            ->where('institution_id', $institutionId)
+            ->whereIn('grade', $grades)
+            ->where('stream', '<>', $stream)
+            ->whereNull('deleted_at')
+            ->distinct()
+            ->orderBy('stream')
+            ->pluck('stream')
+            ->all();
+    }
+
     public function netLevelMovement(AnalyticsFilters $filters): int
     {
         $steps = $this->scoredOutcomes($filters)
@@ -415,9 +636,11 @@ final class AnalyticsQueryService
                 'a.name as assessment_name',
                 'a.term',
                 'a.date as assessment_date',
+                'a.subject_id',
                 'a.subject_name',
                 'e.student_id',
                 'st.name as student_name',
+                'st.gender',
                 'rubric.criterion_count',
                 'rubric.max_score',
                 'grid.score_count',
