@@ -16,7 +16,10 @@ import { pullSync } from './syncPull'
    connection. */
 
 export type Phase = 'idle' | 'pushing' | 'pulling' | 'backoff' | 'error'
-export type RunReason = 'session' | 'reachable' | 'enqueue' | 'tick' | 'visible'
+/* server-change: this device just changed something on the server directly, online and
+   outside the outbox (a term close, an unlock), so what it changed should be pulled now,
+   not at the next tick. */
+export type RunReason = 'session' | 'reachable' | 'enqueue' | 'tick' | 'visible' | 'server-change'
 
 export type RunnerStatus = {
   phase: Phase
@@ -113,9 +116,9 @@ type RunnerDeps = {
 const passThrough: Lock = async (run) => ({ ran: true, value: await run() })
 
 /* These end a backoff early: the situation changed, so waiting out the timer would be
-   waiting for nothing. An enqueue or a tick is not news, and must not hammer a server
-   that just failed. */
-const ENDS_BACKOFF: ReadonlySet<RunReason> = new Set(['session', 'reachable', 'visible'])
+   waiting for nothing. A server change is news of that kind: the server just answered this
+   device. An enqueue or a tick is not news, and must not hammer a server that just failed. */
+const ENDS_BACKOFF: ReadonlySet<RunReason> = new Set(['session', 'reachable', 'visible', 'server-change'])
 
 export function createSyncRunner(deps: RunnerDeps) {
   const { clock } = deps
@@ -386,6 +389,14 @@ export type BindOptions = {
 }
 
 const bound = new WeakMap<LocalDatabase, () => void>()
+const serverChanges = new WeakMap<LocalDatabase, () => void>()
+
+/* For a screen that just changed something on the server directly (closing a term, unlocking an
+   assessment): asks this user's runner to pull now, so the change appears without waiting for
+   the next tick. Nothing happens when no runner is bound, as before sign-in. */
+export function pullAfterServerChange(userId: string): void {
+  serverChanges.get(localDatabaseFor(userId))?.()
+}
 
 /* Starts syncing one verified session and returns the function that stops it. Binding
    a database that already has a runner replaces it, so a re-mount or a changed token
@@ -443,6 +454,7 @@ export function bindSyncRunner(options: BindOptions): () => void {
 
   runner.start()
   runner.trigger('session')
+  serverChanges.set(database, () => runner.trigger('server-change'))
 
   const unbind = () => {
     runner.dispose()
@@ -452,7 +464,10 @@ export function bindSyncRunner(options: BindOptions): () => void {
     window.removeEventListener('online', reachability)
     window.removeEventListener('offline', reachability)
     document.removeEventListener('visibilitychange', visibility)
-    if (bound.get(database) === unbind) bound.delete(database)
+    if (bound.get(database) === unbind) {
+      bound.delete(database)
+      serverChanges.delete(database)
+    }
     status.reset()
   }
   bound.set(database, unbind)

@@ -167,6 +167,7 @@ export function AssessmentsScreen({
       {listView === 'queue' ? (
         <QueueList
           assessments={list}
+          school={school}
           subjects={school?.subjects ?? []}
           filters={filters}
           onFiltersChange={setFilters}
@@ -177,6 +178,7 @@ export function AssessmentsScreen({
       ) : (
         <BrowseTree
           assessments={list}
+          school={school}
           classes={referenceClasses}
           grades={referenceGrades}
           onOpenGrid={(id) => onOpen(id, 'grid')}

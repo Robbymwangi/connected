@@ -30,6 +30,12 @@ export type SchoolDirectory = {
   classesForYear: (year: number) => SchoolClass[]
   studentsForYear: (year: number) => Student[]
   openTerm: OpenTerm | null
+  /* Whether the server would let this user edit or finalize this assessment (AssessmentPolicy,
+     docs/spec/access-model.md): its creator, or a teacher assigned to its class and subject. It
+     only decides what is offered; the server checks again. An assessment this device does not
+     hold, or holds without its creator yet (made here and not synced), is offered: the device
+     cannot know otherwise, and its own creations are the user's. */
+  answerableFor: (userId: string, assessmentId: string) => boolean
 }
 
 /* The live term with no end. The server allows one at most; if a device ever held two, the later
@@ -134,6 +140,17 @@ export function mapSchoolDirectory(source: SchoolDirectorySource): SchoolDirecto
     }]
   }).sort((a, b) => a.name.localeCompare(b.name))
 
+  const assignmentKeys = new Set(teacherAssignments.map((assignment) =>
+    `${stringField(assignment, 'userId')}|${stringField(assignment, 'classId')}|${stringField(assignment, 'subjectId')}`))
+  const assessmentById = new Map(assessments.map((record) => [record.id, record]))
+  const answerableFor = (userId: string, assessmentId: string): boolean => {
+    const record = assessmentById.get(assessmentId)
+    const createdBy = record ? stringField(record, 'createdBy') : ''
+    if (!record || !createdBy) return true
+    return createdBy === userId
+      || assignmentKeys.has(`${userId}|${stringField(record, 'classId')}|${stringField(record, 'subjectId')}`)
+  }
+
   const years = [...new Set(enrolments.map((record) => record.year).filter((year): year is number => Number.isInteger(year)))].sort((a, b) => b - a)
 
   const classesForYear = (year: number): SchoolClass[] => classes.map((cls) => {
@@ -181,5 +198,6 @@ export function mapSchoolDirectory(source: SchoolDirectorySource): SchoolDirecto
     classesForYear,
     studentsForYear,
     openTerm: openTermOf(source.terms),
+    answerableFor,
   }
 }

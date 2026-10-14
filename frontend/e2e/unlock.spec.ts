@@ -29,7 +29,15 @@ test('the HOD of the subject unlocks a finalized assessment, and is told the not
       : { status: 422, contentType: 'application/json', body: JSON.stringify({ message: 'A resolution note is required when reports exist.' }) })
   })
 
-  await page.goto('/assessments/a1/grid')
+  /* Reached by clicking, as a teacher would: a finalized card offers its grid to whoever may
+     unlock it, under its term in Browse. Going straight to the grid's address hid that the
+     card once offered only its report. */
+  await page.goto('/assessments')
+  await page.getByRole('button', { name: 'Browse' }).click()
+  await page.getByRole('button', { name: /Grade 4/ }).click()
+  await page.getByRole('button', { name: /Stream 4W/ }).click()
+  const term = page.getByRole('region', { name: 'Term 2, 2025' })
+  await term.getByRole('button', { name: 'Open grid' }).click()
   await page.getByRole('button', { name: 'Unlock' }).click()
   const dialog = page.getByRole('dialog', { name: 'Unlock assessment?' })
   await dialog.getByRole('button', { name: 'Unlock' }).click()
@@ -52,6 +60,13 @@ test('the HOD of the subject unlocks a finalized assessment, and is told the not
 test('a teacher who neither directs studies nor heads the subject is offered no unlock', async ({ page }) => {
   await reachableApi(page)
   await signIn(page, FINALIZED)
+
+  await page.goto('/assessments')
+  await page.getByRole('button', { name: 'Browse' }).click()
+  await page.getByRole('button', { name: /Grade 4/ }).click()
+  await page.getByRole('button', { name: /Stream 4W/ }).click()
+  await expect(page.getByRole('region', { name: 'Term 2, 2025' }).getByRole('button', { name: 'View report' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open grid' })).toHaveCount(0)
 
   await page.goto('/assessments/a1/grid')
   await expect(page.getByText('Finalized', { exact: true })).toBeVisible()

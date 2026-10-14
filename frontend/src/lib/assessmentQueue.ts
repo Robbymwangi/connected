@@ -64,3 +64,24 @@ const QUEUE_PRIORITY: Record<LifecycleStatus, number> = {
 export function sortQueue(list: Assessment[]): Assessment[] {
   return [...list].sort((a, b) => QUEUE_PRIORITY[a.status] - QUEUE_PRIORITY[b.status])
 }
+
+export type TermGroup = { label: string; assessments: Assessment[] }
+
+/* A stream's assessments as a mark book reads them: by term, newest term first, and in date
+   order within a term. The term is held as text ("Term 2"), so its number orders it. */
+export function groupByTerm(list: Assessment[]): TermGroup[] {
+  const termNumber = (term: string) => Number(/\d+/.exec(term)?.[0] ?? 0)
+  const groups = new Map<string, { year: number; term: string; assessments: Assessment[] }>()
+  for (const assessment of list) {
+    const key = `${assessment.year}|${assessment.term}`
+    const group = groups.get(key) ?? { year: assessment.year, term: assessment.term, assessments: [] }
+    group.assessments.push(assessment)
+    groups.set(key, group)
+  }
+  return [...groups.values()]
+    .sort((a, b) => b.year - a.year || termNumber(b.term) - termNumber(a.term))
+    .map((group) => ({
+      label: `${group.term}, ${group.year}`,
+      assessments: [...group.assessments].sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name)),
+    }))
+}
