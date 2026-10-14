@@ -7,6 +7,7 @@ use App\Filament\Resources\Students\Pages\CreateStudent;
 use App\Filament\Resources\Teachers\Pages\EditUser;
 use App\Filament\Resources\Teachers\Pages\ListUsers;
 use App\Filament\Resources\Teachers\RelationManagers\SubjectModerationsRelationManager;
+use App\Http\Middleware\ResolveAdminInstitution;
 use App\Http\Middleware\ResolveInstitution;
 use App\Models\Student;
 use App\Models\SubjectModeration;
@@ -15,6 +16,7 @@ use App\Support\CurrentInstitution;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
+use Livewire\Mechanisms\PersistentMiddleware\PersistentMiddleware;
 
 /* Build plan 5.4 to 5.6, the admin panel (ADR 0009), each test one of the plan's "done when" lines.
    Page loads go through HTTP, so the panel's own middleware, ResolveInstitution with the admin
@@ -120,7 +122,21 @@ test('lists and searches show only the administrator\'s own institution', functi
 });
 
 test('every Livewire request of the panel is scoped too, not only the first page load', function () {
-    expect(Livewire::getPersistentMiddleware())->toContain(ResolveInstitution::class.':admin');
+    /* A Livewire update (a search, a save, a modal's create) re-runs only those of its page's route
+       middleware that Livewire matches against its persistent list, comparing names with any
+       ":argument" stripped from the route's side alone. ResolveInstitution:admin never matched, so
+       updates ran with no institution: unscoped reads, and a create with a null institution_id.
+       Being in the persistent list is not enough; this runs Livewire's own match on every panel page. */
+    $persistent = app(PersistentMiddleware::class);
+    $reapplied = new ReflectionMethod($persistent, 'filterMiddlewareByPersistentMiddleware');
+    $pages = collect(app('router')->getRoutes()->getRoutes())
+        ->filter(fn ($route) => str_starts_with((string) $route->getName(), 'filament.admin.') && in_array('GET', $route->methods(), true));
+
+    expect($pages)->not->toBeEmpty();
+    foreach ($pages as $page) {
+        expect($reapplied->invoke($persistent, app('router')->gatherRouteMiddleware($page)))
+            ->toContain(ResolveAdminInstitution::class);
+    }
 });
 
 test('another institution\'s record is a 404 by its id', function () {
