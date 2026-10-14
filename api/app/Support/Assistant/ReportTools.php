@@ -55,7 +55,7 @@ final class ReportTools
             ['name' => 'term_deviation', 'description' => 'Each subject\'s mean percentage and pass rate in the report\'s term against the term before it in the same year, with the change (the deviation). A term 1 has no earlier term to compare with.', 'input_schema' => $none],
             ['name' => 'stream_comparison', 'description' => 'This stream against the other streams of the same grade in this school, for the report\'s subject, year, and term: each stream\'s mean percentage, pass rate, and number of scored entries, its gap from the grade mean, and its difference from this stream. Says whether the streams sat the same assessments.', 'input_schema' => $none],
             ['name' => 'criterion_across_streams', 'description' => 'Each rubric criterion\'s mean percentage in this stream and in the other streams of the same grade, for the report\'s subject, year, and term, with each stream\'s difference from this one. Shows whether a weak criterion is this class or the whole grade. Needs a report scoped to one subject.', 'input_schema' => $none],
-            ['name' => 'gender_breakdown', 'description' => 'Girls and boys as two groups in the report\'s scope: how many students, mean percentage, pass rate, and results per level (one per student per assessment), with the gap between the groups. Group totals only; a group of fewer than 5 students is withheld.', 'input_schema' => $none],
+            ['name' => 'gender_breakdown', 'description' => 'Girls and boys as two groups in the report\'s scope: how many students, mean percentage, pass rate, and results per level (one per student per assessment), with the gap between the groups. Group totals only; both groups are withheld when either has fewer than 5 students.', 'input_schema' => $none],
         ];
     }
 
@@ -411,11 +411,12 @@ final class ReportTools
     {
         $groups = $this->analytics->genderBreakdown($this->filters);
         $shown = fn (array $group) => $group['students'] >= self::SMALLEST_GROUP;
-        $describe = fn (array $group) => $shown($group)
-            ? ['students' => $group['students'], 'meanPct' => $group['meanScore'], 'passRatePct' => $group['passRate'], 'resultsPerLevel' => $group['levels']]
-            : ['withheld' => 'Fewer than '.self::SMALLEST_GROUP.' students; too few to compare.'];
         [$girls, $boys] = [$groups['F'], $groups['M']];
+        // Both or neither: the report's own totals less one shown group would give the other.
         $both = $shown($girls) && $shown($boys);
+        $describe = fn (array $group) => $both
+            ? ['students' => $group['students'], 'meanPct' => $group['meanScore'], 'passRatePct' => $group['passRate'], 'resultsPerLevel' => $group['levels']]
+            : ['withheld' => 'One group has fewer than '.self::SMALLEST_GROUP.' students; too few to compare.'];
 
         return [
             'girls' => $describe($girls),

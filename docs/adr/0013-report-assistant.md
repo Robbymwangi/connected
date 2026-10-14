@@ -130,9 +130,10 @@ ADR narrows it for the assistant (decision 4).
      each stream's mean, pass rate, and entries, and each rubric criterion's mean per
      stream. When the report is one assessment, every stream is held to the assessment of
      that name; otherwise the result says whether the streams sat the same ones.
-   - **Girls and boys as two groups:** totals only, never a student's sex. A group of
-     fewer than five students is withheld: too small to compare fairly, and close to
-     describing one or two children.
+   - **Girls and boys as two groups:** totals only, never a student's sex. When either
+     group has fewer than five students, both are withheld: too small to compare fairly,
+     close to describing one or two children, and the report's own totals less the
+     shown group would give the other.
    - **Differences arrive worked out.** A comparison is a difference, and the model may
      not do arithmetic, so every comparing tool returns its gaps; the grounding check
      accepts a returned difference written without its sign ("6.2 points behind").

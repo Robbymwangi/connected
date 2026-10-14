@@ -213,6 +213,22 @@ test('a gender group of fewer than five students is withheld, and so is the gap'
     expect($result['girlsMinusBoysMeanPct'])->toBeNull();
 });
 
+test('when only one group is small both are withheld, since the totals less one group give the other', function () {
+    $g = buildGraph('Mixed School', '-gender-small');
+    $g['assessment']->update(['status' => 'finalized']);
+    foreach (['F', 'F', 'F', 'F', 'M'] as $n => $gender) {
+        $student = Student::create(['institution_id' => $g['institution']->id, 'name' => "Pupil {$n}", 'gender' => $gender, 'dob' => '2016-01-01']);
+        Enrolment::create(['institution_id' => $g['institution']->id, 'student_id' => $student->id, 'class_id' => $g['class']->id, 'year' => 2026]);
+        Mark::create(['institution_id' => $g['institution']->id, 'assessment_id' => $g['assessment']->id, 'student_id' => $student->id, 'criterion_id' => $g['criterion']->id, 'mark_kind' => 'score', 'score' => 6, 'last_edited_by' => $g['teacher']->id]);
+    }
+
+    $result = toolsFor($g, $g['subject']->id, 1)->run('gender_breakdown', []);
+
+    expect($result['girls'])->toHaveKey('withheld');
+    expect($result['boys'])->toHaveKey('withheld');
+    expect($result['girlsMinusBoysMeanPct'])->toBeNull();
+});
+
 test('two groups of five or more get their totals and the gap between them', function () {
     $g = buildGraph('Big School', '-gender');
     $g['assessment']->update(['status' => 'finalized']);
