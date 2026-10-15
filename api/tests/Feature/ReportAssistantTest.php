@@ -85,7 +85,11 @@ test('an in-scope question is answered from a tool, with names restored only for
     expect($gate->data())->not->toHaveKey('tools');
     expect($gate['thinking'])->toBe(['type' => 'disabled']);
     expect($first['model'])->toBe('claude-sonnet-5-5');
-    expect(collect($first['tools'])->pluck('name')->all())->toBe(['report_summary', 'trend', 'criterion_breakdown', 'attention_list', 'decline_list', 'student_outcomes']);
+    expect(collect($first['tools'])->pluck('name')->all())->toBe([
+        'report_summary', 'trend', 'criterion_breakdown', 'attention_list', 'decline_list', 'student_outcomes',
+        'class_standings', 'improvers', 'absences_and_gaps', 'student_across_subjects', 'struggling_in_several_subjects',
+        'subject_breakdown', 'term_deviation', 'stream_comparison', 'criterion_across_streams', 'gender_breakdown',
+    ]);
     expect(collect($first['tools'])->every(fn (array $tool) => $tool['strict'] === true))->toBeTrue();
     expect($second['messages'][2]['content'][0])->toMatchArray(['type' => 'tool_result', 'tool_use_id' => 'toolu_1']);
     // The model's tool call goes back as the API sent it: an empty input stays an object, never a list.
@@ -112,7 +116,7 @@ test('the gate fails closed: out of scope, an error, or output it cannot read ne
     'refused' => [['stop_reason' => 'refusal', 'content' => []]],
 ]);
 
-test('a model refusal, an ungrounded figure, a figure-free answer, or too many tool calls become the fixed reply', function (array $replies) {
+test('a model refusal, an ungrounded figure, a figure-free answer, an unknown handle, or too many tool calls become the fixed reply', function (array $replies) {
     $g = assistantGraph();
     modelReplies(gateSays(true), ...$replies);
 
@@ -125,7 +129,10 @@ test('a model refusal, an ungrounded figure, a figure-free answer, or too many t
     'a number no tool returned' => [[callsTool('report_summary'), answers('The pass rate is 87%.')]],
     'no figure at all' => [[callsTool('report_summary'), answers('The class is doing fine.')]],
     'stopped for length' => [[['stop_reason' => 'max_tokens', 'content' => []]]],
-    'still asking after eight tools' => [array_map(fn (int $n) => callsTool('trend', [], "toolu_{$n}"), range(1, ReportAssistant::MAX_TOOL_CALLS + 1))],
+    // The graph's one student is S1 on the attention list; S6 was never returned, so it could not be
+    // put back to a name and could as easily be another student's.
+    'a handle no tool returned' => [[callsTool('attention_list'), answers('S6 is averaging 30%, below the 50% pass mark.')]],
+    'still asking after twelve tools' => [array_map(fn (int $n) => callsTool('trend', [], "toolu_{$n}"), range(1, ReportAssistant::MAX_TOOL_CALLS + 1))],
 ]);
 
 test('an answer sent before any tool is asked once, and only once, to use the tools', function () {

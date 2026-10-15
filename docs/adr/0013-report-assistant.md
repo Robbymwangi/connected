@@ -33,16 +33,17 @@ ADR narrows it for the assistant (decision 4).
 1. **The assistant reads the analytics service, never the database.** It is given a
    small set of read-only tools, each a thin wrapper over `AnalyticsQueryService`:
    the summary, the trend, the criterion breakdown, the attention list, and one
-   student's outcomes. There is no SQL tool and no table is described to the model.
-   Every tool runs with the asking teacher's institution (the global scope) and with
-   the scope and filters of the report on screen fixed by the server; the model may
-   narrow within them, never widen them.
+   student's outcomes, and since decision 7 the ten that answer broader questions.
+   There is no SQL tool and no table is described to the model. Every tool runs with
+   the asking teacher's institution (the global scope) and starts from the scope and
+   filters of the report on screen fixed by the server; the model may narrow within
+   them, and only the tools decision 7 names reach further, each by its own fixed rule.
 
 2. **The server runs the loop.** `POST /api/reports/assistant` carries the report's
    scope and filters and the new question. The server calls the model with the tool
    definitions, runs each tool the model asks for, returns the results, and repeats
-   until there is an answer, with a cap of about five tool calls, a timeout, and a
-   per-user rate limit. The loop is written on Laravel's HTTP client, as ADR 0007 does
+   until there is an answer, with a cap on tool calls (twelve since decision 7), a
+   timeout, and a per-user rate limit. The loop is written on Laravel's HTTP client, as ADR 0007 does
    for the batch API, so every step is ours to read and test.
 
 3. **Scope is enforced by code, not only by the prompt.**
@@ -106,6 +107,46 @@ ADR narrows it for the assistant (decision 4).
    `AiDialog` awaits it, shows that it is waiting, and shows the fixed reply or an
    offline message if it fails. Its connectivity rule is unchanged.
 
+7. **Broader questions, within the school (added 2026-10-14).** Physical testing showed
+   what teachers ask first: who is doing best, whether a student struggles only in one
+   subject, whether the stream did better than its sister streams. Those are the simple
+   statistics school decisions rest on, and Kenyan exam analysis already reports them:
+   subject means, deviation from the last exam, the head and tail of the class, stream
+   against stream, girls against boys. The report's own scope cannot answer them, so ten
+   tools are added. Reading is not the limit: any teacher may read every stream and mark
+   in their school (`docs/spec/access-model.md`). What decision 1 guarded against was the
+   model choosing where to look, and that stays closed: no tool takes a stream, subject,
+   year, or school, and each widening is one rule in `ReportTools`.
+   - **Within the report's scope:** class standings (every student, highest mean first,
+     with the class's top, middle, and bottom third), improvers (the mirror of the decline
+     list), and absences and marks not yet entered.
+   - **The stream's other subjects,** in the report's year and term: one student's mean in
+     each subject beside the stream's, the students below the pass mark in two or more
+     subjects, and each subject's mean, pass rate, and levels.
+   - **The term before,** in the same year only: each subject's mean and pass rate against
+     the previous term, the deviation. A stream's name passes to next year's cohort, so
+     last year's figures for it are other children and are never compared.
+   - **The other streams of the same grade,** at the report's subject, year, and term:
+     each stream's mean, pass rate, and entries, and each rubric criterion's mean per
+     stream. When the report is one assessment, every stream is held to the assessment of
+     that name; otherwise the result says whether the streams sat the same ones.
+   - **Girls and boys as two groups:** totals only, never a student's sex. When either
+     group has fewer than five students, both are withheld: too small to compare fairly,
+     close to describing one or two children, and the report's own totals less the
+     shown group would give the other.
+   - **Differences arrive worked out.** A comparison is a difference, and the model may
+     not do arithmetic, so every comparing tool returns its gaps; the grounding check
+     accepts a returned difference written without its sign ("6.2 points behind").
+   - **Handles are checked as figures are.** An answer naming a handle that no tool
+     returned in the request is refused: it cannot be put back to a name, and a
+     misremembered handle could as easily be another student's. The first evaluation run
+     of these tools found one ("S6 has dropped sharply").
+   - **Never teachers.** No tool says who teaches a stream, and the gate treats judging
+     or comparing teachers as out of scope. Stream against stream is about the children's
+     results, not staff appraisal.
+   - The red-team evaluation gains ordinary questions of each kind and a "judging
+     teachers" attack set, against the same bar.
+
 ## Considered and rejected
 
 - **Levels only (no percentages to the model).** Keeps ADR 0012 decision 5 whole, but
@@ -121,6 +162,11 @@ ADR narrows it for the assistant (decision 4).
   is the one a prompt alone does not stop.
 - **The official PHP SDK and its tool runner.** Less code, but a new dependency, and the
   loop it hides is short enough to own and worth being able to explain.
+- **Comparing with other schools, or with last year's cohort of a stream.** The first
+  leaves the school and its global scope; the second compares different children under
+  the same stream name.
+- **Ranking or comparing teachers.** A stream's results are not a fair measure of the
+  person teaching it, and the assistant is not an appraisal tool.
 - **Claude Opus 5.5.** More capable than answering about one report needs, at twice the
   price.
 

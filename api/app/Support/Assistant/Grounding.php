@@ -8,7 +8,8 @@ namespace App\Support\Assistant;
 
    "Appears" allows the rounding a sentence uses: a figure written to n decimals matches a returned
    value within half a unit of its last place, so 62.5 may be written 62.5, 63, or 62, 51.25 may
-   be 51.2 or 51.3, and a share of 0.625 may be 62.5 or 63 percent. Nothing else is allowed: a
+   be 51.2 or 51.3, and a share of 0.625 may be 62.5 or 63 percent. A difference a tool returned
+   may be written without its sign, as "6.2 points behind" for -6.2. Nothing else is allowed: a
    difference, total, or count the model worked out itself is ungrounded, however simple.
 
    Names are not figures. A number glued to letters (S12, 4W, 5A) is a label, as are Term 2 and T3,
@@ -67,6 +68,26 @@ final class Grounding
         return $missing === [] ? null : $missing;
     }
 
+    /**
+     * Student handles the answer names that no tool result of this request returned. A handle the
+     * model misremembers cannot be put back to a name, and could as easily be another student's.
+     *
+     * @param  list<mixed>  $toolResults
+     * @return list<string>
+     */
+    public static function unknownHandles(string $text, array $toolResults): array
+    {
+        $known = [];
+        array_walk_recursive($toolResults, function (mixed $value) use (&$known): void {
+            if (is_string($value) && preg_match('/^S\d+$/', $value)) {
+                $known[$value] = true;
+            }
+        });
+        preg_match_all('/\bS\d+\b/', $text, $matches);
+
+        return array_values(array_unique(array_filter($matches[0], fn (string $handle) => ! isset($known[$handle]))));
+    }
+
     /** @return list<float> */
     public static function numbersIn(string $text): array
     {
@@ -99,7 +120,7 @@ final class Grounding
         $tolerance = 0.5 * 10 ** -$decimals + 1e-9;
 
         foreach ($known as $value) {
-            foreach ([$value, $value * 100] as $candidate) {
+            foreach ([$value, $value * 100, abs($value)] as $candidate) {
                 if (abs($candidate - $number) <= $tolerance) {
                     return true;
                 }

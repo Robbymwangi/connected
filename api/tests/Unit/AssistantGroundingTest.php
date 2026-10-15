@@ -71,3 +71,17 @@ test('names the teacher types become handles before anything is sent', function 
     expect($handles->conceal('Did Brian pass?', $roster))->toBe('Did Brian pass?');
     expect($handles->all())->toBe(['a' => 'S1', 'd' => 'S2', 'b' => 'S3']);
 });
+
+test('a difference a tool returned may be written without its sign, and one it did not return may not', function () {
+    $results = [['stream' => 'East', 'meanDifferenceFromThisStreamPct' => -6.2, 'meanPct' => 58.1]];
+
+    expect(Grounding::holds('East is 6.2 points behind this stream, at 58.1%.', $results))->toBeTrue();
+    expect(Grounding::ungrounded('East is 7.4 points behind.', $results))->toBe([7.4]);
+});
+
+test('a handle the answer names must be one a tool returned', function () {
+    $results = [['students' => [['student' => 'S1', 'meanPct' => 31.2], ['student' => 'S12', 'meanPct' => 33.0]]]];
+
+    expect(Grounding::unknownHandles('S1 and S12 need support.', $results))->toBe([]);
+    expect(Grounding::unknownHandles('S1 and S6 need support; S6 dropped.', $results))->toBe(['S6']);
+});
