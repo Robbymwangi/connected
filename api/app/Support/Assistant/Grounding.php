@@ -68,6 +68,26 @@ final class Grounding
         return $missing === [] ? null : $missing;
     }
 
+    /**
+     * Student handles the answer names that no tool result of this request returned. A handle the
+     * model misremembers cannot be put back to a name, and could as easily be another student's.
+     *
+     * @param  list<mixed>  $toolResults
+     * @return list<string>
+     */
+    public static function unknownHandles(string $text, array $toolResults): array
+    {
+        $known = [];
+        array_walk_recursive($toolResults, function (mixed $value) use (&$known): void {
+            if (is_string($value) && preg_match('/^S\d+$/', $value)) {
+                $known[$value] = true;
+            }
+        });
+        preg_match_all('/\bS\d+\b/', $text, $matches);
+
+        return array_values(array_unique(array_filter($matches[0], fn (string $handle) => ! isset($known[$handle]))));
+    }
+
     /** @return list<float> */
     public static function numbersIn(string $text): array
     {

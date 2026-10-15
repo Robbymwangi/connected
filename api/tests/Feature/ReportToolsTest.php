@@ -9,6 +9,7 @@ use App\Models\Student;
 use App\Models\Subject;
 use App\Support\AnalyticsFilters;
 use App\Support\AnalyticsQueryService;
+use App\Support\Assistant\Grounding;
 use App\Support\Assistant\Handles;
 use App\Support\Assistant\ReportTools;
 
@@ -90,6 +91,19 @@ test('class standings rank the whole class by mean and mark its thirds (position
         [$school['students']['chege']->id, 50.0, 'middle'],
         [$school['students']['amina']->id, 30.0, 'bottom'],
     ]);
+    // Counted by the tool from each student's latest level, so the model never counts.
+    expect($result['studentsPerLatestLevel'])->toBe(['EE' => 1, 'ME' => 1, 'AE' => 1, 'BE' => 1]);
+});
+
+test('the trend gives each assessment\'s name and term apart, so "CAT 1, term 1" is grounded', function () {
+    $school = toolsSchool();
+    $result = toolsFor($school, $school['subject']->id, null)->run('trend', []);
+
+    expect(array_map(fn (array $row) => [$row['assessment'], $row['term'], $row['meanPct']], $result['assessments']))->toBe([
+        ['CAT 1', 1, 56.7],
+        ['CAT 2', 2, 60.0],
+    ]);
+    expect(Grounding::holds('The mean went from 56.7% on CAT 1, term 1 to 60% on CAT 2, term 2.', [$result]))->toBeTrue();
 });
 
 test('improvers are the mirror of the decline list, largest rise first', function () {

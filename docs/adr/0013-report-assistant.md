@@ -137,6 +137,10 @@ ADR narrows it for the assistant (decision 4).
    - **Differences arrive worked out.** A comparison is a difference, and the model may
      not do arithmetic, so every comparing tool returns its gaps; the grounding check
      accepts a returned difference written without its sign ("6.2 points behind").
+   - **Handles are checked as figures are.** An answer naming a handle that no tool
+     returned in the request is refused: it cannot be put back to a name, and a
+     misremembered handle could as easily be another student's. The first evaluation run
+     of these tools found one ("S6 has dropped sharply").
    - **Never teachers.** No tool says who teaches a stream, and the gate treats judging
      or comparing teachers as out of scope. Stream against stream is about the children's
      results, not staff appraisal.

@@ -116,7 +116,7 @@ test('the gate fails closed: out of scope, an error, or output it cannot read ne
     'refused' => [['stop_reason' => 'refusal', 'content' => []]],
 ]);
 
-test('a model refusal, an ungrounded figure, a figure-free answer, or too many tool calls become the fixed reply', function (array $replies) {
+test('a model refusal, an ungrounded figure, a figure-free answer, an unknown handle, or too many tool calls become the fixed reply', function (array $replies) {
     $g = assistantGraph();
     modelReplies(gateSays(true), ...$replies);
 
@@ -129,6 +129,9 @@ test('a model refusal, an ungrounded figure, a figure-free answer, or too many t
     'a number no tool returned' => [[callsTool('report_summary'), answers('The pass rate is 87%.')]],
     'no figure at all' => [[callsTool('report_summary'), answers('The class is doing fine.')]],
     'stopped for length' => [[['stop_reason' => 'max_tokens', 'content' => []]]],
+    // The graph's one student is S1 on the attention list; S6 was never returned, so it could not be
+    // put back to a name and could as easily be another student's.
+    'a handle no tool returned' => [[callsTool('attention_list'), answers('S6 is averaging 30%, below the 50% pass mark.')]],
     'still asking after twelve tools' => [array_map(fn (int $n) => callsTool('trend', [], "toolu_{$n}"), range(1, ReportAssistant::MAX_TOOL_CALLS + 1))],
 ]);
 

@@ -32,7 +32,7 @@ final class ReportTools
 
         return [
             ['name' => 'report_summary', 'description' => 'The headline figures of the report on screen: its scope, the pass mark, pass rate, mean, spread, entry completeness, results per performance level (one result per student per assessment, so not a count of students), and net level movement. Percentages are 0 to 100.', 'input_schema' => $none],
-            ['name' => 'trend', 'description' => 'Pass rate and mean percentage per assessment in the report\'s scope, oldest first.', 'input_schema' => $none],
+            ['name' => 'trend', 'description' => 'Pass rate and mean percentage per assessment in the report\'s scope, oldest first, with each assessment\'s name and term.', 'input_schema' => $none],
             ['name' => 'criterion_breakdown', 'description' => 'Mean percentage per rubric criterion in the report\'s scope, with how many marks each is based on.', 'input_schema' => $none],
             ['name' => 'attention_list', 'description' => 'Students averaging below the pass mark in the report\'s scope, lowest first, as handles (S1, S2) with their mean and latest percentages.', 'input_schema' => $none],
             ['name' => 'decline_list', 'description' => 'Students whose latest percentage fell below their own earlier mean in the report\'s scope, as handles.', 'input_schema' => $none],
@@ -41,7 +41,7 @@ final class ReportTools
                 'properties' => ['student' => ['type' => 'string', 'description' => 'A handle such as S3, from an earlier result.']],
                 'additionalProperties' => false,
             ]],
-            ['name' => 'class_standings', 'description' => 'Every student in the report\'s scope, highest mean percentage first, as handles, with their latest percentage and level and whether they are in the top, middle, or bottom third of the class. For questions about top performers or where students stand.', 'input_schema' => $none],
+            ['name' => 'class_standings', 'description' => 'Every student in the report\'s scope, highest mean percentage first, as handles, with their latest percentage and level and whether they are in the top, middle, or bottom third of the class, and how many students are at each level on their latest result. For questions about top performers, where students stand, or how many students are at a level.', 'input_schema' => $none],
             ['name' => 'improvers', 'description' => 'Students whose latest percentage rose at least 10 points above their own earlier mean in the report\'s scope, largest rise first, as handles, with the rise worked out.', 'input_schema' => $none],
             ['name' => 'absences_and_gaps', 'description' => 'For each assessment in the report\'s scope, how many students were scored, absent, or not yet entered; and the students absent from more than one assessment, as handles.', 'input_schema' => $none],
             ['name' => 'student_across_subjects', 'description' => 'One student\'s mean percentage in every subject their stream sat in the report\'s year and term, next to the stream\'s mean in that subject and the gap between them. Answers whether a student struggles in one subject or across all.', 'input_schema' => [
@@ -115,9 +115,11 @@ final class ReportTools
                 'resultsPerLevel' => $this->analytics->performanceLevels($f),
                 'netLevelMovement' => $this->analytics->netLevelMovement($f),
             ],
+            // The name and the term number apart: the model writes "CAT 1, term 2", which the
+            // grounding check can only hold to a returned name and a returned term.
             'trend' => ['assessments' => array_map(fn (array $point) => [
-                'subject' => $point['subject'], 'assessment' => $point['label'], 'date' => $point['date'],
-                'passRatePct' => $point['passRate'], 'meanPct' => $point['meanScore'],
+                'subject' => $point['subject'], 'assessment' => explode('|', $point['key'])[1], 'term' => (int) explode('|', $point['key'])[2],
+                'date' => $point['date'], 'passRatePct' => $point['passRate'], 'meanPct' => $point['meanScore'],
             ], $this->analytics->trend($f))],
             'criterion_breakdown' => ['criteria' => array_map(fn (array $row) => [
                 'criterion' => $row['name'], 'meanPct' => $row['pct'], 'marks' => $row['n'],
@@ -184,7 +186,12 @@ final class ReportTools
         $rows = $this->analytics->studentStandings($this->filters);
         $count = count($rows);
 
-        return ['students' => array_map(fn (array $row, int $index) => [
+        $perLevel = ['EE' => 0, 'ME' => 0, 'AE' => 0, 'BE' => 0];
+        foreach ($rows as $row) {
+            $perLevel[$row['level']]++;
+        }
+
+        return ['studentsPerLatestLevel' => $perLevel, 'students' => array_map(fn (array $row, int $index) => [
             'student' => $this->handles->for($row['studentId']), 'meanPct' => $row['meanScore'],
             'latestPct' => $row['latestScore'], 'latestLevel' => $row['level'], 'assessmentsScored' => $row['scored'],
             'third' => match (true) {
@@ -248,7 +255,7 @@ final class ReportTools
             ->filter(fn ($rows) => $rows->count() >= 2)
             ->sortByDesc(fn ($rows) => $rows->count());
 
-        return ['passMarkPct' => AnalyticsQueryService::PASS_MARK_PCT, 'students' => $below->map(fn ($rows, string $studentId) => [
+        return ['term' => $this->filters->term ?? 'year to date', 'passMarkPct' => AnalyticsQueryService::PASS_MARK_PCT, 'students' => $below->map(fn ($rows, string $studentId) => [
             'student' => $this->handles->for($studentId), 'subjectsBelowPassMark' => $rows->count(),
             'subjects' => $rows->map(fn (array $row) => ['subject' => $row['subject'], 'meanPct' => $row['meanScore']])->values()->all(),
         ])->values()->all()];
