@@ -35,10 +35,10 @@ use Laravel\Sanctum\HasApiTokens;
 
    The panel's app authentication (MFA) keeps its secret and recovery codes here, encrypted and
    hidden by Filament's traits; hidden attributes never enter the sync log, so no device ever
-   receives them. Only admins sign in to the panel, so only admins ever set them.  */
+   receives them. Only admins sign in to the panel, so only admins ever set them. */
 #[Fillable(['id', 'institution_id', 'name', 'email', 'kind', 'directs_studies', 'password', 'deactivated_at'])]
 #[Hidden(['password'])]
-class User extends Authenticatable implements FilamentUser
+class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery
 {
     /** @use HasFactory<UserFactory> */
     use BelongsToInstitution, HasApiTokens, HasFactory, InteractsWithAppAuthentication, InteractsWithAppAuthenticationRecovery, Syncable;

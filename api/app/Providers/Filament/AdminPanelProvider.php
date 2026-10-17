@@ -42,7 +42,6 @@ class AdminPanelProvider extends PanelProvider
             // production, so every admin sets it up at their first sign-in; optional elsewhere, so
             // the seeded development admin signs in with a password alone.
             ->multiFactorAuthentication([AppAuthentication::make()->recoverable()], isRequired: fn (): bool => app()->isProduction())
-
             ->brandName('ConnectED admin')
             // The brand accent of AGENTS.md; the panel is server-rendered, outside the PWA's tokens.
             ->colors(['primary' => Color::hex('#c1440e')])

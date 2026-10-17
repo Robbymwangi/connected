@@ -15,16 +15,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        
-    // Production sits behind CloudFront, so the client's address and scheme arrive in
+        // Production sits behind CloudFront, so the client's address and scheme arrive in
         // X-Forwarded-For and X-Forwarded-Proto. Trusting every proxy is safe only because the
         // host accepts traffic from CloudFront alone (its security group) and nginx sets the
         // scheme itself; without this, Laravel would see CloudFront's address and plain http.
-        $middleware->trustProxies(at: '*', headers: 
-        Request::HEADER_X_FORWARDED_FOR | 
-        Request::HEADER_X_FORWARDED_PROTO);
+        $middleware->trustProxies(at: '*', headers: Request::HEADER_X_FORWARDED_FOR | Request::HEADER_X_FORWARDED_PROTO);
 
-    // The whole api group, so no route can forget it, and given explicit
+        // The whole api group, so no route can forget it, and given explicit
         // priority ahead of auth:sanctum (#43): Laravel's default priority
         // list runs AuthenticatesRequests before any middleware that isn't
         // in the list, so without this, auth:sanctum would resolve the
