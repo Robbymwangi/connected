@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Auth\Login;
 use App\Http\Middleware\ResolveAdminInstitution;
+use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -37,6 +38,10 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login(Login::class)
             ->authGuard('admin')
+            // An authenticator app, with recovery codes (ADR 0014, panel MFA). Required in
+            // production, so every admin sets it up at their first sign-in; optional elsewhere, so
+            // the seeded development admin signs in with a password alone.
+            ->multiFactorAuthentication([AppAuthentication::make()->recoverable()], isRequired: fn (): bool => app()->isProduction())
             ->brandName('ConnectED admin')
             // The brand accent of AGENTS.md; the panel is server-rendered, outside the PWA's tokens.
             ->colors(['primary' => Color::hex('#c1440e')])

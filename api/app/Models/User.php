@@ -5,6 +5,10 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToInstitution;
 use App\Models\Concerns\Syncable;
 use Database\Factories\UserFactory;
+use Filament\Auth\MultiFactor\App\Concerns\InteractsWithAppAuthentication;
+use Filament\Auth\MultiFactor\App\Concerns\InteractsWithAppAuthenticationRecovery;
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthenticationRecovery;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -27,13 +31,17 @@ use Laravel\Sanctum\HasApiTokens;
    push-channel system, and AGENTS.md is explicit that this app's
    notifications are synced job-status rows the device already holds, not
    push infrastructure. The domain relation below is a plain hasMany to our
-   own Notification model instead. */
+   own Notification model instead.
+
+   The panel's app authentication (MFA) keeps its secret and recovery codes here, encrypted and
+   hidden by Filament's traits; hidden attributes never enter the sync log, so no device ever
+   receives them. Only admins sign in to the panel, so only admins ever set them. */
 #[Fillable(['id', 'institution_id', 'name', 'email', 'kind', 'directs_studies', 'password', 'deactivated_at'])]
 #[Hidden(['password'])]
-class User extends Authenticatable implements FilamentUser
+class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery
 {
     /** @use HasFactory<UserFactory> */
-    use BelongsToInstitution, HasApiTokens, HasFactory, Syncable;
+    use BelongsToInstitution, HasApiTokens, HasFactory, InteractsWithAppAuthentication, InteractsWithAppAuthenticationRecovery, Syncable;
 
     public const TEACHER = 'teacher';
 

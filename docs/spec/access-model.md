@@ -192,9 +192,11 @@ Tokens are revoked on logout, and by an admin for any teacher account.
 
 Creating the very first institution and its first admin account is out of band:
 a seeder for local development, or a one-time artisan command for a real
-deployment. It is not a role, not an ability, and not a screen; whoever runs it
-exists once, before the ordinary account system has anyone to provision from. No
-agent should build a cross-tenant super-admin login to solve this.
+deployment (`php artisan connected:provision-school`, which asks for the
+administrator's password rather than taking it as an option). It is not a role,
+not an ability, and not a screen; whoever runs it exists once, before the
+ordinary account system has anyone to provision from. No agent should build a
+cross-tenant super-admin login to solve this.
 
 Where and how ADMIN actually manages accounts (a dedicated panel, or endpoints
 the PWA's admin capability calls) was deliberately left undecided by this file;
