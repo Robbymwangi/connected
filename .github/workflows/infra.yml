@@ -1,0 +1,71 @@
+name: infra
+
+# Terraform for production (infra/production, ADR 0015). A merge request that touches it gets a
+# plan, made with a role that can read but not change anything and posted as a comment; a merge
+# to main applies it with the apply role. Both sign in to AWS through OIDC, so no AWS key is
+# stored in GitHub. The job is skipped until the bootstrap has run and its outputs are set as
+# repository variables (infra/README.md).
+
+on:
+  pull_request:
+    paths: ['infra/production/**', '.github/workflows/infra.yml']
+  push:
+    branches: [main]
+    paths: ['infra/production/**', '.github/workflows/infra.yml']
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+# One Terraform run at a time; a queued apply waits rather than cancelling the one in progress.
+concurrency:
+  group: infra
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    if: vars.AWS_PLAN_ROLE_ARN != '' && vars.AWS_APPLY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/production
+    env:
+      TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
+      TF_IN_AUTOMATION: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ github.event_name == 'push' && vars.AWS_APPLY_ROLE_ARN || vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: af-south-1
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+      - run: terraform fmt -check -recursive
+      - run: terraform validate
+
+      # The plan role cannot write the lock file, so a merge request's plan does not take the lock.
+      - name: plan
+        run: |
+          terraform plan -input=false -no-color -out=tfplan ${{ github.event_name == 'pull_request' && '-lock=false' || '' }}
+          terraform show -no-color tfplan > plan.txt
+
+      - name: comment the plan on the merge request
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('infra/production/plan.txt', 'utf8');
+            const body = '### Terraform plan (infra/production)\n```\n' + plan.slice(-60000) + '\n```';
+            await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+
+      - name: apply
+        if: github.event_name == 'push'
+        run: terraform apply -input=false -auto-approve tfplan
