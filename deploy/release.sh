@@ -7,9 +7,10 @@
 # Order matters. Everything that can fail runs first, while the previous release is still serving:
 # the .env, the shared storage, migrations (additive only, so the old code keeps working against
 # the new schema), and the caches. Only then does `current` switch to the new release, in one rename,
-# so a request sees either the old release or the new one, never a half-made one. A failure at any
-# step before the switch leaves the previous release live.
-set -euo pipefail
+# so a request sees either the old release or the new one, never a half-made one. A failure before
+# the switch leaves the previous release live; a failure after it (a service that will not reload,
+# or no answer from /up) switches back to it.
+set -eEuo pipefail
 
 SHA="$1"
 BASE=/var/www/connected
@@ -82,16 +83,31 @@ cp "$RELEASE/deploy/connected-queue.service" /etc/systemd/system/connected-queue
 systemctl daemon-reload
 systemctl enable --quiet connected-queue
 
-# 5. The switch: one atomic rename.
-ln -sfn "$RELEASE" "$BASE/current.next"
-mv -Tf "$BASE/current.next" "$BASE/current"
+# 5. The switch: one atomic rename. If anything after it fails, `current` goes back to the release
+#    that was serving before (none on the very first deploy), which still works against the
+#    migrated schema because migrations are additive.
+previous=$(readlink "$BASE/current" || true)
+activate() {
+    ln -sfn "$1" "$BASE/current.next"
+    mv -Tf "$BASE/current.next" "$BASE/current"
+    systemctl reload php8.4-fpm
+    systemctl reload nginx
+    systemctl restart connected-queue
+}
+restore() {
+    if [ -n "$previous" ]; then
+        echo "release $SHA failed after the switch; restoring $previous" >&2
+        activate "$previous" || true
+    fi
+}
+trap restore ERR
+activate "$RELEASE"
 
-systemctl reload php8.4-fpm
-systemctl reload nginx
-systemctl restart connected-queue
-
-# 6. Is it answering? Through nginx, with the header CloudFront sends.
-curl -fsS -o /dev/null -H "X-Origin-Verify: $origin_secret" http://127.0.0.1/up
+# 6. Is it answering? Through nginx, with the header CloudFront sends; a few tries, since the
+#    PHP workers have only just reloaded.
+curl -fsS -o /dev/null --retry 5 --retry-delay 2 --retry-all-errors \
+    -H "X-Origin-Verify: $origin_secret" http://127.0.0.1/up
+trap - ERR
 echo "release $SHA is live"
 
 # 7. Keep the five newest releases, for a quick rollback by pointing current at an older one.
