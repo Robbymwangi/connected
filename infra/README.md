@@ -64,7 +64,7 @@ apply role:
 
 1. **API.** It installs the production dependencies, packs `api/` and `deploy/` into one file,
    puts it in the reports bucket under `_releases/`, and asks the host (through Systems
-   Manager, so no SSH port is open) to unpack it into `/var/www/connected/releases/<commit>-<run>`
+   Manager, so no SSH port is open) to unpack it into `/var/www/connected/releases/<commit>-<run>-<attempt>`
    and run `deploy/release.sh`. That script writes `.env` from Parameter Store and the
    database secret, runs the migrations and caches, installs the nginx site and the queue
    worker, then switches `current` to the new release in one rename and checks `/up`. A

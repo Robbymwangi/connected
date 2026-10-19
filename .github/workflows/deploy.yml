@@ -25,16 +25,39 @@ env:
   SHA: ${{ github.event.workflow_run.head_sha }}
 
 jobs:
-  api:
+  # Each deploy starts when its own `check` finishes, so two merges close together can finish out
+  # of order and an older commit would deploy over a newer one. A first attempt therefore goes
+  # ahead only if its commit is still the tip of main; a re-run always does, so re-running an
+  # earlier deploy stays the way to roll back.
+  gate:
     if: >-
       github.event.workflow_run.conclusion == 'success'
       && github.event.workflow_run.event == 'push'
       && vars.AWS_APPLY_ROLE_ARN != ''
     runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.tip.outputs.deploy }}
+    steps:
+      - id: tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tip=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)
+          if [ "$tip" = "$SHA" ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ]; then
+            echo deploy=true >> "$GITHUB_OUTPUT"
+          else
+            echo "main is at $tip, so $SHA is superseded and is not deployed"
+          fi
+
+  api:
+    needs: gate
+    if: needs.gate.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
 
       # The host runs PHP 8.4 (infra/production/user-data.sh); the dependencies are installed for it.
       - uses: shivammathur/setup-php@v2
@@ -54,8 +77,8 @@ jobs:
           role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Unpacked into its own directory, named for the commit and this run, so a re-run never
-      # overwrites the release that is serving; deploy/release.sh does the rest on the host.
+      # Unpacked into its own directory, named for the commit, this run, and this attempt, so a
+      # re-run never unpacks over the release that is serving; deploy/release.sh does the rest.
       - name: deploy to the host
         run: |
           set -euo pipefail
@@ -63,7 +86,7 @@ jobs:
             --filters Name=tag:Name,Values=connected-app Name=instance-state-name,Values=running \
             --query 'Reservations[0].Instances[0].InstanceId' --output text)
           bucket=$(aws ssm get-parameter --name /connected/production/AWS_BUCKET --query Parameter.Value --output text)
-          release="${SHA}-${GITHUB_RUN_ID}"
+          release="${SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           key="_releases/${release}.tar.gz"
           aws s3 cp release.tar.gz "s3://${bucket}/${key}"
 
@@ -98,6 +121,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
