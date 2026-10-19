@@ -1,0 +1,10 @@
+# Terraform's working files. The bootstrap's own state stays on the machine that applied it
+# (infra/README.md); production's state lives in the S3 bucket the bootstrap creates.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+tfplan
+
+# Provider versions are pinned by the ranges in versions.tf; the lock file is not kept yet.
+.terraform.lock.hcl

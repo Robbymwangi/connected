@@ -367,6 +367,10 @@ frontend static assets to S3 and CloudFront, GitHub Actions authenticating with
 OIDC and IAM roles rather than long-lived credentials, API deployment behind a
 manual trigger, migrations additive only so that offline clients that have not yet
 synced are never broken.
+*Amended 2026-10-18 (ADR 0015):* the resources are Terraform in `infra/`, planned on
+merge requests and applied on merge; and every merge to `main` deploys, in place of the
+manual trigger, with each deploy a new release that goes live only once it has fully
+succeeded.
 
 **5.3 Hardening**
 Bring `make check` green across typecheck, lint, Vitest, Playwright, and Pest.
