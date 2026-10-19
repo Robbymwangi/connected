@@ -1,0 +1,132 @@
+name: deploy
+
+# Every merge to main deploys, once `check` has passed on it (ADR 0015, amending build plan 5.2).
+# The API first, then the PWA, so a new frontend never reaches devices ahead of the API it expects;
+# the API stays backward compatible because migrations are additive only. Signs in to AWS through
+# OIDC with the apply role. Nothing is looked up from repository variables beyond that role: the
+# host is found by its tag, the buckets and the CloudFront distribution by their names.
+
+on:
+  workflow_run:
+    workflows: [check]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: af-south-1
+  SHA: ${{ github.event.workflow_run.head_sha }}
+
+jobs:
+  api:
+    if: >-
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && vars.AWS_APPLY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      # The host runs PHP 8.4 (infra/production/user-data.sh); the dependencies are installed for it.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pgsql
+          coverage: none
+
+      - name: build the release
+        run: |
+          (cd api && composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction)
+          tar --exclude='api/tests' --exclude='api/storage' --exclude='api/node_modules' --exclude='api/.env*' \
+            -czf release.tar.gz api deploy
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Unpacked into its own directory, named for the commit and this run, so a re-run never
+      # overwrites the release that is serving; deploy/release.sh does the rest on the host.
+      - name: deploy to the host
+        run: |
+          set -euo pipefail
+          instance=$(aws ec2 describe-instances \
+            --filters Name=tag:Name,Values=connected-app Name=instance-state-name,Values=running \
+            --query 'Reservations[0].Instances[0].InstanceId' --output text)
+          bucket=$(aws ssm get-parameter --name /connected/production/AWS_BUCKET --query Parameter.Value --output text)
+          release="${SHA}-${GITHUB_RUN_ID}"
+          key="_releases/${release}.tar.gz"
+          aws s3 cp release.tar.gz "s3://${bucket}/${key}"
+
+          script="set -euo pipefail
+          dir=/var/www/connected/releases/${release}
+          mkdir -p \$dir
+          /snap/bin/aws s3 cp s3://${bucket}/${key} /tmp/${release}.tar.gz
+          tar -xzf /tmp/${release}.tar.gz -C \$dir
+          rm -f /tmp/${release}.tar.gz
+          bash \$dir/deploy/release.sh ${release}"
+
+          command=$(aws ssm send-command --instance-ids "$instance" --document-name AWS-RunShellScript \
+            --comment "deploy ${SHA}" \
+            --parameters "$(jq -n --arg s "$script" '{commands: ["bash -c \($s | @sh)"], executionTimeout: ["1200"]}')" \
+            --query Command.CommandId --output text)
+
+          # Wait for it, up to 20 minutes, then print what the host printed.
+          for _ in $(seq 120); do
+            status=$(aws ssm get-command-invocation --command-id "$command" --instance-id "$instance" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in Pending|InProgress|Delayed) sleep 10 ;; *) break ;; esac
+          done
+          aws ssm get-command-invocation --command-id "$command" --instance-id "$instance" \
+            --query '[StandardOutputContent, StandardErrorContent]' --output text
+          aws s3 rm "s3://${bucket}/${key}"
+          test "$status" = Success
+
+  frontend:
+    needs: api
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci && npm run build
+        working-directory: frontend
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Hashed files under assets/ never change, so browsers and CloudFront may keep them a year.
+      # Everything else (index.html, the service worker, Workbox, the manifest, icons) is
+      # revalidated every time, so a new version reaches devices on their next visit. Old assets are
+      # left in place: a device still on the previous version may need them until it reloads.
+      - name: upload the PWA
+        working-directory: frontend/dist
+        run: |
+          set -euo pipefail
+          account=$(aws sts get-caller-identity --query Account --output text)
+          bucket="connected-frontend-${account}"
+          aws s3 sync assets "s3://${bucket}/assets" --cache-control 'public, max-age=31536000, immutable'
+          aws s3 sync . "s3://${bucket}" --exclude 'assets/*' --exclude '*.webmanifest' --delete --cache-control 'no-cache'
+          aws s3 cp manifest.webmanifest "s3://${bucket}/manifest.webmanifest" \
+            --content-type 'application/manifest+json' --cache-control 'no-cache'
+          distribution=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Comment=='ConnectED'].Id | [0]" --output text)
+          aws cloudfront create-invalidation --distribution-id "$distribution" --paths '/*' --query Invalidation.Id --output text

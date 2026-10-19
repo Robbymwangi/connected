@@ -54,9 +54,29 @@ Re-run the `infra` check on the open merge request (or push to it). It posts a p
 what will be created. Merging the merge request applies it. The first apply takes about 15 to
 20 minutes, mostly the database and CloudFront.
 
-Then add three more repository variables from the apply's outputs (shown at the end of the
-`apply` step's log, or with `terraform output` below), for the deploy workflow:
-`FRONTEND_BUCKET`, `CLOUDFRONT_DISTRIBUTION_ID`, and `APP_INSTANCE_ID`.
+No more variables are needed. The `deploy` workflow finds the host by its `connected-app` tag,
+the buckets by their names, and the CloudFront distribution by its `ConnectED` comment.
+
+### 4. Deploys (by CI, on every merge)
+
+When `check` passes on `main`, `.github/workflows/deploy.yml` deploys that commit with the
+apply role:
+
+1. **API.** It installs the production dependencies, packs `api/` and `deploy/` into one file,
+   puts it in the reports bucket under `_releases/`, and asks the host (through Systems
+   Manager, so no SSH port is open) to unpack it into `/var/www/connected/releases/<commit>-<run>`
+   and run `deploy/release.sh`. That script writes `.env` from Parameter Store and the
+   database secret, runs the migrations and caches, installs the nginx site and the queue
+   worker, then switches `current` to the new release in one rename and checks `/up`. A
+   failure before the switch leaves the previous release serving.
+2. **PWA.** Once the API is live, it builds the frontend and uploads it: the hashed files
+   under `assets/` cached for a year, everything else revalidated on every visit. Then it
+   clears CloudFront's cache.
+
+To roll back, re-run the `deploy` workflow of an earlier merge from the Actions tab.
+
+The first deploy needs production to exist, so merge nothing that triggers it before step 3
+has finished.
 
 To read production's outputs or plan from your machine:
 
