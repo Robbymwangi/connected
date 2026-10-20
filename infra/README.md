@@ -98,8 +98,8 @@ through a merge request, so they are reviewed and recorded.
 aws ssm start-session --target <APP_INSTANCE_ID>
 ```
 
-**Saving money when nobody is testing:** stop both, start both before you need them. RDS
-starts itself again after 7 days stopped.
+**Saving money for a few days:** stop both, start both before you need them. RDS starts
+itself again after 7 days stopped; for longer, take production down (below).
 
 ```bash
 aws ec2 stop-instances --instance-ids <APP_INSTANCE_ID>
@@ -117,3 +117,42 @@ aws ssm put-parameter --name /connected/production/ANTHROPIC_API_KEY --type Secu
 ```
 
 The next deploy writes it into the host's `.env`.
+
+## Taking production down, and bringing it back
+
+Production costs roughly $40 to $50 a month. When it is not needed (no credits, no pilot yet),
+take it down rather than stopping it: a stopped database restarts itself after 7 days, and a
+taken-down production costs only cents (the state bucket, and one database snapshot). The
+bootstrap stays: the state bucket, GitHub's sign-in, and the two roles cost nothing.
+
+Everything in production is deleted except a final database snapshot, `connected-final`. Do it
+only when nothing in production needs keeping.
+
+**1. Switch off the two workflows** in GitHub, so a merge neither deploys to a host that is not
+there nor rebuilds production: Actions, then **deploy**, then the menu, then **Disable workflow**;
+the same for **infra**.
+
+**2. Lift the safeguards, then destroy**, from `infra/production` on your machine, signed in to
+AWS (`aws sso login`), with the `terraform.tfvars` from the first setup:
+
+```bash
+export AWS_PROFILE=<your profile>
+terraform init -backend-config="bucket=<the state_bucket output>"
+terraform apply  -var allow_destroy=true   # expect only the database and the two buckets to change
+terraform destroy -var allow_destroy=true  # everything; CloudFront takes about 15 minutes
+```
+
+`allow_destroy` is off in every other apply, CI's included, so the safeguards come back on the
+next normal one.
+
+**To bring it back:**
+
+1. Delete the old snapshot first, or the next take-down will refuse to reuse its name:
+   `aws rds delete-db-snapshot --db-snapshot-identifier connected-final` (or keep it under
+   another name with `copy-db-snapshot` if its data matters).
+2. Enable the **infra** workflow and re-run its latest run on `main`; the apply creates
+   everything again (about 20 minutes). The app address changes: CloudFront issues a new one,
+   shown as `app_url` at the end of the apply.
+3. Enable the **deploy** workflow and re-run its latest run; it deploys `main` to the new host.
+4. Provision the school again (`connected:provision-school`, as in the first setup) and set it
+   up in the admin panel.
