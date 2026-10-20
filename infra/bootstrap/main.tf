@@ -51,8 +51,8 @@ resource "aws_iam_openid_connect_provider" "github" {
 /* Who may take a role: a workflow of this repository, for the given subject, asking for AWS. */
 data "aws_iam_policy_document" "github_trust" {
   for_each = {
-    plan  = "repo:${var.github_repository}:pull_request"
-    apply = "repo:${var.github_repository}:ref:refs/heads/main"
+    plan  = "${var.github_subject_prefix}:pull_request"
+    apply = "${var.github_subject_prefix}:ref:refs/heads/main"
   }
 
   statement {
