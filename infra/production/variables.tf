@@ -38,3 +38,13 @@ variable "db_engine_version" {
   type        = string
   default     = "17"
 }
+
+/* Off in every normal apply, CI's included. Set true only from a machine, for taking production
+   down (infra/README.md, "Taking production down"): an apply with it lifts the database's deletion
+   protection and lets the two buckets be deleted with files in them, and the destroy that follows
+   can then remove everything. */
+variable "allow_destroy" {
+  description = "True only for taking production down; lifts the database and bucket safeguards."
+  type        = bool
+  default     = false
+}
