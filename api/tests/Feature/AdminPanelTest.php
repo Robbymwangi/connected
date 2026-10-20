@@ -3,14 +3,28 @@
 use App\Filament\Auth\Login;
 use App\Filament\Resources\Admins\Pages\CreateAdmin;
 use App\Filament\Resources\Admins\Pages\ListAdmins;
+use App\Filament\Resources\Classes\Pages\CreateSchoolClass;
+use App\Filament\Resources\Classes\Pages\EditSchoolClass;
+use App\Filament\Resources\Classes\RelationManagers\ClassSubjectsRelationManager;
+use App\Filament\Resources\Classes\RelationManagers\EnrolmentsRelationManager;
+use App\Filament\Resources\Classes\RelationManagers\TeacherAssignmentsRelationManager;
 use App\Filament\Resources\Students\Pages\CreateStudent;
+use App\Filament\Resources\Subjects\Pages\CreateSubject;
+use App\Filament\Resources\Subjects\Pages\EditSubject;
+use App\Filament\Resources\Subjects\RelationManagers\CriteriaRelationManager;
 use App\Filament\Resources\Teachers\Pages\EditUser;
 use App\Filament\Resources\Teachers\Pages\ListUsers;
 use App\Filament\Resources\Teachers\RelationManagers\SubjectModerationsRelationManager;
 use App\Http\Middleware\ResolveAdminInstitution;
 use App\Http\Middleware\ResolveInstitution;
+use App\Models\ClassSubject;
+use App\Models\Criterion;
+use App\Models\Enrolment;
 use App\Models\Student;
+use App\Models\Subject;
 use App\Models\SubjectModeration;
+use App\Models\SyncChange;
+use App\Models\TeacherAssignment;
 use App\Models\User;
 use App\Support\CurrentInstitution;
 use Filament\Facades\Filament;
@@ -315,6 +329,175 @@ test('the panel does no academic work: it has no assessments screen, and an admi
 
     $this->actingAs($admin, 'admin')->get('/admin/assessments')->assertNotFound();
     expect(Gate::forUser($admin)->allows('unlock', $graph['assessment']))->toBeFalse();
+});
+
+/* Setting up a school from nothing (the panel is a real school's only way in; the demo seeder never
+   runs in production): subjects and their rubrics, what each class offers, its students for the
+   year, and who teaches what. Every row is the synchronisable model, so it carries a version and
+   a sync_changes entry, which is how a device learns of it. */
+
+/** A Livewire test of a relation manager on one of the administrator's own records. */
+function relationTest(string $manager, $owner, string $page, User $admin)
+{
+    test()->actingAs($admin, 'admin');
+    asPanelRequestFor($admin);
+
+    return Livewire::test($manager, ['ownerRecord' => $owner, 'pageClass' => $page]);
+}
+
+function newPupil(array $g, string $name): Student
+{
+    return Student::create(['institution_id' => $g['institution']->id, 'name' => $name, 'gender' => 'M', 'dob' => '2015-06-01']);
+}
+
+test('a subject is made in the panel, once by name, and lands in the sync log', function () {
+    $g = buildGraph();
+    $admin = adminOf($g);
+    $this->actingAs($admin, 'admin');
+    asPanelRequestFor($admin);
+
+    Livewire::test(CreateSubject::class)->fillForm(['name' => 'Kiswahili'])->call('create')->assertHasNoFormErrors();
+    Livewire::test(CreateSubject::class)->fillForm(['name' => 'Maths'])->call('create')->assertHasFormErrors(['name' => 'unique']);
+
+    $subject = Subject::query()->where('name', 'Kiswahili')->sole();
+    expect($subject->institution_id)->toBe($g['institution']->id)
+        ->and($subject->version)->toBe(1)
+        ->and(SyncChange::query()->where('table', 'subjects')->where('record_id', $subject->id)->exists())->toBeTrue();
+});
+
+test('another school may have a subject of the same name', function () {
+    buildGraph('Other School', '-theirs');
+    $g = buildGraph('Hillside Academy', '-mine');
+    $admin = adminOf($g);
+    $this->actingAs($admin, 'admin');
+    asPanelRequestFor($admin);
+
+    Livewire::test(CreateSubject::class)->fillForm(['name' => 'Science'])->call('create')->assertHasNoFormErrors();
+});
+
+test('a criterion is added to a subject, and an unused one is removed as a soft delete', function () {
+    $g = buildGraph();
+    $admin = adminOf($g);
+
+    relationTest(CriteriaRelationManager::class, $g['subject'], EditSubject::class, $admin)
+        ->callTableAction('create', data: ['name' => 'Working', 'max_score' => 5])
+        ->assertHasNoTableActionErrors();
+
+    $working = Criterion::query()->where('name', 'Working')->sole();
+    expect($working->subject_id)->toBe($g['subject']->id)->and($working->max_score)->toBe(5);
+
+    relationTest(CriteriaRelationManager::class, $g['subject'], EditSubject::class, $admin)
+        ->callTableAction('delete', $working);
+
+    expect(Criterion::withTrashed()->find($working->id))
+        ->trashed()->toBeTrue()
+        ->version->toBe(2);
+});
+
+test('a criterion with marks keeps its maximum and cannot be removed, though its name can be corrected', function () {
+    $g = buildGraph();
+    $admin = adminOf($g);
+
+    relationTest(CriteriaRelationManager::class, $g['subject'], EditSubject::class, $admin)
+        ->assertTableActionHidden('delete', $g['criterion'])
+        ->callTableAction('edit', $g['criterion'], data: ['name' => 'Accuracy of working', 'max_score' => 50])
+        ->assertHasNoTableActionErrors();
+
+    expect($g['criterion']->fresh())
+        ->name->toBe('Accuracy of working')
+        ->max_score->toBe(10);
+});
+
+test('a class offers a subject once, and stops offering it as a soft delete', function () {
+    $g = buildGraph();
+    $admin = adminOf($g);
+    $english = Subject::create(['institution_id' => $g['institution']->id, 'name' => 'English']);
+
+    relationTest(ClassSubjectsRelationManager::class, $g['class'], EditSchoolClass::class, $admin)
+        ->callTableAction('create', data: ['subject_id' => $english->id])
+        ->assertHasNoTableActionErrors();
+
+    relationTest(ClassSubjectsRelationManager::class, $g['class'], EditSchoolClass::class, $admin)
+        ->callTableAction('create', data: ['subject_id' => $g['subject']->id])
+        ->assertHasTableActionErrors(['subject_id' => 'unique']);
+
+    $offered = ClassSubject::query()->where('class_id', $g['class']->id)->where('subject_id', $english->id)->sole();
+
+    relationTest(ClassSubjectsRelationManager::class, $g['class'], EditSchoolClass::class, $admin)
+        ->callTableAction('delete', $offered);
+
+    expect(ClassSubject::withTrashed()->find($offered->id)->trashed())->toBeTrue();
+});
+
+test('a student is enrolled for the current year by default, once a year, and the roster then has them', function () {
+    $g = buildGraph();
+    $admin = adminOf($g);
+    $amina = newPupil($g, 'Amina Test');
+
+    relationTest(EnrolmentsRelationManager::class, $g['class'], EditSchoolClass::class, $admin)
+        ->mountTableAction('create')
+        ->assertTableActionDataSet(['year' => now()->year])
+        ->setTableActionData(['student_id' => $amina->id])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    // Already in a class this year (buildGraph enrols its student for 2026): refused, in any class.
+    relationTest(EnrolmentsRelationManager::class, $g['class'], EditSchoolClass::class, $admin)
+        ->callTableAction('create', data: ['student_id' => $amina->id, 'year' => now()->year])
+        ->assertHasTableActionErrors(['student_id' => 'unique']);
+
+    // The next year is a new enrolment.
+    relationTest(EnrolmentsRelationManager::class, $g['class'], EditSchoolClass::class, $admin)
+        ->callTableAction('create', data: ['student_id' => $amina->id, 'year' => now()->year + 1])
+        ->assertHasNoTableActionErrors();
+
+    $this->withToken(tokenFor($g['teacher']))->getJson('/api/students?class_id='.$g['class']->id)
+        ->assertOk()
+        ->assertJsonFragment(['name' => 'Amina Test']);
+});
+
+test('removing an enrolment soft-deletes it, and the student can be enrolled again', function () {
+    $g = buildGraph();
+    $admin = adminOf($g);
+    $brian = newPupil($g, 'Brian Test');
+    $enrolment = Enrolment::create(['institution_id' => $g['institution']->id, 'student_id' => $brian->id, 'class_id' => $g['class']->id, 'year' => now()->year]);
+
+    relationTest(EnrolmentsRelationManager::class, $g['class'], EditSchoolClass::class, $admin)
+        ->callTableAction('delete', $enrolment)
+        ->callTableAction('create', data: ['student_id' => $brian->id, 'year' => now()->year])
+        ->assertHasNoTableActionErrors();
+
+    expect(Enrolment::withTrashed()->find($enrolment->id)->trashed())->toBeTrue()
+        ->and(Enrolment::query()->where('student_id', $brian->id)->count())->toBe(1);
+});
+
+test('a subject teacher is an active teacher account, for a subject the class offers, once', function () {
+    $g = buildGraph();
+    $admin = adminOf($g);
+    $colleague = makeColleague($g, 'colleague@example.com');
+    $notOffered = Subject::create(['institution_id' => $g['institution']->id, 'name' => 'Art']);
+
+    $assign = fn (array $data) => relationTest(TeacherAssignmentsRelationManager::class, $g['class'], EditSchoolClass::class, $admin)
+        ->callTableAction('create', data: $data);
+
+    $assign(['subject_id' => $g['subject']->id, 'user_id' => $colleague->id])->assertHasNoTableActionErrors();
+    $assign(['subject_id' => $g['subject']->id, 'user_id' => $colleague->id])->assertHasTableActionErrors(['user_id' => 'unique']);
+    $assign(['subject_id' => $g['subject']->id, 'user_id' => $admin->id])->assertHasTableActionErrors(['user_id']);
+    $assign(['subject_id' => $notOffered->id, 'user_id' => $colleague->id])->assertHasTableActionErrors(['subject_id']);
+
+    expect(TeacherAssignment::query()->where('user_id', $colleague->id)->where('class_id', $g['class']->id)->count())->toBe(1);
+});
+
+test('a class teacher is a teacher account, never an admin', function () {
+    $g = buildGraph();
+    $admin = adminOf($g);
+    $this->actingAs($admin, 'admin');
+    asPanelRequestFor($admin);
+
+    Livewire::test(CreateSchoolClass::class)
+        ->fillForm(['grade' => '5', 'stream' => 'East', 'class_teacher_id' => $admin->id])
+        ->call('create')
+        ->assertHasFormErrors(['class_teacher_id']);
 });
 
 arch('no API controller depends on the admin panel')
