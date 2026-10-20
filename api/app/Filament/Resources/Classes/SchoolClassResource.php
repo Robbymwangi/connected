@@ -5,7 +5,11 @@ namespace App\Filament\Resources\Classes;
 use App\Filament\Resources\Classes\Pages\CreateSchoolClass;
 use App\Filament\Resources\Classes\Pages\EditSchoolClass;
 use App\Filament\Resources\Classes\Pages\ListSchoolClasses;
+use App\Filament\Resources\Classes\RelationManagers\ClassSubjectsRelationManager;
+use App\Filament\Resources\Classes\RelationManagers\EnrolmentsRelationManager;
+use App\Filament\Resources\Classes\RelationManagers\TeacherAssignmentsRelationManager;
 use App\Models\SchoolClass;
+use App\Models\User;
 use BackedEnum;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
@@ -38,7 +42,9 @@ class SchoolClassResource extends Resource
             TextInput::make('stream')->required()->maxLength(255),
             Select::make('class_teacher_id')
                 ->label('Class teacher')
-                ->relationship('classTeacher', 'name', fn ($query) => $query->whereNull('deactivated_at'))
+                ->relationship('classTeacher', 'name', fn ($query) => $query
+                    ->where('kind', User::TEACHER)
+                    ->whereNull('deactivated_at'))
                 ->searchable()
                 ->preload(),
         ]);
@@ -54,6 +60,17 @@ class SchoolClassResource extends Resource
             ])
             ->defaultSort('grade')
             ->recordActions([EditAction::make()]);
+    }
+
+    /* What a class holds besides its own fields: the subjects it offers, its students for each
+       year, and who teaches what. */
+    public static function getRelations(): array
+    {
+        return [
+            ClassSubjectsRelationManager::class,
+            EnrolmentsRelationManager::class,
+            TeacherAssignmentsRelationManager::class,
+        ];
     }
 
     public static function getPages(): array
