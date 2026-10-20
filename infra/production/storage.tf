@@ -9,11 +9,13 @@ locals {
 }
 
 resource "aws_s3_bucket" "frontend" {
-  bucket = "connected-frontend-${local.account_id}"
+  bucket        = "connected-frontend-${local.account_id}"
+  force_destroy = var.allow_destroy
 }
 
 resource "aws_s3_bucket" "reports" {
-  bucket = "connected-reports-${local.account_id}"
+  bucket        = "connected-reports-${local.account_id}"
+  force_destroy = var.allow_destroy
 }
 
 resource "aws_s3_bucket_public_access_block" "private" {
