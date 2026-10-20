@@ -21,7 +21,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,woff2,svg,png,webmanifest}'],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+        /* Paths the API host serves on the same origin (CloudFront, build-plan 5.2):
+           a navigation to them must reach the network, not the app shell. */
+        navigateFallbackDenylist: [/^\/api\//, /^\/admin(\/|$)/, /^\/up$/],
         cleanupOutdatedCaches: true,
         /* Control the page as soon as the worker activates, so a first visit is
            offline-ready without a second load; a new version still waits for the

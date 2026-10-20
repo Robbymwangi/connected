@@ -414,6 +414,13 @@ deactivating the person.
   are each covered by a test.
 - Do not: let Filament's default resource scaffolding generate a delete
   action anywhere on the user resource; strip it explicitly.
+- Amended after the first production deploy: an empty school could not be
+  set up, because enrolments, subjects, criteria, class subjects, and
+  teacher assignments had only ever come from the demo seeder, which never
+  runs in production. The panel now has a subjects resource with each
+  subject's criteria, and on each class its offered subjects, its
+  enrolments by year, and its subject teachers. A criterion with marks
+  keeps its maximum and cannot be removed; every removal is a soft delete.
 
 **5.6 Admin panel: unlock action**
 A Filament custom Action on the assessment resource, a form modal with one
