@@ -73,7 +73,8 @@ apply role:
    under `assets/` cached for a year, everything else revalidated on every visit. Then it
    clears CloudFront's cache.
 
-To roll back, re-run the `deploy` workflow of an earlier merge from the Actions tab.
+To roll back, re-run the `deploy` workflow of an earlier merge from the Actions tab (possible for
+30 days after that run), or revert the merge on `main`, which deploys like any other merge.
 
 The first deploy needs production to exist, so merge nothing that triggers it before step 3
 has finished.
@@ -150,9 +151,13 @@ next normal one.
 1. Delete the old snapshot first, or the next take-down will refuse to reuse its name:
    `aws rds delete-db-snapshot --db-snapshot-identifier connected-final` (or keep it under
    another name with `copy-db-snapshot` if its data matters).
-2. Enable the **infra** workflow and re-run its latest run on `main`; the apply creates
-   everything again (about 20 minutes). The app address changes: CloudFront issues a new one,
-   shown as `app_url` at the end of the apply.
-3. Enable the **deploy** workflow and re-run its latest run; it deploys `main` to the new host.
+2. Enable the **infra** workflow, then run it by hand: Actions, **infra**, **Run workflow** on
+   `main`. It applies `main` as it stands and creates everything again (about 20 minutes). The
+   app address changes: CloudFront issues a new one, shown as `app_url` at the end of the apply.
+3. Enable the **deploy** workflow and run it by hand the same way. It deploys `main` to the new
+   host, once `check` has passed on that commit.
+
+Run them by hand rather than re-running an old run: GitHub allows a re-run for only 30 days, and
+a re-run replays that run's own commit, not `main`.
 4. Provision the school again (`connected:provision-school`, as in the first setup) and set it
    up in the admin panel.

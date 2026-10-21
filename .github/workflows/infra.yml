@@ -4,7 +4,9 @@ name: infra
 # plan, made with a role that can read but not change anything and posted as a comment; a merge
 # to main applies it with the apply role. Both sign in to AWS through OIDC, so no AWS key is
 # stored in GitHub. The job is skipped until the bootstrap has run and its outputs are set as
-# repository variables (infra/README.md).
+# repository variables (infra/README.md). It can also be run by hand on main (Actions, infra, Run
+# workflow), which applies main as it stands: the way production is brought back after it was
+# taken down, since a re-run of an old run is possible only for 30 days and replays its old commit.
 
 on:
   pull_request:
@@ -12,6 +14,7 @@ on:
   push:
     branches: [main]
     paths: ['infra/production/**', '.github/workflows/infra.yml']
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -25,7 +28,10 @@ concurrency:
 
 jobs:
   terraform:
-    if: vars.AWS_PLAN_ROLE_ARN != '' && vars.AWS_APPLY_ROLE_ARN != ''
+    # A run by hand applies, so only from main: the apply role trusts main alone.
+    if: >-
+      vars.AWS_PLAN_ROLE_ARN != '' && vars.AWS_APPLY_ROLE_ARN != ''
+      && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -38,7 +44,7 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ github.event_name == 'push' && vars.AWS_APPLY_ROLE_ARN || vars.AWS_PLAN_ROLE_ARN }}
+          role-to-assume: ${{ github.event_name == 'pull_request' && vars.AWS_PLAN_ROLE_ARN || vars.AWS_APPLY_ROLE_ARN }}
           aws-region: af-south-1
 
       - uses: hashicorp/setup-terraform@v3
@@ -67,5 +73,5 @@ jobs:
             await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
 
       - name: apply
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: terraform apply -input=false -auto-approve tfplan

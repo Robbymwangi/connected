@@ -12,7 +12,10 @@ export type ConflictSide = {
   userId: string
   who: string
   mark: Mark
+  /* When the device says the edit was made: its own clock, so a claim, never shown unlabelled. */
   at: string
+  /* When the server received it, on its own clock; absent only on fixtures. */
+  receivedAt?: string
 }
 
 /* What a resolution settles on: one of the two edits, or a corrected mark. A choice
@@ -30,6 +33,7 @@ export type Proposal = {
   choice: Choice
   note: string
   at: string
+  receivedAt?: string
 }
 
 /* Handed to a moderator: after the bounded rounds ran out, or by a party's choice. */

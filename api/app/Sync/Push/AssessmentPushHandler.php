@@ -322,7 +322,8 @@ final class AssessmentPushHandler extends PushHandler
 
     /* While a stream's term is closed its cards stand on the assessments it closed over, so an
        assessment cannot be created in it or moved in or out (docs/spec/workflow.md, Term close). The
-       way back is an admin's unlock, which unwinds the close. The term close takes the same
+       way back is an unlock by the Director of Studies or the subject's head of department (ADR 0014
+       decision 3), which unwinds the close. The term close takes the same
        institution lock as this push, so the check cannot race it. */
     private function assertTermOpen(string $classId, int $year, int $term): void
     {

@@ -13,9 +13,10 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Validation\Rules\Unique;
 
-/* Who teaches which subject in this class (teacher_assignments): the fact that scopes editing,
-   finalizing, and unlocking an assessment to its teacher (#36 Option B). It never gates grading or
-   creating an assessment. The teacher is an active teacher account, never an admin; the subject
+/* Who teaches which subject in this class (teacher_assignments): the fact that scopes editing and
+   finalizing an assessment to its teacher (#36 Option B). Unlocking is the Director of Studies' or
+   the subject's head of department's (ADR 0014 decision 3), and grading and creating an
+   assessment are never gated. The teacher is an active teacher account, never an admin; the subject
    is one this class offers. */
 class TeacherAssignmentsRelationManager extends RelationManager
 {
