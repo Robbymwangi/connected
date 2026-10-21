@@ -113,7 +113,7 @@ administrator account (ADR 0009). Run `make` alone to list every target.
 ### Day to day
 
 ```sh
-make up        # start API, Postgres, MinIO, and the queue worker (data kept between runs)
+make up        # start API, Postgres, RustFS, and the queue worker (data kept between runs)
 make dev       # frontend dev server, live reload, no service worker
 make offline   # production build on :4173, the app as installed; test offline here
 make check     # typecheck, lint, Vitest, and Pest: what must pass before a commit
@@ -159,21 +159,23 @@ Comment drafts come from the Anthropic batch API when `ANTHROPIC_API_KEY` is set
 `api/.env`; without it, drafts are templated stand-ins marked `[Stand-in]`. Never commit
 the key.
 
-Report card PDFs go to S3. Under Sail, MinIO stands in for it: `make up` starts it and
-creates the bucket, and its console is on http://localhost:8900. Point the API at it in
-`api/.env`:
+Report card PDFs go to S3. Under Sail, RustFS stands in for it (MinIO's images left Docker
+Hub in September 2026): `make up` starts it and creates the bucket, and its console is on
+http://localhost:9001 (sign in as `sail`, `password`). `api/.env.example` already points the
+API at it, so a fresh `make setup` needs nothing more; an `api/.env` made before October 2026
+needs these seven lines:
 
 ```sh
 AWS_ACCESS_KEY_ID=sail
 AWS_SECRET_ACCESS_KEY=password
 AWS_DEFAULT_REGION=us-east-1
 AWS_BUCKET=reports
-AWS_ENDPOINT=http://minio:9000
+AWS_ENDPOINT=http://rustfs:9000
 AWS_PUBLIC_ENDPOINT=http://localhost:9000
 AWS_USE_PATH_STYLE_ENDPOINT=true
 ```
 
-`AWS_ENDPOINT` is how the API container reaches MinIO; `AWS_PUBLIC_ENDPOINT` is how your
+`AWS_ENDPOINT` is how the API container reaches RustFS; `AWS_PUBLIC_ENDPOINT` is how your
 browser does, and is the host a download link is signed for.
 
 ### Windows with WSL2
