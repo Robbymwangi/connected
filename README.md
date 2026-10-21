@@ -161,7 +161,9 @@ the key.
 
 Report card PDFs go to S3. Under Sail, RustFS stands in for it (MinIO's images left Docker
 Hub in September 2026): `make up` starts it and creates the bucket, and its console is on
-http://localhost:9001 (sign in as `sail`, `password`). Point the API at it in `api/.env`:
+http://localhost:9001 (sign in as `sail`, `password`). `api/.env.example` already points the
+API at it, so a fresh `make setup` needs nothing more; an `api/.env` made before October 2026
+needs these seven lines:
 
 ```sh
 AWS_ACCESS_KEY_ID=sail
