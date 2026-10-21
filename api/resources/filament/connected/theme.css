@@ -1,0 +1,89 @@
+/* The admin panel in the app's look, so the two read as one product: the warm background, the
+   brand-tinted gradient top bar, and Fraunces for headings (Figtree for everything else comes from
+   AdminPanelProvider's font). A Filament asset: AdminPanelProvider registers it, composer install
+   publishes it to public/css/app, and every panel page loads it. Filament's rules sit in CSS
+   cascade layers and these do not, so these win without !important.
+
+   The values are the app's tokens (frontend/src/styles/tokens.css), repeated here because the
+   panel is server-rendered and cannot read the PWA's stylesheet; change them in both places.
+   Filament sets the same .dark class on <html> that the app does. */
+
+:root {
+  --connected-background: #fdfbf7;
+  --connected-foreground: #2d2926;
+  --connected-card: rgba(255, 255, 255, 0.72);
+  --connected-primary: #c1440e;
+  --connected-border: rgba(45, 41, 38, 0.1);
+}
+
+.dark {
+  --connected-background: #1a1816;
+  --connected-foreground: #f4f0ec;
+  --connected-card: rgba(40, 36, 33, 0.74);
+  --connected-border: rgba(255, 255, 255, 0.1);
+}
+
+.fi-body {
+  background-color: var(--connected-background);
+  color: var(--connected-foreground);
+}
+
+/* The app's top bar (frontend/src/layout/glass.css, .topbar-glass): a brand tint on the left that
+   fades to plain card glass on the right, blurred over whatever scrolls beneath it. */
+.fi-topbar {
+  background: linear-gradient(
+    112deg,
+    color-mix(in srgb, var(--connected-primary) 35%, color-mix(in srgb, var(--connected-card) 85%, transparent)) 0%,
+    color-mix(in srgb, var(--connected-primary) 20%, color-mix(in srgb, var(--connected-card) 80%, transparent)) 44%,
+    color-mix(in srgb, var(--connected-card) 74%, transparent) 100%
+  );
+  backdrop-filter: blur(12px);
+  box-shadow: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--connected-border) 60%, transparent);
+}
+
+/* Fraunces for display and headings only, as in the app. */
+.fi-header-heading,
+.fi-simple-header-heading,
+.fi-section-header-heading,
+.fi-ta-header-heading,
+.fi-modal-heading {
+  font-family: var(--serif-font-family), Georgia, serif;
+  letter-spacing: -0.01em;
+}
+
+/* The brand mark (resources/views/filament/brand.blade.php), the app sidebar's. */
+.connected-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.connected-brand-mark {
+  display: flex;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background-color: var(--connected-primary);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.connected-brand-name {
+  font-family: var(--serif-font-family), Georgia, serif;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  white-space: nowrap;
+  color: var(--connected-foreground);
+}
+
+.connected-brand-tag {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--connected-foreground) 60%, transparent);
+}
