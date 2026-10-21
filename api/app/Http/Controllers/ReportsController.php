@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Storage;
    report of another school is a 404 through the institution scope on the binding.
 
    The URL is signed by the s3-public disk, which is the s3 disk with the endpoint a browser can
-   reach. In production the two are the same; under Sail the API reaches MinIO as minio:9000 while
+   reach. In production the two are the same; under Sail the API reaches RustFS as rustfs:9000 while
    the browser reaches it as localhost:9000, and a presigned URL is signed for its host, so rewriting
    the host afterwards would break the signature. Presigning is local: it makes no request. */
 class ReportsController extends Controller

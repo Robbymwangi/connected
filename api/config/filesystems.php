@@ -62,7 +62,7 @@ return [
 
         // The s3 disk as a browser reaches it, used only to presign report card URLs
         // (ReportsController). Same as s3 unless AWS_PUBLIC_ENDPOINT says otherwise, as under Sail,
-        // where the API reaches MinIO as minio:9000 and the browser as localhost:9000.
+        // where the API reaches RustFS as rustfs:9000 and the browser as localhost:9000.
         's3-public' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
