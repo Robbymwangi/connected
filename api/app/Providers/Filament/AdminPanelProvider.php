@@ -56,7 +56,8 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogo(fn () => view('filament.brand'))
             ->brandLogoHeight('2rem')
             ->defaultAvatarProvider(InitialsAvatarProvider::class)
-            ->font('Figtree', url: fn (): string => asset('fonts/app/connected/index.css').'?v='.self::assetVersion(), provider: LocalFontProvider::class)
+            // The font files load as the registered asset (boot); this names the family to use.
+            ->font('Figtree', provider: LocalFontProvider::class)
             ->serifFont('Fraunces', provider: LocalFontProvider::class)
             ->colors(['primary' => self::brandPalette(), 'gray' => Color::Stone])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
