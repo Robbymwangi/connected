@@ -42,10 +42,11 @@ locals {
   api_origin      = "api"
 
   # Everything the host answers. Livewire 4 serves its updates and scripts under a hashed prefix
-  # (livewire-808cf2ba/...), hence the wildcard rather than /livewire/*.
+  # (livewire-808cf2ba/...), hence the wildcard rather than /livewire/*. /css/app and /fonts/app
+  # are the admin panel's own look, published there as Filament assets (AdminPanelProvider).
   api_paths = [
     "/api/*", "/up", "/admin", "/admin/*", "/livewire-*", "/filament/*",
-    "/css/filament/*", "/js/filament/*", "/fonts/filament/*",
+    "/css/filament/*", "/js/filament/*", "/fonts/filament/*", "/css/app/*", "/fonts/app/*",
   ]
 }
 

@@ -6,7 +6,11 @@
    2. A Tailwind @theme block that exposes each property as a utility (bg-card,
       text-muted-foreground, font-display, and so on). Components use the utilities, or
       var(--name) inside SVG and inline styles where a utility cannot reach; never a
-      raw hex value. */
+      raw hex value.
+
+   The admin panel repeats the background, foreground, card, primary, and border values
+   in api/public/css/filament/connected/theme.css, since it cannot read this file; a
+   change to one of them belongs in both. */
 
 @custom-variant dark (&:where(.dark, .dark *));
 
