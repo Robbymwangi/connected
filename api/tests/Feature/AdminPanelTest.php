@@ -28,6 +28,8 @@ use App\Models\TeacherAssignment;
 use App\Models\User;
 use App\Support\CurrentInstitution;
 use Filament\Facades\Filament;
+use Filament\Support\Colors\Color;
+use Filament\Support\Facades\FilamentColor;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 use Livewire\Mechanisms\PersistentMiddleware\PersistentMiddleware;
@@ -498,6 +500,37 @@ test('a class teacher is a teacher account, never an admin', function () {
         ->fillForm(['grade' => '5', 'stream' => 'East', 'class_teacher_id' => $admin->id])
         ->call('create')
         ->assertHasFormErrors(['class_teacher_id']);
+});
+
+/* The panel in the app's look (AdminPanelProvider, resources/filament/connected): its fonts and
+   theme stylesheet from the host itself, its avatar drawn in the page, and nothing fetched from
+   another origin, which Filament's defaults did (ui-avatars.com). */
+test('a panel page loads the app\'s fonts and theme from the host and nothing from elsewhere', function () {
+    $g = buildGraph();
+    $admin = adminOf($g);
+
+    $html = $this->actingAs($admin, 'admin')->get('/admin/classes')->assertOk()->getContent();
+    $origin = parse_url(config('app.url'), PHP_URL_HOST);
+    preg_match_all('/(?:src|href)="(https?:\/\/[^"]+)"/', $html, $urls);
+
+    expect($html)->toContain('fonts/app/connected/index.css')
+        ->toContain('css/app/connected-theme.css')
+        ->toContain('data:image/svg+xml;base64,')
+        ->not->toContain('ui-avatars.com')
+        ->and(collect($urls[1])->map(fn ($url) => parse_url($url, PHP_URL_HOST))->unique()->values()->all())->toBe([$origin])
+        ->and(public_path('fonts/app/connected/Fraunces-VF.woff2'))->toBeFile()
+        ->and(public_path('fonts/app/connected/Figtree-VF.woff2'))->toBeFile();
+});
+
+test('a primary button is the brand with white text', function () {
+    // The panel registers its colours as it serves a page.
+    $html = $this->get('/admin/login')->assertOk()->getContent();
+    $primary = FilamentColor::getColor('primary');
+
+    expect(Color::convertToHex($primary[600]))->toBe('#c1440e')
+        ->and(Color::isTextContrastRatioAccessible($primary[600], 'oklch(1 0 0)'))->toBeTrue()
+        ->and(Color::isTextContrastRatioAccessible($primary[500], 'oklch(1 0 0)'))->toBeTrue()
+        ->and($html)->toContain('fi-bg-color-600 hover:fi-bg-color-500');
 });
 
 arch('no API controller depends on the admin panel')
