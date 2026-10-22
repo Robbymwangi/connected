@@ -38,6 +38,7 @@ The URL scheme:
 | marking grid, report | `/assessments/<id>/grid`, `/assessments/<id>/report` |
 | classes list, a stream, a student | `/classes`, `/classes/<classId>`, `/classes/<classId>/students/<studentId>` |
 | a teacher | `/teachers/<teacherId>` |
+| a stream's report-card comments for a term (added with #158) | `/classes/<classId>/comments/<year>/<term>` |
 | sync, with a highlighted conflict | `/sync`, `/sync?highlight=<conflictId>` |
 | reports | `/reports` |
 
