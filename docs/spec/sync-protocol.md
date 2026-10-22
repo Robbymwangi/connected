@@ -190,8 +190,7 @@ happens inside its transaction, after the lock.
    both sides are equal, on any table (an `unread` flag set on two of one
    user's devices, a second finalize): if every field the entry touches,
    overlapping or disjoint, already matches the record's current value →
-   **(proposed
-   amendment, discussed 2026-10-03, not yet reviewed: a no-op)** the record
+   **(amendment, discussed 2026-10-03, built with 3.2: a no-op)** the record
    itself is not touched again: no new `version`, no change-log row,
    `last_edited_by` unchanged, since the value the first side already wrote
    is the value this entry would have written, in every field it touches,
@@ -273,9 +272,10 @@ Conflict actions (propose, accept, refer, resolve) are commands on `table: "conf
 "Conflict commands" below. They are never field patches.
 
 Unlocking a finalized assessment is not a mutation through this endpoint.
-It's an ADMIN action (#36), almost certainly made online, that writes
-`unlock_notes` and the assessment's status directly; `unlock_notes` isn't
-synchronisable (#34) and was never meant to travel through the outbox.
+It's an online-only call, `POST /api/assessments/{id}/unlock`, made in the app by a
+Director of Studies or the HOD of the assessment's subject (ADR 0014, decision 3),
+that writes `unlock_notes` and the assessment's status directly; `unlock_notes`
+isn't synchronisable (#34) and was never meant to travel through the outbox.
 
 **Field names on the wire.** Names are camelCase on the wire and each
 pushable table has an explicit wire-to-column allowlist; names are never
@@ -291,7 +291,7 @@ no separate time field either: the device's claimed time is the entry's own
 whole batch and they come back `replayed`; the failing entry is not recorded
 and is decided afresh. A poisoned entry can stall the outbox until the defect
 is fixed, which is the right pressure: a status that told the device to keep
-going would hide it. (Proposed.)
+going would hide it. (Built with 3.2.)
 
 **Decided while building POST /sync (3.2a).**
 - A patch that changes nothing, at the current version, is `accepted` at the
@@ -385,7 +385,7 @@ going would hide it. (Proposed.)
   another field, missing a half, a status other than `finalized`, or on a create is `invalid`. Two devices
   finalizing is the no-op, with the credit kept by the first; an already finalized
   assessment is the no-op too; a finalize queued before an unlock is a conflict. Unlock stays an online
-  administrator action and is never a mutation.
+  call (ADR 0014, decision 3) and is never a mutation.
 - Server-written notifications. A mark edit refused because its assessment is finalized writes
   `edit-blocked` to the rejected teacher and each teacher assigned to the assessment's class and subject, in
   the fresh transaction that records the rejection, since the entry's own rolled back; a resend writes
@@ -434,13 +434,14 @@ going would hide it. (Proposed.)
   refused as `edit-blocked`. The server refuses a finalize mixed with other fields, so the mistake
   surfaces instead of hiding.
 
-**Decided while building the client (3.4, slice 5a). Proposed, not yet reviewed.**
+**Decided while building the client (3.4, slice 5a), and built that way.**
 - When a mark conflict resolves, whoever resolved it, the device drops the entry it kept
   for the conflict, the cell takes the settled mark, and an edit that was held behind the
   conflict is sent against the version the resolution produced. That edit is then judged by
   rule 2 and accepted: the later edit wins. A device that wanted it to surface as a new
   conflict would send it against the version the teacher saw before the conflict instead;
-  this is the one-line choice (`baseAfterResolution`), and it is the reviewer's to confirm.
+  this is the one-line choice (`baseAfterResolution` in `lib/reconcileConflicts.ts`) should that
+  ever be wanted.
 - A command answered with a stale base is dropped with a notice, and the fresh conflict
   the server returned is adopted, so the teacher decides again with what is now true.
   Commands queued behind it were decided on a state that never existed, and are dropped
@@ -660,7 +661,7 @@ what only the server writes (a mark's `lastEditedBy`, a finalize's own
 `finalizedAt`). The device remembers the version it raised the record to, applies
 the change at exactly that version once, to the fields no open entry still holds,
 and forgets the version. A change at any other version that is not greater is
-skipped as before. (Proposed, with 3.4 slice 3; not yet reviewed.)
+skipped as before. (Built with 3.4 slice 3.)
 
 ## Conflict taxonomy
 
@@ -675,7 +676,7 @@ ADR 0002's rules for who may act.
 
 ## Audit timestamps and actor identity
 
-> **Proposed addition, drafted 2026-10-03, not yet reviewed.** Raised
+> **Addition drafted 2026-10-03, built with 3.2 except where marked.** Raised
 > while discussing PR #88 (what a device's clock can and can't be trusted
 > for): `at`'s "informational only" label already protects correctness,
 > since nothing above compares it to anything. It says nothing about
@@ -694,18 +695,17 @@ below. But a device's clock being untrustworthy is also exactly why an
 auditor looking at a conflict later needs something that *is* trustworthy
 to check `at` against, and nothing currently records one.
 
-**Proposed: `receivedAt`, set by the server from its own clock, the
+**`receivedAt`, set by the server from its own clock, the
 moment any write to a synchronisable table happens.** This is new data,
 not already captured anywhere; `created_at`/`updated_at` are per-row, not
 per-edit, and can't tell two overlapping writes apart. It applies to
 every `sync_changes` row, not only a `POST /sync` push: the change log
 above already carries a server-originated write (an admin creates a
-student, an unlock, a finalize made through the admin action, a report
-finishing) the same way it carries a push's, and the second anomaly check
+student, an unlock, a term close, a report finishing) the same way it carries a push's, and the second anomaly check
 below needs a `receivedAt` for whichever write produced a `baseVersion`
 regardless of which path wrote it, so the stamp has to be unconditional
 on every row that log appends, not only the three `POST /sync` rules. It
-arrives with the Phase 3 sync implementation (issue #89), stored on the
+is built (issue #89), stored on the
 change-log row `GET /sync` reads (`sync_changes`, already named in that
 section below) and copied from there into a conflict's `side_a`/`side_b`
 and into a `proposals[]` entry, alongside the existing client `at`, never
@@ -752,7 +752,9 @@ claim doesn't add up and is worth a look:
 
 Both flags are derived when the row is read for display (3.5), not stored
 on it; they're a function of two timestamps already on record, not a new
-fact that needs its own column.
+fact that needs its own column. **Not built yet:** the Sync screen shows
+`receivedAt` and the device's `at` on each side, labelled as below, but
+derives neither flag. The five-minute tolerance was never agreed either.
 
 **Be honest about what these two checks are for.** They catch an honest
 clock mistake (wrong timezone, a device that never had NTP), not a
@@ -794,7 +796,7 @@ examples below.
 
 ## Authorization and scoping
 
-> **Proposed addition, drafted 2026-10-03, not yet reviewed.** The
+> **Addition drafted 2026-10-03, built with 3.2.** The
 > institution rule below is existing, settled spec. The actor-identity
 > rule after it is new: raised while discussing PR #88 (see "Audit
 > timestamps and actor identity") and belongs here because it's the same
@@ -833,7 +835,7 @@ different value for either is `invalid`, and a `date` it sends must stay in the
 year. The check runs behind the institution's advisory lock, which opening a term
 also takes, so the two cannot interleave.
 
-**Proposed: a two-part rule for who a mutation's fields can claim to be.**
+**A two-part rule for who a mutation's fields can claim to be** (built with 3.2).
 A user id can legitimately appear in a payload: `workflow.md`'s finalize
 mutation sends `finalizedBy`, and a conflict's `proposals[]` entries carry
 `byId`, because an offline device recording its own action has to say who
@@ -875,10 +877,10 @@ no field named `resolvedAt` at all: its device claim is the entry's `at`,
 so the `resolvedAt` a device pulls is only ever the server's.
 
 Push authorization mirrors #36 exactly: marks and assessment creation are
-unrestricted for any teacher account (creation into the open term only, above); updating, finalizing, or unlocking
+unrestricted for any teacher account (creation into the open term only, above); updating or finalizing
 an existing assessment is scoped to its creator or a teacher assigned to
 that class and subject (`teacher_assignments`), checked as part of rule 6
-above, `forbidden` otherwise. Conflict actions are scoped by the policy
+above, `forbidden` otherwise. Unlocking is never a push (above). Conflict actions are scoped by the policy
 mirroring `lib/conflicts.ts`, including subject-scoped moderation
 (`subject_moderations`).
 
