@@ -125,4 +125,16 @@ test('the seeded school is plausible against every KPI in the analytics spec', f
         ->havingRaw('count(*) > 1')
         ->get();
     expect($duplicateDates)->toBeEmpty();
+
+    // The three roles stand apart, so the demo can show each (ADR 0014): the Director of
+    // Studies heads no subject; John Otieno heads Maths and Mercy Achieng Science.
+    $heads = DB::table('subject_moderations')
+        ->join('users', 'users.id', '=', 'subject_moderations.user_id')
+        ->join('subjects', 'subjects.id', '=', 'subject_moderations.subject_id')
+        ->get(['subjects.name', 'users.email'])
+        ->map(fn ($row) => [$row->name => $row->email])
+        ->collapse();
+    expect(DB::table('subject_moderations')->count())->toBe(2);
+    expect($heads->all())->toEqual(['Maths' => 'j.otieno@greenvalley.test', 'Science' => 'm.achieng@greenvalley.test']);
+    expect(DB::table('users')->where('directs_studies', true)->pluck('email')->all())->toBe(['dos@greenvalley.test']);
 });

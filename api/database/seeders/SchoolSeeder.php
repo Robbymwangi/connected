@@ -69,14 +69,14 @@ class SchoolSeeder extends Seeder
         DB::transaction(function () {
             $institution = Institution::create(['name' => 'Green Valley Primary School']);
 
-            [$admin, $directorOfStudies, $classTeachers] = $this->seedStaff($institution);
+            [$admin, , $classTeachers] = $this->seedStaff($institution);
             $this->seedTerms($institution, $admin);
             $subjects = $this->seedSubjectsAndCriteria($institution);
             $classes = $this->seedClasses($institution, $classTeachers);
 
             $this->seedClassSubjects($institution, $classes, $subjects);
             $this->seedTeacherAssignments($institution, $classes, $subjects, $classTeachers);
-            $this->seedSubjectModerations($institution, $directorOfStudies, $subjects);
+            $this->seedSubjectModerations($institution, $classTeachers, $subjects);
 
             $studentsByClass = $this->seedStudentsAndEnrolments($institution, $classes);
 
@@ -247,15 +247,22 @@ class SchoolSeeder extends Seeder
         }
     }
 
+    /* Heads of department (ADR 0014, decision 2): John Otieno heads Maths and Mercy Achieng
+       Science, so the demo shows the three roles apart: a teacher, a HOD, and the Director of
+       Studies, who heads nothing. A HOD who is a party to a conflict acts only as a party, so a
+       Maths conflict in 4W, Otieno's own stream, has no one to settle it outright if referred;
+       one between two other teachers' streams does. English and Kiswahili have no HOD. */
+
     /**
+     * @param  array<string, User>  $classTeachers
      * @param  array<string, array{subject: Subject, criteria: array<int, Criterion>}>  $subjects
      */
-    private function seedSubjectModerations(Institution $institution, User $moderator, array $subjects): void
+    private function seedSubjectModerations(Institution $institution, array $classTeachers, array $subjects): void
     {
-        foreach (['Maths', 'Science'] as $name) {
+        foreach (['Maths' => '4W', 'Science' => '4E'] as $name => $stream) {
             SubjectModeration::create([
                 'institution_id' => $institution->id,
-                'user_id' => $moderator->id,
+                'user_id' => $classTeachers[$stream]->id,
                 'subject_id' => $subjects[$name]['subject']->id,
             ]);
         }

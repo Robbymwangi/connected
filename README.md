@@ -122,8 +122,10 @@ The seeders create Green Valley, a demo school. Every password is `password`.
 | Account | Email | Signs in to |
 |---|---|---|
 | Admin | `admin@greenvalley.test` | the admin panel only |
-| Director of Studies, HOD for Maths and Science | `dos@greenvalley.test` | the app |
-| Class teachers of 4W, 4E, 5A, 5B | `j.otieno@`, `m.achieng@`, `p.kariuki@`, `e.chebet@greenvalley.test` | the app |
+| Director of Studies (heads no subject) | `dos@greenvalley.test` | the app |
+| Class teacher of 4W, and head of department (HOD) for Maths | `j.otieno@greenvalley.test` | the app |
+| Class teacher of 4E, and HOD for Science | `m.achieng@greenvalley.test` | the app |
+| Class teachers of 5A and 5B | `p.kariuki@`, `e.chebet@greenvalley.test` | the app |
 
 Admin and teacher accounts are separate kinds, and each door refuses the other
 ([ADR 0014](docs/adr/0014-roles-accounts-and-terms.md)).
