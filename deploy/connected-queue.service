@@ -1,5 +1,6 @@
 # The queue worker (ADR 0007): report cards and comment batches. Restarted by each deploy, and by
 # systemd if it ever stops; --max-time recycles it hourly so a slow leak cannot build up.
+# --tries=3 --timeout=90 are ADR 0007 decision 3's, the same as the Sail queue service.
 [Unit]
 Description=ConnectED queue worker
 After=network-online.target
@@ -8,7 +9,7 @@ After=network-online.target
 User=www-data
 Group=www-data
 WorkingDirectory=/var/www/connected/current/api
-ExecStart=/usr/bin/php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+ExecStart=/usr/bin/php artisan queue:work --sleep=3 --tries=3 --timeout=90 --max-time=3600
 Restart=always
 RestartSec=5
 

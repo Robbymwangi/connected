@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { count, formatDateTime, formatLongDate, formatRelative, greetingFor, parseLocalDate } from './time'
+import { count, formatDateTime, receivedOrDeviceTime, formatLongDate, formatRelative, greetingFor, parseLocalDate } from './time'
 
 const at = (hour: number) => new Date(2026, 7, 28, hour, 0, 0)
 
@@ -27,6 +27,16 @@ describe('formatLongDate', () => {
 describe('formatDateTime', () => {
   it('writes a compact British date with a 24-hour time', () => {
     expect(formatDateTime('2026-08-27T14:32:00')).toBe('27 Aug 2026, 14:32')
+  })
+})
+
+describe('receivedOrDeviceTime', () => {
+  it('shows the server\'s receipt time plainly when there is one', () => {
+    expect(receivedOrDeviceTime('2030-01-01T00:00:00', '2026-08-27T14:32:00')).toBe('received 27 Aug 2026, 14:32')
+  })
+
+  it('labels a device\'s own time as the device\'s, never as simply the time', () => {
+    expect(receivedOrDeviceTime('2026-08-27T14:32:00')).toBe('27 Aug 2026, 14:32, device time')
   })
 })
 

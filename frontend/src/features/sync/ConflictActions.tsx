@@ -3,7 +3,7 @@ import { useCurrentUser } from '../../app/AuthContext'
 import type { ActiveConflict, Choice, Proposal } from '../../fixtures/conflicts'
 import { abilityOf, canRefer, describeReferral, isValidNote, sideOf, type Resolver } from '../../lib/conflicts'
 import { formatMark, parseMarkInput, type Mark } from '../../lib/grading'
-import { formatDateTime } from '../../lib/time'
+import { receivedOrDeviceTime } from '../../lib/time'
 
 type ConflictActionsProps = {
   conflict: ActiveConflict
@@ -223,7 +223,7 @@ function SideButton({
     <button type="button" onClick={onClick} className={`${ACTION} border-border text-foreground hover:bg-muted`}>
       <span className="block tabular">{label}</span>
       <span className="block text-[10px] font-medium text-muted-foreground">
-        {side.userId === myId ? 'you' : side.who}, {formatDateTime(side.at)}
+        {side.userId === myId ? 'you' : side.who}, {receivedOrDeviceTime(side.at, side.receivedAt)}
       </span>
     </button>
   )
@@ -265,7 +265,7 @@ export function ProposalThread({
               {proposalVerb(proposal, pending, myId)} {describe(proposal.choice)}
             </p>
             <p className="mt-1 text-xs leading-relaxed text-foreground/80 italic">"{proposal.note}"</p>
-            <p className="mt-1 text-[10px] text-muted-foreground/70">{formatDateTime(proposal.at)}</p>
+            <p className="mt-1 text-[10px] text-muted-foreground/70">{receivedOrDeviceTime(proposal.at, proposal.receivedAt)}</p>
           </div>
         )
       })}

@@ -84,6 +84,34 @@ describe('mapSyncedAssessmentState', () => {
     expect(state.conflicts[0].theirs).toMatchObject({ userId: 'teacher-1', who: 'Teacher One', mark: { kind: 'score', value: 12 } })
   })
 
+  it('keeps the server\'s receipt time apart from the device\'s claimed time on each side and proposal', () => {
+    const state = mapSyncedAssessmentState({
+      userId: 'teacher-2',
+      directory,
+      assessments: [{
+        id: 'assessment-1', version: 2, classId: 'class-1', subjectId: 'subject-1', name: 'CAT 1',
+        term: 'Term 1', year: 2026, date: '2026-05-12', status: 'scheduled',
+      }],
+      marks: [{
+        id: 'mark-1', version: 2, assessmentId: 'assessment-1', studentId: 'student-1',
+        criterionId: 'criterion-1', markKind: 'score', score: 12, lastEditedBy: 'teacher-1',
+      }],
+      conflicts: [{
+        id: 'conflict-1', version: 1, markId: 'mark-1', baseVersion: 1,
+        sideA: { editId: 'edit-1', userId: 'teacher-1', who: 'Teacher One', markKind: 'score', score: 12, at: '2026-05-12T09:00:00Z', receivedAt: '2026-05-12T09:05:00Z' },
+        sideB: { editId: 'edit-2', userId: 'teacher-2', who: 'Teacher Two', markKind: 'absent', score: null, at: '2030-01-01T00:00:00Z' },
+        proposals: [{ byId: 'teacher-1', by: 'Teacher One', choice: { kind: 'side', editId: 'edit-1' }, note: 'I saw the script', at: '2026-05-12T10:00:00Z', receivedAt: '2026-05-12T10:01:00Z' }],
+        referral: null, resolution: null, resolvedAt: null,
+      }],
+      results: [],
+    })
+
+    expect(state.conflicts[0].theirs).toMatchObject({ at: '2026-05-12T09:00:00Z', receivedAt: '2026-05-12T09:05:00Z' })
+    expect(state.conflicts[0].mine.at).toBe('2030-01-01T00:00:00Z')
+    expect(state.conflicts[0].mine).not.toHaveProperty('receivedAt')
+    expect(state.conflicts[0].proposals[0]).toMatchObject({ at: '2026-05-12T10:00:00Z', receivedAt: '2026-05-12T10:01:00Z' })
+  })
+
   it('keeps an unacknowledged local finalize pending on a later snapshot', () => {
     const state = mapSyncedAssessmentState({
       userId: 'teacher-1',

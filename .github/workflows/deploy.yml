@@ -5,16 +5,22 @@ name: deploy
 # the API stays backward compatible because migrations are additive only. Signs in to AWS through
 # OIDC with the apply role. Nothing is looked up from repository variables beyond that role: the
 # host is found by its tag, the buckets and the CloudFront distribution by their names.
+#
+# It can also be run by hand on main (Actions, deploy, Run workflow): it deploys main as it stands,
+# once `check` has passed on that commit. That is how production gets its code back after being
+# taken down, since re-running an old run is possible only for 30 days and replays its old commit.
 
 on:
   workflow_run:
     workflows: [check]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
+  actions: read
 
 concurrency:
   group: deploy
@@ -22,18 +28,22 @@ concurrency:
 
 env:
   AWS_REGION: af-south-1
-  SHA: ${{ github.event.workflow_run.head_sha }}
+  SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
   # Each deploy starts when its own `check` finishes, so two merges close together can finish out
   # of order and an older commit would deploy over a newer one. A first attempt therefore goes
   # ahead only if its commit is still the tip of main; a re-run always does, so re-running an
   # earlier deploy stays the way to roll back.
+  # A run by hand is checked the other way: it must be on main, and `check` must have passed on
+  # the commit it deploys.
   gate:
     if: >-
-      github.event.workflow_run.conclusion == 'success'
-      && github.event.workflow_run.event == 'push'
-      && vars.AWS_APPLY_ROLE_ARN != ''
+      vars.AWS_APPLY_ROLE_ARN != ''
+      && ((github.event_name == 'workflow_run'
+           && github.event.workflow_run.conclusion == 'success'
+           && github.event.workflow_run.event == 'push')
+        || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     outputs:
       deploy: ${{ steps.tip.outputs.deploy }}
@@ -42,6 +52,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            passed=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/check.yml/runs?head_sha=${SHA}&event=push&status=success" --jq .total_count)
+            if [ "$passed" -eq 0 ]; then
+              echo "::error::check has not passed on $SHA, so it is not deployed"
+              exit 1
+            fi
+          fi
           tip=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)
           if [ "$tip" = "$SHA" ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ]; then
             echo deploy=true >> "$GITHUB_OUTPUT"
@@ -56,7 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ env.SHA }}
           persist-credentials: false
 
       # The host runs PHP 8.4 (infra/production/user-data.sh); the dependencies are installed for it.
@@ -120,7 +137,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ env.SHA }}
           persist-credentials: false
 
       - uses: actions/setup-node@v4
