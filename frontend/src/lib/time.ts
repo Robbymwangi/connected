@@ -32,6 +32,15 @@ export function formatRelative(from: Date, now: Date = new Date()): string {
   return `${Math.floor(hours / 24)}d ago`
 }
 
+/* A conflict's times, as the sync protocol's display discipline has them
+   (docs/spec/sync-protocol.md, "Display discipline"): the server's receipt time is
+   the one shown plainly, and a time a device claims is always labelled as the
+   device's, never presented as simply "the time", since a device clock can be wrong. */
+export function receivedOrDeviceTime(at: string, receivedAt?: string): string {
+  if (receivedAt) return `received ${formatDateTime(receivedAt)}`
+  return `${formatDateTime(at)}, device time`
+}
+
 /* "27 Aug 2026, 14:32", for the audit-style timestamps on conflicts. */
 export function formatDateTime(iso: string): string {
   return new Intl.DateTimeFormat('en-GB', {

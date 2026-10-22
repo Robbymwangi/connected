@@ -81,6 +81,7 @@ function sideFromWire(value: unknown, names: Map<string, string>): ConflictSide 
     who: wireName || names.get(userId) || 'Unknown teacher',
     mark,
     at: text(side, 'at'),
+    ...(text(side, 'receivedAt') ? { receivedAt: text(side, 'receivedAt') } : {}),
   }
 }
 
@@ -103,7 +104,8 @@ function proposalsFromWire(value: unknown): Proposal[] {
   return records(value).flatMap((item) => {
     const choice = choiceFromWire(item.choice)
     if (!choice || typeof item.byId !== 'string' || typeof item.by !== 'string' || typeof item.note !== 'string') return []
-    return [{ byId: item.byId, by: item.by, choice, note: item.note, at: text(item, 'at') }]
+    const receivedAt = text(item, 'receivedAt')
+    return [{ byId: item.byId, by: item.by, choice, note: item.note, at: text(item, 'at'), ...(receivedAt ? { receivedAt } : {}) }]
   })
 }
 

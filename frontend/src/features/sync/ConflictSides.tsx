@@ -28,11 +28,14 @@ type ValueBlockProps = {
   label: string
   mark: Mark
   at?: string
+  receivedAt?: string
   emphasis: Emphasis
 }
 
-/* One value in a conflict: whose, what, when. Label and colour together. */
-export function ValueBlock({ label, mark, at, emphasis }: ValueBlockProps) {
+/* One value in a conflict: whose, what, when. Label and colour together. "When" is the
+   server's receipt time, shown plainly, then the device's own claim, always labelled as
+   the device's (docs/spec/sync-protocol.md, "Display discipline"). */
+export function ValueBlock({ label, mark, at, receivedAt, emphasis }: ValueBlockProps) {
   return (
     <div className={`rounded-xl border px-3 py-3 ${BOX[emphasis]}`}>
       <p className={`mb-2 truncate text-[10px] font-semibold tracking-wider uppercase ${LABEL[emphasis]}`}>
@@ -41,7 +44,12 @@ export function ValueBlock({ label, mark, at, emphasis }: ValueBlockProps) {
       <p className={`font-display text-2xl leading-none font-bold tabular ${VALUE[emphasis]}`}>
         {formatMark(mark) || '–'}
       </p>
-      {at && <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground/70">{formatDateTime(at)}</p>}
+      {receivedAt && <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground">Received {formatDateTime(receivedAt)}</p>}
+      {at && (
+        <p className={`${receivedAt ? 'mt-0.5' : 'mt-1.5'} text-[10px] leading-snug text-muted-foreground/70`}>
+          Device time {formatDateTime(at)}
+        </p>
+      )}
     </div>
   )
 }
@@ -57,8 +65,8 @@ type ConflictSidesProps = {
 export function ConflictSides({ mine, theirs, mineEmphasis, theirsEmphasis, children }: ConflictSidesProps) {
   return (
     <div className={`grid gap-2 px-4 py-3 ${children ? 'grid-cols-3' : 'grid-cols-2'}`}>
-      <ValueBlock label={mine.who} mark={mine.mark} at={mine.at} emphasis={mineEmphasis} />
-      <ValueBlock label={theirs.who} mark={theirs.mark} at={theirs.at} emphasis={theirsEmphasis} />
+      <ValueBlock label={mine.who} mark={mine.mark} at={mine.at} receivedAt={mine.receivedAt} emphasis={mineEmphasis} />
+      <ValueBlock label={theirs.who} mark={theirs.mark} at={theirs.at} receivedAt={theirs.receivedAt} emphasis={theirsEmphasis} />
       {children}
     </div>
   )
