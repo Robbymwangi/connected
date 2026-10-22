@@ -12,8 +12,10 @@ completion end of November 2026.
 ## Stack
 
 React and TypeScript PWA in `frontend/`, built with Vite, holding its own router and an
-IndexedDB local store with a mutation outbox. Laravel JSON API in `api/`, PostgreSQL,
-Sanctum token auth, Laravel queues. S3 for report PDFs. Hosted on AWS.
+IndexedDB local store (through Dexie) with a mutation outbox. Laravel JSON API in `api/`,
+PostgreSQL, Sanctum token auth, Laravel queues. S3 for report card PDFs (RustFS stands in
+for it locally). The school's back office is a Filament admin panel at `/admin` on the
+API (ADRs 0009 and 0014). Production is AWS, described as Terraform in `infra/` (ADR 0015).
 
 Not Inertia. The two halves are separate applications that share a repository. The
 Laravel starter kits assume a server-rendered monolith, which is the wrong default here:
@@ -83,13 +85,14 @@ These are load-bearing. Do not work around them.
   than trusting a cached report to still be answerable offline. The server runs it
   (ADR 0013); where the server has no model key, answers are templated from the
   report's own figures and labelled as a stand-in.
-- Fixtures under `fixtures/` use short readable string ids (`s1`, `class-4w`). They
-  stand in for the local store, which assigns the real client-generated UUIDs.
+- Fixtures under `fixtures/` use short readable string ids (`s1`, `class-4w`). The
+  screens read the local store now; the fixtures supply shared types, a few helpers,
+  and test data. Records created in the app get real client-generated UUIDs.
 
 ## Running it
 
 `make setup` once, then `make up` for the API (Docker through Laravel Sail: `api`,
-`pgsql`, and `queue` services from `api/compose.yaml`) and `make dev` for the
+`pgsql`, `queue`, and `rustfs` services from `api/compose.yaml`) and `make dev` for the
 frontend, which runs natively on Node 22. `make check` is what must pass before a
 commit. The README has the platform notes; `CONTRIBUTING.md` has the workflow.
 
@@ -120,19 +123,35 @@ rules an agent applies while writing:
   address or decline its findings before every commit. Local and merge request reviews
   share one quota, so review in sweeps: one local pass per finished chunk, then let the
   bot on the merge request confirm. The bot comments; it does not block.
-- Architectural decisions go in `docs/adr/` as they are made. Five exist: record
-  versioning (0001), conflict resolution (0002), charts without a library (0003),
-  offline with Workbox (0004), router from location (0005).
+- Architectural decisions go in `docs/adr/` as they are made, one per file, each
+  titled with its decision and opening with its status. Read the ones that touch your
+  change before making it; the specs in `docs/spec/` say what the system does, the
+  ADRs say why.
 
 ## Current stage
 
-The frontend runs entirely on static fixtures with an in-memory session store
-(`app/useSessionStore.ts`, a reducer). There is no API client, no sync engine, and no
-IndexedDB store yet. The API is a fresh Laravel skeleton on Postgres in Sail, with no
-domain migrations or resources. Findings that depend on a server (acknowledgements, record
-versions beyond what ADR 0001 fixes, persistence across reloads, network error
-handling) are future work: note them as such, not as defects to fix now. Fixture ids
-are short readable strings; the store assigns real UUIDs to created records.
+Built and working end to end, offline first:
+
+- **Frontend.** Teachers sign in with a Sanctum token. The screens read a Dexie
+  IndexedDB store; every write goes to the outbox first, and the sync runner pushes it
+  and pulls the server's change log (ADRs 0010 and 0011, `docs/spec/sync-protocol.md`).
+  Conflicts show on the Sync screen and resolve under ADR 0002.
+- **API.** Domain tables with client UUIDs, versions, soft deletes, and the
+  institution scope; `GET` and `POST /api/sync`; read endpoints for classes,
+  subjects, students, and assessments; unlock, term closure, report cards as PDFs on
+  the queue (ADR 0012); and the report assistant (ADR 0013).
+- **Accounts (ADR 0014).** Two kinds, never both: a `teacher` account signs in to the
+  app only, an `admin` account to the panel only. Academic authority is a role on a
+  teacher account: head of department (HOD) for a subject, Director of Studies (DOS)
+  across the school. Unlocking and closing a term happen in the app; the panel holds
+  the school's setup, accounts, and the term calendar, with an authenticator app
+  required for admins in production.
+- **Production** (ADR 0015) was deployed and then taken down to save cost; the
+  Terraform and deploy workflows remain, disabled in GitHub, and `infra/README.md`
+  says how to bring it back.
+
+Not built yet: the multi-device simulation (`docs/build-plan.md` 5.1) and the
+hardening pass (5.3). `docs/build-plan.md` has the item-by-item state.
 
 ## How to work here
 
