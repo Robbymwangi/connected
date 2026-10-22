@@ -21,8 +21,9 @@ incremented server-side, and `deleted_at` for a soft delete, per ADR 0001.
 detect a conflict or order a pull.
 
 Synchronisable is not the same as writable from a device. Marks, assessments,
-conflicts, and a notification's `unread` flag are the only fields a device
-pushes (`docs/spec/sync-protocol.md`, #35). Classes, subjects, criteria,
+conflicts, report-card comments, and a notification's `unread` flag are the only
+things a device pushes (`docs/spec/sync-protocol.md`, #35); conflicts and comments
+only as commands, never as field patches. Classes, subjects, criteria,
 students, and users reach a device only by pull; the device reads them but
 never proposes a change to them.
 
@@ -84,8 +85,9 @@ something #36 requires.
 - **`teacher_assignments`**: `id`, `institution_id`, `user_id`, `class_id`,
   `subject_id`. Replaces the frontend's `subjectsByStream` JSON with a real
   table, because #36 needs to query it: it's exactly the fact that scopes
-  assessment lifecycle actions (edit, finalize, unlock) to a teacher who
-  teaches that class and subject. It never gates grading or assessment
+  assessment lifecycle actions (edit, finalize) to a teacher who teaches that
+  class and subject. Unlocking is not among them: it belongs to a Director of
+  Studies or the subject's HOD (ADR 0014, decision 3). It never gates grading or assessment
   creation, which stay unrestricted.
 - **`subject_moderations`**: `id`, `institution_id`, `user_id`, `subject_id`.
   One row per subject a user moderates. "Subject head" and "head of
@@ -204,8 +206,9 @@ something #36 requires.
   rather than stretching that one to cover it.
 - **`unlock_notes`**: `id`, `institution_id`, `assessment_id`, `user_id`,
   `note`, `created_at`. An append-only audit log, not synchronisable in the
-  full sense: it's written once by ADMIN, online, and a device only ever
-  reads it as part of an assessment's history.
+  full sense: it's written once by the unlock call, online, with `user_id` the
+  Director of Studies or HOD who unlocked. It stays on the server as the record
+  of who unlocked and why; no device pulls it, and no screen shows it yet.
 - **`sync_changes`**: `seq` (bigserial primary key, the pull cursor),
   `institution_id`, `table`, `record_id`, `version`, `fields` (jsonb, changed
   fields only, `deleted_at` included), `received_at` (server clock, set on every

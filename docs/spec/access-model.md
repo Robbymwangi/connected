@@ -56,7 +56,12 @@ passwords; email is unique per kind, so both may use one address. This list is
 exhaustive; nothing outside it is admin work.
 
 - Creating and editing student records and enrolments.
-- Creating and editing class records, including who is class teacher.
+- Creating and editing class records, including who is class teacher, which
+  subjects the class offers (`class_subjects`), and who teaches each of them
+  there (`teacher_assignments`, which scope an assessment's lifecycle above).
+- Creating and editing subjects and their marking criteria. A criterion that
+  already has marks keeps its maximum and cannot be removed, since changing either
+  would silently change recorded results.
 - Creating and editing teacher accounts, including deactivating one, revoking its
   devices, and granting or revoking its subject-moderation links and Director of
   Studies grant (Moderation and Roles, below). An admin makes these grants and
@@ -144,7 +149,8 @@ Every teacher account, by default, can read everything and grade anything (The
 principle, above). On top of that, it may hold:
 
 - Zero or more subject-moderation links (Moderation, above): one link per
-  subject moderated, regardless of title. The interface will call this HOD.
+  subject moderated, regardless of title. ADR 0014 calls this HOD in the
+  interface; not done yet: the panel still lists the links under "Moderates".
 - The Director of Studies grant (`users.directs_studies`): institution-wide,
   allowing unlock of any assessment and term close. A school may grant it to
   more than one teacher; it is a capability, not a seat.
@@ -224,3 +230,9 @@ the PWA side.
 for separate kinds of account, not one account with two sign-ins. The panel's
 gate is now an active admin account (`canAccessPanel`), and the roster
 endpoints the PWA once had are removed: the panel is the roster's only writer.
+Unlocking left the panel for the app (The principle, above).
+
+In production the panel also requires an authenticator app at sign-in, with
+recovery codes; an admin account can change every school record, so a password
+alone is not enough. Local development skips it, so the demo admin signs in
+with a password only.

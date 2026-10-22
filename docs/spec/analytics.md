@@ -97,16 +97,17 @@ nothing about narrowing a query is specific to any one caller.
 
 ## Decline and attention
 
-The attention list (above) is already built: a mean below the pass mark.
-Decline is a different signal, not currently computed anywhere, and this
-file defines it: **a student is flagged as declining when their latest
+The attention list (above) is a mean below the pass mark. Decline is a
+different signal, computed by the server alongside it
+(`AnalyticsQueryService::declineList`), and this file defines it: **a student is flagged as declining when their latest
 scored percentage in scope is at least ten points below the mean of their
 own preceding scored percentages in that same scope**, and they have at
 least two scored outcomes to compare. One data point can't decline; it can
 only be low or not.
 
 Ten points is a constant, alongside `PASS_MARK_PCT`, until real usage
-suggests otherwise. This is a trend flag, not a one-off dip: comparing the
+suggests otherwise. Its mirror, a latest result at least ten points above the
+student's own earlier mean, lists the students who are improving. This is a trend flag, not a one-off dip: comparing the
 latest result to the single assessment before it would flag ordinary
 noise, a strong term followed by one merely average result, as a decline.
 Comparing it to the running mean of everything before it asks whether the
@@ -115,9 +116,9 @@ should mean.
 
 This is computable as a window function: the mean of every prior scored
 percentage for that student in scope, ordered by date, compared against
-the latest one. `docs/build-plan.md` item 1.4's seeder needs at least a few
-students whose planted scores actually fall this way, or the flag has
-nothing to find in the demo data.
+the latest one. The demo seeder (`docs/build-plan.md` item 1.4) plants twelve
+declining and twelve improving student-subject pairs, so both lists have
+something to find in the demo data.
 
 Net level movement, named in `docs/build-plan.md` item 4.1 as a use for
 window functions alongside trend, is this: for each student, each
@@ -139,7 +140,7 @@ Every figure in this file is computed once, server-side, as a SQL aggregate over
 the backend was chosen." There is no client implementation to keep equal to it
 and no second source of these numbers to drift from the first.
 
-Reports will be an online-only screen: `GET /api/reports/summary` called on
+Reports is an online-only screen: `GET /api/reports/summary` called on
 demand. This is a named, deliberate exception to AGENTS.md's zero-connectivity
 rule, not a quiet departure from it: AGENTS.md already carves out exactly
 this shape of exception for the assistant, and this file widens it to the
@@ -173,12 +174,18 @@ endpoint, so the dashboard's own stat tiles are unaffected.
 
 ## The assistant
 
+The assistant runs on the server (ADR 0013): each question is a call to
+`POST /api/reports/assistant` with the report's scope, and the server answers
+from the same figures this file defines, through tools that query them. Students
+reach the model as S1, S2, never by name. Where the server has no model key, the
+call says the assistant is unavailable and the dialog falls back to a stand-in.
+
 `AiDialog` never computes anything itself; it takes `report: AssistantReport`
 as a prop, handed down from whatever the screen already holds
-(`features/reports/AiDialog.tsx`). That's what lets its stand-in survive
-this section's decision with no client analytics code at all: it never
-needs to derive anything, only to read a
-`Summary`-shaped object already sitting in the screen's own state.
+(`features/reports/AiDialog.tsx`). That's what lets the stand-in work with no
+client analytics code at all: it never needs to derive anything, only to read a
+`Summary`-shaped object already sitting in the screen's own state, and it labels
+each answer as a stand-in.
 
 The dialog itself still needs a *current* connection to open, per
 AGENTS.md's rule, whether or not a report happens to be cached from
@@ -187,12 +194,10 @@ staying visible: a cached report can sit on screen while offline (Where
 figures are computed, above), but the dialog checks connectivity itself
 and shows its own offline state whenever it's down, rather than reading
 whatever's cached the moment a report exists. The reason isn't
-consistency for its own sake: once the real assistant exists, every
-question is its own live call to the server, so it will always need a
-connection at the moment of asking, not just at some earlier fetch.
-Letting the stand-in work offline off a cached report now would teach a
-habit the real assistant can't keep, so it doesn't get that habit to
-begin with.
+consistency for its own sake: every question is its own live call to the
+server, so it needs a connection at the moment of asking, not just at some
+earlier fetch. The stand-in follows the same rule, so the dialog behaves the
+same whichever answers it.
 
 The dialog's offline copy says so plainly: "The assistant runs on the server.
 Marking keeps working offline; reports and this dialog need a connection."
@@ -251,9 +256,9 @@ Marking keeps working offline; reports and this dialog need a connection."
    the flag, plus a refresh lock or `CONCURRENTLY` with a unique index.
    More machinery for the same number, worth it only once there's an
    actual latency problem to justify it, and there isn't a measured one:
-   how fast these queries run against realistic data is unknown until
-   `docs/build-plan.md` item 1.4's seeder exists and `EXPLAIN ANALYZE` can
-   run against it, which is a gap, not an assumption.
+   how fast these queries run against realistic data has not been measured.
+   The seeder (`docs/build-plan.md` item 1.4) now exists, so `EXPLAIN ANALYZE`
+   against it is the measurement still owed: a gap, not an assumption.
 
    The trigger, stated now rather than left vague: materialize a specific
    report query once its measured time against the seeded school exceeds
