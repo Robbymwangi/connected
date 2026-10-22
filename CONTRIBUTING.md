@@ -50,6 +50,22 @@ what.
    confirm. The bot comments; it does not block.
 3. Commit with a message whose first line says what changed and why in one sentence.
 
+## What a merge sets off
+
+While production is up, merging is releasing (ADR 0015):
+
+- Every merge to `main` deploys, once `check` has passed on it: the API first, then
+  the PWA. Migrations must stay additive, because devices on the previous frontend keep
+  talking to the new API until they reload.
+- A merge request that touches `infra/production/` or the `infra` workflow gets a
+  Terraform plan posted as a comment; merging it applies the change to production.
+  Read the plan before approving.
+
+While production is taken down, the **deploy** and **infra** workflows are disabled in
+GitHub, so merges release nothing. Leave them disabled until production is brought back
+([`infra/README.md`](infra/README.md)); enabling **infra** with production gone would
+rebuild it on the next merge that touches `infra/production/`.
+
 ## When a change needs everyone's dev database rebuilt
 
 A non-additive migration, new seed data, or a change to what the sync log must contain
@@ -71,6 +87,15 @@ defending at the examination, when it reverses an earlier one (ADR 0004 reversed
 hand-written service worker to Workbox and says why), or when a future contributor
 would otherwise reopen the question. A development environment choice is not an ADR;
 it belongs in the README.
+
+The Status line says where the decision stands:
+
+- **Proposed** while it is under discussion or not yet built.
+- **Accepted**, with the date, once the merge request that implements it merges. Name
+  that merge request.
+- When a later ADR changes a decision, the earlier ADR's Status names the later one and
+  which of its decisions it replaces ("Decisions 3 and 4 superseded by ADR 0014"). The
+  earlier text stays as written: it is the record of what was decided then and why.
 
 ## What is ours and what is a dependency
 

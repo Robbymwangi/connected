@@ -73,8 +73,10 @@ Laravel Sail for the containers.
 | Offline | Workbox via `vite-plugin-pwa`, IndexedDB | Precached shell; local store with a mutation outbox |
 | API | Laravel 13, Sanctum tokens, queues | JSON only in [`api/`](api/); not Inertia, not a monolith |
 | Database | PostgreSQL 18 | Client UUID keys, integer versions, soft deletes |
-| Files | S3-compatible object storage | Generated report PDFs |
+| Back office | Filament admin panel on the API | School setup, accounts, term calendar ([ADR 0009](docs/adr/0009-admin-panel.md), [ADR 0014](docs/adr/0014-roles-accounts-and-terms.md)) |
+| Files | S3-compatible object storage | Report card PDFs; RustFS locally |
 | Dev environment | Docker via Laravel Sail, Node 22 | API in containers, frontend native |
+| Production | AWS in Cape Town, as Terraform | [`infra/`](infra/) ([ADR 0015](docs/adr/0015-infrastructure-as-code.md)); currently taken down |
 
 The two halves are separate applications sharing one repository. Nothing at runtime
 crosses the client-server boundary except the JSON API.
@@ -82,9 +84,13 @@ crosses the client-server boundary except the JSON API.
 ## Repository layout
 
 ```
-api/         Laravel JSON API (compose.yaml lives here; run it through Sail)
-frontend/    React PWA (fixtures, service worker, own router and charts)
-docs/adr/    Architecture decision records, numbered
+api/         Laravel JSON API and admin panel (compose.yaml lives here; run it through Sail)
+frontend/    React PWA (local store, outbox, sync, service worker, own router and charts)
+docs/spec/   What the system does: data model, sync protocol, workflow, access, analytics
+docs/adr/    Architecture decision records, numbered: why it does it that way
+docs/build-plan.md   The work items, in order, and their state
+infra/       Terraform for production on AWS (bootstrap and production stacks)
+deploy/      What runs on the production host: the release script and the queue worker
 Makefile     Front door for setup and daily commands
 AGENTS.md    Rules for coding agents and humans: data rules, frontend rules, conventions
 ```
@@ -106,9 +112,21 @@ make dev       # frontend on http://localhost:5173
 ```
 
 The first `make setup` builds the Sail image and takes a few minutes. The API answers
-on http://localhost:8000 (`GET /api/user` returns 401 until you have a token; that is
-the success case). The admin panel is on http://localhost:8000/admin, for an
-administrator account (ADR 0009). Run `make` alone to list every target.
+on http://localhost:8000 (`GET /api/health` returns `{"ok":true}`). The admin panel is
+on http://localhost:8000/admin. Run `make` alone to list every target.
+
+### Signing in to the demo school
+
+The seeders create Green Valley, a demo school. Every password is `password`.
+
+| Account | Email | Signs in to |
+|---|---|---|
+| Admin | `admin@greenvalley.test` | the admin panel only |
+| Director of Studies, HOD for Maths and Science | `dos@greenvalley.test` | the app |
+| Class teachers of 4W, 4E, 5A, 5B | `j.otieno@`, `m.achieng@`, `p.kariuki@`, `e.chebet@greenvalley.test` | the app |
+
+Admin and teacher accounts are separate kinds, and each door refuses the other
+([ADR 0014](docs/adr/0014-roles-accounts-and-terms.md)).
 
 ### Day to day
 
@@ -211,7 +229,13 @@ nvm, and `make` from your package manager. Then `make setup`.
 
 ## Documentation
 
-- [`AGENTS.md`](AGENTS.md): Built for AI agents to better understand the project
-- [`CONTRIBUTING.md`](CONTRIBUTING.md): Collaboration conventions followed by the project
+- [`AGENTS.md`](AGENTS.md): the rules of the code, written for coding agents and
+  humans alike, and the project's current stage.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): how we work: branches, merge requests, reviews,
+  and ADRs.
+- [`docs/spec/`](docs/spec/): what the system does, one area per file.
 - [`docs/adr/`](docs/adr/): why things are the way they are, one decision per file.
+- [`docs/build-plan.md`](docs/build-plan.md): the work items and their state.
+- [`infra/README.md`](infra/README.md): production: setting it up, deploying, taking it
+  down, and bringing it back.
 

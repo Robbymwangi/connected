@@ -62,7 +62,7 @@ frontend/node_modules: frontend/package-lock.json
 
 # --- API (Docker) ---------------------------------------------------------------
 
-up: ## Start the API, Postgres, and the queue worker (rebuilds the dev data if the epoch moved)
+up: ## Start the API, Postgres, RustFS, and the queue worker (rebuilds the dev data if the epoch moved)
 	cd api && $(SAIL) up -d
 	@$(MAKE) --no-print-directory api-epoch
 
