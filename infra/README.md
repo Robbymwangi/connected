@@ -8,7 +8,11 @@ Production on AWS, as Terraform (ADR 0015). Two stacks:
   (RDS), the two S3 buckets, CloudFront, the settings in Parameter Store, and a budget alarm.
   Planned on merge requests and applied on merge by `.github/workflows/infra.yml`.
 
-Region: `af-south-1` (Cape Town). Rough cost: $35 to $50 a month.
+Region: `af-south-1` (Cape Town). Rough cost: $40 to $50 a month while it runs.
+
+**Current state:** production is taken down (October 2026), and the **deploy** and **infra**
+workflows are disabled in GitHub. The bootstrap stack is still in place. To bring production
+back, follow [Taking production down, and bringing it back](#taking-production-down-and-bringing-it-back).
 
 ## What you need
 
@@ -79,6 +83,20 @@ To roll back, re-run the `deploy` workflow of an earlier merge from the Actions 
 The first deploy needs production to exist, so merge nothing that triggers it before step 3
 has finished.
 
+### 5. The school (once, on the host)
+
+A fresh production database has no school in it. Open a shell on the host (Day to day,
+below) and create the school and its first administrator:
+
+```bash
+sudo -u www-data php /var/www/connected/current/api/artisan connected:provision-school
+```
+
+It asks for the school's name, the administrator's name and email, and a password of at least
+12 characters. That administrator then signs in at `<app_url>/admin`, sets up an authenticator
+app (production requires one), and enters everything else there: subjects, classes, teachers,
+students, and the term calendar. No demo data is ever seeded in production.
+
 To read production's outputs or plan from your machine:
 
 ```bash
@@ -137,7 +155,7 @@ the same for **infra**.
 AWS (`aws sso login`), with the `terraform.tfvars` from the first setup:
 
 ```bash
-export AWS_PROFILE=<your profile>
+export AWS_PROFILE=ConnectED
 terraform init -backend-config="bucket=<the state_bucket output>"
 terraform apply  -var allow_destroy=true   # expect only the database and the two buckets to change
 terraform destroy -var allow_destroy=true  # everything; CloudFront takes about 15 minutes
@@ -156,8 +174,8 @@ next normal one.
    app address changes: CloudFront issues a new one, shown as `app_url` at the end of the apply.
 3. Enable the **deploy** workflow and run it by hand the same way. It deploys `main` to the new
    host, once `check` has passed on that commit.
+4. Provision the school again (step 5 of the first setup) and set it up in the admin panel.
+   The database is new; the old data is only in the snapshot, if you kept it.
 
-Run them by hand rather than re-running an old run: GitHub allows a re-run for only 30 days, and
-a re-run replays that run's own commit, not `main`.
-4. Provision the school again (`connected:provision-school`, as in the first setup) and set it
-   up in the admin panel.
+Run the workflows by hand rather than re-running an old run: GitHub allows a re-run for only 30
+days, and a re-run replays that run's own commit, not `main`.
