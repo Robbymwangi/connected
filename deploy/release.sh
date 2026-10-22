@@ -21,6 +21,15 @@ AWS=/snap/bin/aws
 
 test -d "$RELEASE/api" || { echo "no release at $RELEASE" >&2; exit 1; }
 
+# 0. No release goes live on a PHP with a known remote code execution hole. 8.4.27 carries the
+#    fixes for CVE-2026-109618 and CVE-2026-109619; raise it when a later advisory says to.
+MIN_PHP=8.4.27
+if ! php -r 'exit(version_compare(PHP_VERSION, $argv[1], ">=") ? 0 : 1);' -- "$MIN_PHP"; then
+    echo "PHP $(php -r 'echo PHP_VERSION;') is older than $MIN_PHP; update it on the host" \
+        "(apt-get update && apt-get install --only-upgrade 'php8.4-*') and deploy again" >&2
+    exit 1
+fi
+
 # 1. Settings: every parameter under /connected/production/ becomes a line of .env, apart from the
 #    two only this script needs; then the database password from Secrets Manager.
 params=$($AWS ssm get-parameters-by-path --path "$PREFIX" --with-decryption --recursive --output json)
@@ -82,6 +91,7 @@ nginx -t
 cp "$RELEASE/deploy/connected-queue.service" /etc/systemd/system/connected-queue.service
 systemctl daemon-reload
 systemctl enable --quiet connected-queue
+install -m 644 "$RELEASE/deploy/apt-auto-upgrades.conf" /etc/apt/apt.conf.d/52connected-auto-upgrades
 
 # 5. The switch: one atomic rename. If anything after it fails, `current` goes back to the release
 #    that was serving before (none on the very first deploy), which still works against the
