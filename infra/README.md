@@ -176,6 +176,10 @@ next normal one.
    host, once `check` has passed on that commit.
 4. Provision the school again (step 5 of the first setup) and set it up in the admin panel.
    The database is new; the old data is only in the snapshot, if you kept it.
+5. Check the host takes PHP's security updates (from a shell on it, Day to day):
+   `sudo unattended-upgrade --dry-run --debug 2>&1 | grep -i "allowed origins"` lists
+   `o=LP-PPA-ondrej-php` among them. The deploy refuses to go live on a PHP older than the
+   floor in `deploy/release.sh` and says how to update it.
 
 Run the workflows by hand rather than re-running an old run: GitHub allows a re-run for only 30
 days, and a re-run replays that run's own commit, not `main`.
