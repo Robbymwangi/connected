@@ -70,6 +70,7 @@ class UserResource extends Resource
                 TextColumn::make('name')->searchable()->sortable(),
                 TextColumn::make('email')->searchable(),
                 IconColumn::make('directs_studies')->label('DOS')->boolean(),
+                TextColumn::make('subjectModerations.subject.name')->label('HOD of')->badge()->placeholder('None'),
                 TextColumn::make('deactivated_at')
                     ->label('Status')
                     ->formatStateUsing(fn ($state) => $state === null ? 'Active' : 'Deactivated')

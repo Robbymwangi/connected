@@ -149,8 +149,8 @@ Every teacher account, by default, can read everything and grade anything (The
 principle, above). On top of that, it may hold:
 
 - Zero or more subject-moderation links (Moderation, above): one link per
-  subject moderated, regardless of title. ADR 0014 calls this HOD in the
-  interface; not done yet: the panel still lists the links under "Moderates".
+  subject moderated, regardless of title. The interface calls this HOD (ADR
+  0014): the panel's "Head of department" section on a teacher.
 - The Director of Studies grant (`users.directs_studies`): institution-wide,
   allowing unlock of any assessment and term close. A school may grant it to
   more than one teacher; it is a capability, not a seat.
