@@ -8,7 +8,7 @@ Accepted.
 
 ## Context
 
-CLAUDE.md requires an integer `version` on every synchronisable record, incremented
+CLAUDE.md (now `AGENTS.md`) requires an integer `version` on every synchronisable record, incremented
 server-side, with conflicts detected by a stale base version and never by comparing
 timestamps: clock skew across teacher devices makes wall-clock comparison unsound.
 

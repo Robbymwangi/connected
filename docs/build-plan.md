@@ -23,6 +23,30 @@ architecture decision records, because those have to be defended orally by their
 author. And every item lands on its own branch behind a merge request, so the
 commit history shows the build sequence rather than a single drop.
 
+## Status
+
+As of 22 October 2026. The items below keep their original briefs; this table says
+where each one stands.
+
+| Item | State |
+|---|---|
+| 0.1 ADR 0000 | Done |
+| 0.2 ADR 0006 | Done, written up 22 October; its evidence waits on 5.1 |
+| 0.3 ADR 0007 | Done |
+| 0.4 to 0.8 the five specs | Done, updated to the built system 22 October |
+| 1.1 to 1.9 foundations | Done |
+| 2.1 Read endpoints | Done |
+| 2.2 Write endpoints and policies | Done; the roster writes later moved to the admin panel (ADR 0014) |
+| 2.3 Finalize and unlock | Done; unlock is a Director of Studies' or HOD's call in the app (ADR 0014) |
+| 3.1 to 3.4 sync: pull, push, local store, outbox | Done |
+| 3.5 Conflict resolution UI | Done, except the two timestamp anomaly flags (`docs/spec/sync-protocol.md`) |
+| 4.1 to 4.5 analytics, dashboard, comments, report cards, assistant | Done |
+| 5.1 Distributed-systems simulation | **Not started** |
+| 5.2 Deployment | Done; deployed, then taken down to save cost (`infra/README.md`) |
+| 5.3 Hardening | **In part**: offline and sync paths have Playwright coverage in CI, and the host takes PHP security updates (#190). Still to do: Playwright in `make check`, and a hardening pass |
+| 5.4, 5.5 Admin panel | Done, widened to school setup (#184) |
+| 5.6 Admin panel: unlock action | **Dropped**: ADR 0014 moved unlocking to the app |
+
 ---
 
 ## Phase 0: the handover package
@@ -349,7 +373,7 @@ a SQL tool or any tool beyond the report's own figures.
 
 ## Phase 5: parallel and closing
 
-**5.1 Distributed-systems simulation**
+**5.1 Distributed-systems simulation** (not started)
 Standalone Python, outside the application stack. Trace generator producing
 synthetic edit events with known ground truth; a naive last-writer-wins resolver
 keyed on physical timestamps; a vector-clock resolver with element-wise merge and
@@ -422,7 +446,8 @@ deactivating the person.
   enrolments by year, and its subject teachers. A criterion with marks
   keeps its maximum and cannot be removed; every removal is a soft delete.
 
-**5.6 Admin panel: unlock action**
+**5.6 Admin panel: unlock action** (dropped: ADR 0014 decision 3 moved unlocking to the
+app, for a Director of Studies or the subject's HOD; the brief below is kept as written)
 A Filament custom Action on the assessment resource, a form modal with one
 required note field, calling the same model method 2.3 builds for unlocking
 rather than reimplementing the rule a second time.

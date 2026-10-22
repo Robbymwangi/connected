@@ -4,7 +4,8 @@ Date: 2026-10-09
 
 ## Status
 
-Proposed.
+Accepted 2026-10-09. Implemented by `docs/build-plan.md` 3.4, slices 1 to 5b (#130 to
+#137).
 
 ## Context
 

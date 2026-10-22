@@ -4,7 +4,9 @@ Date: 2026-10-01
 
 ## Status
 
-Accepted.
+Accepted. Decisions 3 (one account, two sign-ins) and 4 (admin exclusivity is social)
+superseded by ADR 0014, which also narrows decision 7 (the panel's scope); see ADR 0014
+decision 7 for the scope as built. The text below stays as decided on 2026-10-01.
 
 ## Context
 
