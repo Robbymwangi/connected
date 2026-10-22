@@ -4,7 +4,8 @@ Date: 2026-10-12
 
 ## Status
 
-Proposed. Decision 4 is provisional: it stands until the advisory on sending student
+Accepted 2026-10-13, implemented by #160; decision 7 added 2026-10-14 and implemented by
+#178. Decision 4 is provisional: it stands until the advisory on sending student
 data to a model provider (Angaza, or the lecturer coordinator) is received, and
 changes with it (Consequences).
 
@@ -32,8 +33,9 @@ ADR narrows it for the assistant (decision 4).
 
 1. **The assistant reads the analytics service, never the database.** It is given a
    small set of read-only tools, each a thin wrapper over `AnalyticsQueryService`:
-   the summary, the trend, the criterion breakdown, the attention list, and one
-   student's outcomes, and since decision 7 the ten that answer broader questions.
+   the summary, the trend, the criterion breakdown, the attention list, the decline
+   list, and one student's outcomes, and since decision 7 the ten that answer broader
+   questions: sixteen in all.
    There is no SQL tool and no table is described to the model. Every tool runs with
    the asking teacher's institution (the global scope) and starts from the scope and
    filters of the report on screen fixed by the server; the model may narrow within

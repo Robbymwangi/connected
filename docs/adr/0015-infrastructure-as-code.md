@@ -4,7 +4,9 @@ Date: 2026-10-18
 
 ## Status
 
-Proposed. Amends `docs/build-plan.md` item 5.2: the API deploys on every merge to `main`
+Accepted 2026-10-20, implemented by #180 and #181, with the take-down switch in #185.
+Production was deployed and then taken down to save cost; `infra/README.md` has its
+current state. Amends `docs/build-plan.md` item 5.2: the API deploys on every merge to `main`
 rather than behind a manual trigger, and the AWS resources are code rather than console
 steps.
 

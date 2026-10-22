@@ -4,7 +4,8 @@ Date: 2026-10-13
 
 ## Status
 
-Proposed. Supersedes ADR 0009 decisions 3 (one account, two sign-ins) and 4 (admin
+Accepted 2026-10-13, implemented by merge requests 1 to 4 (#166, #167, #168, #170).
+Decision 7 widened 2026-10-20 by #184 (below). Supersedes ADR 0009 decisions 3 (one account, two sign-ins) and 4 (admin
 exclusivity is social) and narrows its decision 7 (the panel's scope). Promotes
 `docs/spec/data-model.md` decision 3 (term is a value, not a table), as that decision
 already accepts in advance. Changes who may close a term under ADR 0012, not what a
@@ -116,6 +117,11 @@ principal signs. Titles vary between schools; the functions do not.
    classes, including who is class teacher; teacher accounts, including deactivation,
    token revocation, HOD links, and the DOS grant; admin accounts; and the term
    calendar (decision 4). No academic act: no unlock, no term close, no comments.
+
+   *Widened 2026-10-20 (#184):* subjects and their marking criteria, the subjects each
+   class offers, and who teaches each subject in each class. A school set up from
+   nothing in production had no other way to get them; only the demo seeder made them.
+   These are school setup, not academic acts, so the last sentence above still holds.
 
 ## What was considered
 

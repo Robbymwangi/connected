@@ -63,7 +63,8 @@ teachers is a moderation matter.
 - Proposals and acceptances are outbox entries; the server applies an acceptance
   against the conflict's base version like any other write.
 - Roles are needed: for now a `canModerate` flag on the user fixture; the real role
-  model comes with authentication.
+  model comes with authentication. *Since built:* moderation is per subject, from
+  `subject_moderations` through `GET /me`, and the flag is gone (clarification 1 below).
 - The marking grid's conflict dialog and the Sync screen share one set of actions,
   so the policy cannot drift between them.
 - If the agreement flow proves unworkable in practice, this decision is superseded by
