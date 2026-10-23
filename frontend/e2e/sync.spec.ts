@@ -107,7 +107,7 @@ test.describe('reconciling offline edits with no clicks', () => {
 
 
 /* A conflict between two teachers over one mark, in the shape the server pulls it. */
-async function conflictChanges(sides: { a: string; b: string }): Promise<E2ESyncChange[]> {
+async function conflictChanges(sides: { a: string; b: string }, sideBTimes: Record<string, string> = {}): Promise<E2ESyncChange[]> {
   const markId = await markIdFor('a1', 'student-1', 'criterion-1')
   const side = (editId: string, userId: string, who: string, scoreValue: number) => (
     { editId, userId, who, markKind: 'score', score: scoreValue, at: '2026-10-08T09:00:00Z' }
@@ -120,7 +120,7 @@ async function conflictChanges(sides: { a: string; b: string }): Promise<E2ESync
       fields: {
         markId, baseVersion: 1,
         sideA: side('edit-a', sides.a, sides.a === E2E_USER.id ? E2E_USER.name : 'Ms. Akinyi', 12),
-        sideB: side('edit-b', sides.b, sides.b === E2E_USER.id ? E2E_USER.name : 'Mr. Otieno', 15),
+        sideB: { ...side('edit-b', sides.b, sides.b === E2E_USER.id ? E2E_USER.name : 'Mr. Otieno', 15), ...sideBTimes },
         proposals: [], referral: null, resolution: null, resolvedAt: null,
       },
     },
@@ -140,6 +140,19 @@ const outboxEntries = (page: Page) => page.evaluate(async () => {
   })
   database.close()
   return rows
+})
+
+test('a side whose device clock does not add up is flagged beside that side, and the other is not', async ({ page }) => {
+  // Mr. Otieno's device says 14:00, but the server received his edit at 09:05: off by hours.
+  await signIn(page, await conflictChanges(
+    { a: E2E_USER.id, b: 'teacher-otieno' },
+    { at: '2026-10-08T14:00:00Z', receivedAt: '2026-10-08T09:05:00Z', baseReceivedAt: '2026-10-08T08:00:00Z' },
+  ))
+
+  await page.goto('/sync')
+  const flag = page.getByTestId('clock-anomaly')
+  await expect(flag).toHaveCount(1)
+  await expect(flag).toHaveText(/Device time is after the server received this edit/)
 })
 
 test.describe('settling a conflict', () => {

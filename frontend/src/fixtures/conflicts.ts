@@ -16,6 +16,9 @@ export type ConflictSide = {
   at: string
   /* When the server received it, on its own clock; absent only on fixtures. */
   receivedAt?: string
+  /* When the server received the version this edit was made from: only on the incoming side
+     of a conflict, and only for one recorded since it was added. Feeds the clock check. */
+  baseReceivedAt?: string
 }
 
 /* What a resolution settles on: one of the two edits, or a corrected mark. A choice

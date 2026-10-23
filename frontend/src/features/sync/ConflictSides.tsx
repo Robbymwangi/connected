@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
+import { TriangleAlert } from 'lucide-react'
 import type { ConflictSide } from '../../fixtures/conflicts'
+import { CLOCK_ANOMALY_TEXT, clockAnomalies } from '../../lib/clockAnomalies'
 import { formatMark, type Mark } from '../../lib/grading'
 import { formatDateTime } from '../../lib/time'
 
@@ -29,13 +31,17 @@ type ValueBlockProps = {
   mark: Mark
   at?: string
   receivedAt?: string
+  baseReceivedAt?: string
   emphasis: Emphasis
 }
 
 /* One value in a conflict: whose, what, when. Label and colour together. "When" is the
    server's receipt time, shown plainly, then the device's own claim, always labelled as
-   the device's (docs/spec/sync-protocol.md, "Display discipline"). */
-export function ValueBlock({ label, mark, at, receivedAt, emphasis }: ValueBlockProps) {
+   the device's (docs/spec/sync-protocol.md, "Display discipline"). A device time that does
+   not add up against the server's is flagged here, beside the value it belongs to, not as a
+   notice of its own. */
+export function ValueBlock({ label, mark, at, receivedAt, baseReceivedAt, emphasis }: ValueBlockProps) {
+  const anomalies = at ? clockAnomalies({ at, receivedAt, baseReceivedAt }) : []
   return (
     <div className={`rounded-xl border px-3 py-3 ${BOX[emphasis]}`}>
       <p className={`mb-2 truncate text-[10px] font-semibold tracking-wider uppercase ${LABEL[emphasis]}`}>
@@ -50,6 +56,12 @@ export function ValueBlock({ label, mark, at, receivedAt, emphasis }: ValueBlock
           Device time {formatDateTime(at)}
         </p>
       )}
+      {anomalies.map((anomaly) => (
+        <p key={anomaly} data-testid="clock-anomaly" className="mt-1.5 flex items-start gap-1 text-[10px] leading-snug text-warning">
+          <TriangleAlert className="mt-px size-3 shrink-0" aria-hidden="true" />
+          {CLOCK_ANOMALY_TEXT[anomaly]}
+        </p>
+      ))}
     </div>
   )
 }
@@ -65,8 +77,8 @@ type ConflictSidesProps = {
 export function ConflictSides({ mine, theirs, mineEmphasis, theirsEmphasis, children }: ConflictSidesProps) {
   return (
     <div className={`grid gap-2 px-4 py-3 ${children ? 'grid-cols-3' : 'grid-cols-2'}`}>
-      <ValueBlock label={mine.who} mark={mine.mark} at={mine.at} receivedAt={mine.receivedAt} emphasis={mineEmphasis} />
-      <ValueBlock label={theirs.who} mark={theirs.mark} at={theirs.at} receivedAt={theirs.receivedAt} emphasis={theirsEmphasis} />
+      <ValueBlock label={mine.who} mark={mine.mark} at={mine.at} receivedAt={mine.receivedAt} baseReceivedAt={mine.baseReceivedAt} emphasis={mineEmphasis} />
+      <ValueBlock label={theirs.who} mark={theirs.mark} at={theirs.at} receivedAt={theirs.receivedAt} baseReceivedAt={theirs.baseReceivedAt} emphasis={theirsEmphasis} />
       {children}
     </div>
   )

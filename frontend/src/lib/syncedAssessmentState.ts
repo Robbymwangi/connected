@@ -82,6 +82,7 @@ function sideFromWire(value: unknown, names: Map<string, string>): ConflictSide 
     mark,
     at: text(side, 'at'),
     ...(text(side, 'receivedAt') ? { receivedAt: text(side, 'receivedAt') } : {}),
+    ...(text(side, 'baseReceivedAt') ? { baseReceivedAt: text(side, 'baseReceivedAt') } : {}),
   }
 }
 

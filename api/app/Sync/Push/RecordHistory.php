@@ -48,6 +48,25 @@ final class RecordHistory
         ])->all());
     }
 
+    /* When the server received one version of a record: the change-log row that wrote it, formatted as above.
+       Null for version 0, which no write produced, and where the log has no row for it. */
+    public static function receivedAt(Model $record, int $version): ?string
+    {
+        if ($version < 1) {
+            return null;
+        }
+
+        return SyncChange::query()
+            ->selectRaw(<<<'SQL'
+                to_char(received_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as received_at_utc
+                SQL)
+            ->where('table', $record->getTable())
+            ->where('record_id', $record->getKey())
+            ->where('version', $version)
+            ->orderBy('seq')
+            ->value('received_at_utc');
+    }
+
     /**
      * The versions present, in order.
      *
