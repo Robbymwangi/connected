@@ -72,6 +72,10 @@ test('two devices edit one cell with different values: a conflict, the cell unch
     ]);
     expect($conflict['side_b']['receivedAt'])->toMatch(UTC_STAMP);
     expect($conflict['side_b']['receivedAt'] >= $conflict['side_a']['receivedAt'])->toBeTrue();
+    // When the server received the version side B was edited from, for the anomaly check
+    // (docs/spec/sync-protocol.md, Audit timestamps). Side A's own base is not known.
+    expect($conflict['side_b']['baseReceivedAt'])->toBe(loggedAt($g['mark']->id, 1));
+    expect($conflict['side_a'])->not->toHaveKey('baseReceivedAt');
 
     expect(DB::table('sync_mutations')->where('id', $entry['id'])->value('conflict_id'))->toBe($conflict['id']);
 });
@@ -147,6 +151,8 @@ test('two devices create one cell with different values: a conflict at base 0, s
     expect($conflict['base_version'])->toBe(0);
     expect($conflict['side_a'])->toMatchArray(['editId' => $first['id'], 'userId' => $g['teacher']->id, 'score' => 5]);
     expect($conflict['side_b'])->toMatchArray(['editId' => $second['id'], 'userId' => $b->id, 'score' => 7]);
+    // A create has no earlier version to have been edited from.
+    expect($conflict['side_b']['baseReceivedAt'])->toBeNull();
 });
 
 test('two devices create one cell with the same value: accepted, credit to the first, an auto conflict', function () {

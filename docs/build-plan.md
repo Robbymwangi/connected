@@ -39,7 +39,7 @@ where each one stands.
 | 2.2 Write endpoints and policies | Done; the roster writes later moved to the admin panel (ADR 0014) |
 | 2.3 Finalize and unlock | Done; unlock is a Director of Studies' or HOD's call in the app (ADR 0014) |
 | 3.1 to 3.4 sync: pull, push, local store, outbox | Done |
-| 3.5 Conflict resolution UI | Done, except the two timestamp anomaly flags (`docs/spec/sync-protocol.md`) |
+| 3.5 Conflict resolution UI | Done, with the two timestamp anomaly flags added 23 October |
 | 4.1 to 4.5 analytics, dashboard, comments, report cards, assistant | Done |
 | 5.1 Distributed-systems simulation | **Not started** |
 | 5.2 Deployment | Done; deployed, then taken down to save cost (`infra/README.md`) |
