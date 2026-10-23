@@ -735,8 +735,8 @@ honestly, and this file's whole offline-first premise means that has to
 stay unremarkable. What's worth flagging as an anomaly for whoever
 audits a conflict later, to look into rather than take as proof of
 anything, is narrower, and both checks allow the same skew tolerance,
-proposed at five minutes pending team agreement on the actual number,
-applied identically to both, since `at` comes from a device clock this
+five minutes (`CLOCK_TOLERANCE_MS` in `lib/clockAnomalies.ts`, a starting
+value rather than a measurement), applied identically to both, since `at` comes from a device clock this
 spec already treats as untrustworthy: a clock that's merely wrong by
 more than the tolerance can trip either check on a perfectly honest
 edit, so neither check proves a lie, only that something about this
@@ -752,9 +752,15 @@ claim doesn't add up and is worth a look:
 
 Both flags are derived when the row is read for display (3.5), not stored
 on it; they're a function of two timestamps already on record, not a new
-fact that needs its own column. **Not built yet:** the Sync screen shows
-`receivedAt` and the device's `at` on each side, labelled as below, but
-derives neither flag. The five-minute tolerance was never agreed either.
+fact that needs its own column. What the second check needs is on record
+as follows: a conflict's side B (the incoming write) carries
+`baseReceivedAt`, the `receivedAt` of the change-log row at the
+conflict's `baseVersion`, copied in when the conflict is raised; null at
+`baseVersion: 0`. Side A carries none, because no record keeps the base
+its write was sent against, so only the first check applies to it, and a
+conflict raised before `baseReceivedAt` existed gets only the first check
+on both sides. Built: `lib/clockAnomalies.ts` derives both, and the Sync
+screen and the grid's conflict dialog show each flag beside its side.
 
 **Be honest about what these two checks are for.** They catch an honest
 clock mistake (wrong timezone, a device that never had NTP), not a

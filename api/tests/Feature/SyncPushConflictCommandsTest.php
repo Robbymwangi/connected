@@ -878,6 +878,11 @@ test('a resolution against a mark that has moved is recorded, leaves the mark, a
     expect($follow['side_a'])->toMatchArray(['editId' => $moveEntry['id'], 'userId' => $mover->id, 'markKind' => 'score', 'score' => 7]);
     expect($follow['side_b'])->toMatchArray(['editId' => $id, 'userId' => $b->id, 'markKind' => 'score', 'score' => 9, 'at' => '2026-10-07T13:00:00Z']);
     expect($follow['side_b']['receivedAt'])->toMatch(COMMAND_STAMP);
+    // The chosen value was decided against version 2, the one the moderator saw.
+    expect($follow['side_b']['baseReceivedAt'])->toBe(DB::selectOne(<<<'SQL'
+        select to_char(received_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as stamp
+        from sync_changes where record_id = ? and version = 2
+        SQL, [$g['mark']->id])->stamp);
 
     // Its parties are told, and the command's own outcome names no conflict.
     foreach ([$mover, $b] as $party) {

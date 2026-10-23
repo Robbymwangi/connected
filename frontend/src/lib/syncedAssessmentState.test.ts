@@ -99,7 +99,7 @@ describe('mapSyncedAssessmentState', () => {
       conflicts: [{
         id: 'conflict-1', version: 1, markId: 'mark-1', baseVersion: 1,
         sideA: { editId: 'edit-1', userId: 'teacher-1', who: 'Teacher One', markKind: 'score', score: 12, at: '2026-05-12T09:00:00Z', receivedAt: '2026-05-12T09:05:00Z' },
-        sideB: { editId: 'edit-2', userId: 'teacher-2', who: 'Teacher Two', markKind: 'absent', score: null, at: '2030-01-01T00:00:00Z' },
+        sideB: { editId: 'edit-2', userId: 'teacher-2', who: 'Teacher Two', markKind: 'absent', score: null, at: '2030-01-01T00:00:00Z', baseReceivedAt: '2026-05-12T08:00:00Z' },
         proposals: [{ byId: 'teacher-1', by: 'Teacher One', choice: { kind: 'side', editId: 'edit-1' }, note: 'I saw the script', at: '2026-05-12T10:00:00Z', receivedAt: '2026-05-12T10:01:00Z' }],
         referral: null, resolution: null, resolvedAt: null,
       }],
@@ -109,6 +109,8 @@ describe('mapSyncedAssessmentState', () => {
     expect(state.conflicts[0].theirs).toMatchObject({ at: '2026-05-12T09:00:00Z', receivedAt: '2026-05-12T09:05:00Z' })
     expect(state.conflicts[0].mine.at).toBe('2030-01-01T00:00:00Z')
     expect(state.conflicts[0].mine).not.toHaveProperty('receivedAt')
+    expect(state.conflicts[0].mine.baseReceivedAt).toBe('2026-05-12T08:00:00Z')
+    expect(state.conflicts[0].theirs).not.toHaveProperty('baseReceivedAt')
     expect(state.conflicts[0].proposals[0]).toMatchObject({ at: '2026-05-12T10:00:00Z', receivedAt: '2026-05-12T10:01:00Z' })
   })
 

@@ -20,7 +20,11 @@ use Ramsey\Uuid\Uuid;
 
    Each side is flat: editId, userId, who, markKind, score, at, receivedAt. `at` is the
    device's own claim, shown as information only. `receivedAt` is the server's own clock for
-   when it saw that write, which is what an auditor checks `at` against.
+   when it saw that write, which is what an auditor checks `at` against. Side B also carries
+   baseReceivedAt, when the server received the version it was edited from (the conflict's
+   base), for the second timestamp anomaly check (docs/spec/sync-protocol.md, Audit
+   timestamps); null at base 0. Side A has none: no record keeps the base its write was sent
+   against, so only the first check applies to it.
 
    Side A's producer is found by link: sync_mutations.change_seq names the change-log row a
    mutation wrote. A write that is not a sync mutation (a resolution's write, a server write,
@@ -50,7 +54,7 @@ final class MarkConflicts
             // The version side A produced: what a resolution measures "has the mark moved since" against.
             'mark_version' => $record->version,
             'side_a' => $this->producerSide($record, $history),
-            'side_b' => $sideB,
+            'side_b' => [...$sideB, 'baseReceivedAt' => RecordHistory::receivedAt($record, $baseVersion)],
             'proposals' => [],
             'referral' => null,
             'resolution' => $auto ? ['kind' => 'auto'] : null,
