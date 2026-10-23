@@ -100,6 +100,17 @@ jobs:
         env:
           APP_ENV: production
 
+  # The distributed-systems simulation (docs/build-plan.md 5.1): standard library only,
+  # so its tests need nothing installed beyond Python.
+  simulation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: make sim-test
+
   # Not one of the required checks unless the branch ruleset says so. Fails a merge
   # request that edits or deletes an existing migration, or touches a seeder, without
   # bumping api/database/DEV_DATA_EPOCH, since `make up` rebuilds each machine's dev
