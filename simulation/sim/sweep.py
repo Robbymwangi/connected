@@ -133,7 +133,7 @@ def _half_width(values: list[float]) -> float:
 def write_csv(path: Path, items: list) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=[x.name for x in fields(items[0])])
+        writer = csv.DictWriter(f, fieldnames=[x.name for x in fields(items[0])], lineterminator="\n")
         writer.writeheader()
         writer.writerows(asdict(x) for x in items)
 
