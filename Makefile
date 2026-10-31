@@ -64,6 +64,9 @@ frontend/node_modules: frontend/package-lock.json
 
 up: ## Start the API, Postgres, RustFS, and the queue worker (rebuilds the dev data if the epoch moved)
 	cd api && $(SAIL) up -d
+	@# The admin panel's theme and fonts (AdminPanelProvider::boot) are copied into public/ by
+	@# Composer, which reruns only when the manifests change; a new asset would otherwise be missing.
+	cd api && $(SAIL) artisan filament:assets --no-interaction
 	@$(MAKE) --no-print-directory api-epoch
 
 down: ## Stop them (data kept)
