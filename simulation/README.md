@@ -51,8 +51,26 @@ right. A value replaced by someone who *had* seen it is a correction, not a conf
 
 - **Last writer wins (device clocks).** Keeps whichever value carries the later device
   timestamp. Never raises a conflict.
-- *Next step:* this system's own rules (server versions, `docs/spec/sync-protocol.md`)
-  and vector clocks.
+- **Server versions (this system).** The rules of `docs/spec/sync-protocol.md`, POST /sync
+  rules 2 to 4, for a mark. The server keeps one integer per cell and raises it only when
+  the value changes. A device sends the version it last pulled with its edit: at the
+  current version the edit is applied; behind it with the same value nothing changes (the
+  "auto" conflict, which needs nobody); behind it with a different value it is a conflict,
+  the cell keeps its value, and a person decides. Two offline creates of one cell meet the
+  same way, since both are sent at version 0.
+- **Vector clocks.** The textbook alternative with no central counter. Every value carries
+  one counter per device that has edited the cell; a device's edit takes the merge of every
+  vector it pulled and adds one to its own. A value that covers another replaces it;
+  concurrent values that differ are a conflict, kept side by side as siblings (as Dynamo
+  does) until a person settles them.
+
+What a device sends is never read from a clock or a true time. Each resolver keeps a
+history of what it held for each cell, and the device's base version or vector is that
+history read back at the device's last sync: exactly what it pulled.
+
+A mark's kind and score move together, so a cell here is one field, and the field-level
+merge of rule 4 never arises: a stale base always overlaps. That merge matters for other
+tables; this simulation does not test it.
 
 ## What is measured (`sim/score.py`)
 
@@ -61,6 +79,14 @@ right. A value replaced by someone who *had* seen it is a correction, not a conf
   clock that ran ahead (a **reversal**).
 - **Caught, missed, false alarms:** real conflicts raised, real conflicts not raised, and
   conflicts raised that were not real.
+- **Covered:** the part of "missed" that loses nothing. Every value the edit disagreed with
+  unseen either repeats a value its device had seen in that cell (typed again by someone
+  else; the value itself was knowingly replaced), or was already raised as a conflict and
+  is waiting for a person. Nobody settles conflicts in the simulation, so a raised conflict
+  stays waiting.
+- **Metadata:** how many numbers each resolver keeps per cell to decide, on average and at
+  most. A vector's entries are each a device identity and a counter, so this undercounts
+  its size.
 
 ## First result, and what it changes
 
@@ -80,3 +106,35 @@ together than the clocks are wrong, and in a term of marking they are usually da
 apart. So the case against device timestamps here is less "bad clocks reorder edits"
 than "a timestamp can only ever pick a winner; it can never tell you that two people
 disagreed". Final figures, over many seeds, come with the sweep.
+
+## Second result: this system and vector clocks
+
+The same term, seed 1, now with all three resolvers. Neither of the new two reads a clock,
+and their figures are identical at every clock error, so one row each stands for all four
+(a test holds them to that):
+
+| Clock error up to | Resolver | Real conflicts caught | Missed (covered) | Lost | Reversals | Numbers per cell (most) |
+|---|---|---|---|---|---|---|
+| any | Server versions (this system) | 173 of 175 | 2 (2) | 0 | 0 | 1 |
+| any | Vector clocks | 175 of 175 | 0 | 0 | 0 | 1.09 (3) |
+| none | Last writer wins | 0 of 175 | 175 | 173 | 0 | 1 |
+| 1 week | Last writer wins | 0 of 175 | 175 | 181 | 7 | 1 |
+
+A busier term (half of sittings get a cover teacher, one cell in five corrected) gives the
+same picture: this system catches 377 of 383, misses 6, all covered, and loses nothing;
+vector clocks catch all 383; last writer wins loses 382, and 415 with clocks a week out.
+
+**What this shows.** Both designs that never trust a clock lose nothing at any clock error,
+and raise no false alarms. Vector clocks catch every real conflict; this system catches
+all but a few, and every one it misses is covered: either the edit corrects a value its
+device had already seen, typed again by someone else, which a server version rightly
+treats as no change at all, or the value it disagrees with is already in an open conflict
+a person has to settle. Vector clocks raise those as further conflicts; this system does
+not add a second question about a value it is already asking about.
+
+So a single server-incremented version does what vector clocks do here, with one number
+per cell instead of a counter per device that touched it, because every write passes
+through one server, which can put them in one order. Vector clocks earn their size where
+there is no such server. The case for ADR 0006 is not only that clocks are wrong; it is
+that a timestamp can only pick a winner, while a version can tell that two people
+disagreed. Final figures, over many seeds and clock errors, come with the sweep (step 3).

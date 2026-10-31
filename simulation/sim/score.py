@@ -6,7 +6,12 @@
                 its own device had already seen: a clock ran ahead, nothing more
     caught      real conflicts the resolver raised
     missed      real conflicts it did not raise
+    covered     the part of `missed` that loses nothing: every value the submission
+                disagreed with unseen either repeats a value its device had seen in the cell
+                (that value was knowingly replaced, whichever device typed it), or had itself
+                been raised as a conflict and is waiting for a person
     false_alarm conflicts it raised that were not real
+    metadata    the numbers it keeps per cell to decide, on average and at most
 
 A value replaced by someone who had seen it is not lost: that is a correction. Two equal
 values are never lost, whichever is kept.
@@ -18,7 +23,7 @@ from dataclasses import dataclass
 
 from .resolvers import Resolver
 from .trace import Trace, knew
-from .truth import real_conflicts
+from .truth import witnesses
 
 
 @dataclass(frozen=True)
@@ -29,9 +34,12 @@ class Score:
     real: int
     caught: int
     missed: int
+    covered: int
     false_alarm: int
     lost: int
     reversals: int
+    metadata_mean: float
+    metadata_max: int
 
     @property
     def lost_rate(self) -> float:
@@ -43,12 +51,14 @@ class Score:
 
 
 def score(trace: Trace, resolver: Resolver) -> Score:
-    real = real_conflicts(trace)
+    real = witnesses(trace)
     by_id = {s.id: s for s in trace.submissions}
-    caught = false_alarm = lost = reversals = 0
+    kinds: dict[int, str] = {}
+    caught = false_alarm = covered = lost = reversals = 0
 
     for s in trace.submissions:
         outcome = resolver.receive(s)
+        kinds[s.id] = outcome.kind
         prior = by_id[outcome.against] if outcome.against is not None else None
 
         if outcome.kind == "conflict":
@@ -56,7 +66,12 @@ def score(trace: Trace, resolver: Resolver) -> Score:
                 caught += 1
             else:
                 false_alarm += 1
-        elif outcome.kind == "applied" and prior is not None and prior.value != s.value and not knew(s, prior):
+        elif s.id in real:
+            w = real[s.id]
+            seen = {p.value for p in w.seen}
+            if all(kinds[p.id] == "conflict" or p.value in seen for p in w.unseen):
+                covered += 1
+        if outcome.kind == "applied" and prior is not None and prior.value != s.value and not knew(s, prior):
             # The cell's value was replaced by someone who never saw it.
             lost += 1
         elif outcome.kind == "discarded" and prior is not None and prior.value != s.value:
@@ -64,6 +79,7 @@ def score(trace: Trace, resolver: Resolver) -> Score:
             if knew(s, prior):
                 reversals += 1
 
+    meta = resolver.metadata()
     return Score(
         resolver=resolver.name,
         skew=trace.scenario.skew,
@@ -71,7 +87,10 @@ def score(trace: Trace, resolver: Resolver) -> Score:
         real=len(real),
         caught=caught,
         missed=len(real) - caught,
+        covered=covered,
         false_alarm=false_alarm,
         lost=lost,
         reversals=reversals,
+        metadata_mean=sum(meta) / len(meta) if meta else 0.0,
+        metadata_max=max(meta, default=0),
     )
