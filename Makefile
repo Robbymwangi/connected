@@ -17,7 +17,7 @@ EPOCH_HAVE := api/storage/app/.dev-data-epoch
 
 .DEFAULT_GOAL := help
 .PHONY: help setup up down restart logs api-shell api-test api-migrate api-fresh \
-        api-epoch dev offline fe-check fe-test e2e sim-test check reset
+        api-epoch dev offline fe-check fe-test e2e sim-test sim-sweep check reset
 
 help: ## List the targets
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  \033[1m%-13s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -131,6 +131,9 @@ e2e: ## Playwright, in Docker (offline, sign-in, and sync specs)
 
 sim-test: ## The simulation's tests (docs/build-plan.md 5.1)
 	cd simulation && python3 -m unittest discover -s tests -t .
+
+sim-sweep: ## The simulation's sweep and charts, into simulation/results (pip install -r simulation/requirements-plots.txt first)
+	cd simulation && python3 -m sim.sweep && python3 -m sim.plots
 
 # --- Everything -------------------------------------------------------------------
 

@@ -7,7 +7,7 @@ Date: 2026-10-22
 Accepted 2026-10-22. Records a decision taken with ADR 0000 on 14 September 2026 and
 built as `docs/build-plan.md` Phase 3 (3.1 to 3.5). Written up after the fact: ADR 0000
 deferred it to this file, which was never written until now. The evidence it promises
-from the simulation (decision 3) is still owed.
+from the simulation (decision 3) is now measured; see the amendment at the end.
 
 ## Context
 
@@ -120,4 +120,24 @@ or replication library, or write the layer ourselves on top of plain storage.
   device within the runner's tick (two minutes) once both are online. Nothing in a
   school's day needs it faster.
 - The simulation (5.1) is owed. This record cites it as its evidence; until it exists,
-  that part of the defence is reasoning, not measurement.
+  that part of the defence is reasoning, not measurement. (Now built; see the amendment.)
+
+## Amendment, 2026-10-31: the simulation's evidence
+
+The simulation (5.1) is built (`simulation/`, its README, and `simulation/results/`). Over
+30 synthetic terms of each of two kinds and clock errors from none to two weeks:
+
+- Last writer wins on device clocks lost 1.6% to 6.8% of submissions silently, and caught
+  no real conflict. Most of that loss happens with sound clocks; clock error adds reversed
+  corrections once it reaches about a day.
+- This system's rules and vector clocks lost nothing at any clock error, and their scores
+  did not change with the clocks.
+- Vector clocks caught every real conflict; this system caught 98.9% and 96.1% in the two
+  kinds of term. Every one it missed was covered, with nothing lost: it corrected a value
+  its device had already seen, or met a value already held in an open conflict.
+
+So decision 3 now rests on measurement. One refinement: "one integer per row gives the
+same detection" above is not exact. It gives the same protection against loss, with
+slightly fewer conflicts raised, because a repeat of a value already seen, or of one
+already in dispute, adds no new question for a person. The simulation's limits are in its
+README.

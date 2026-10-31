@@ -5,10 +5,12 @@ settling concurrent edits loses, measured against a term of marking whose truth 
 known, as device clocks get worse.
 
 Standalone and outside the application. Standard-library Python 3.11 or later; only the
-charts (a later step) use matplotlib.
+charts use matplotlib, pinned in `requirements-plots.txt`.
 
 ```sh
 make sim-test      # the tests, from the repository root
+pip install -r simulation/requirements-plots.txt
+make sim-sweep     # the sweep and its charts, into simulation/results (about a minute)
 ```
 
 ## The question
@@ -105,7 +107,8 @@ simply disappears. Clock error adds reversals only when two edits to a cell are 
 together than the clocks are wrong, and in a term of marking they are usually days
 apart. So the case against device timestamps here is less "bad clocks reorder edits"
 than "a timestamp can only ever pick a winner; it can never tell you that two people
-disagreed". Final figures, over many seeds, come with the sweep.
+disagreed". (Seed 1 turns out to sit on the high side: over 30 seeds the default term
+loses 1.6%, below.)
 
 ## Second result: this system and vector clocks
 
@@ -137,4 +140,63 @@ per cell instead of a counter per device that touched it, because every write pa
 through one server, which can put them in one order. Vector clocks earn their size where
 there is no such server. The case for ADR 0006 is not only that clocks are wrong; it is
 that a timestamp can only pick a winner, while a version can tell that two people
-disagreed. Final figures, over many seeds and clock errors, come with the sweep (step 3).
+disagreed. The sweep below holds these figures over many seeds.
+
+## Final result: the sweep (`sim/sweep.py`, `sim/plots.py`)
+
+Every resolver on 30 seeds of each term, at nine clock errors from none to two weeks: 1,620
+scored runs. `results/sweep.csv` holds every run, `results/summary.csv` the mean over seeds
+with a 95% interval (1.96 standard errors), and `results/*.png` the charts. A run with no
+real conflicts is left out of the rates over real conflicts (one default-term seed has
+none).
+
+Values lost with nobody told, per submission, default term:
+
+| Clock error up to | Last writer wins | Server versions (this system) | Vector clocks |
+|---|---|---|---|
+| none | 1.62% ± 0.25% | 0 | 0 |
+| 1 day | 1.63% ± 0.25% | 0 | 0 |
+| 3 days | 1.66% ± 0.26% | 0 | 0 |
+| 1 week | 1.72% ± 0.26% | 0 | 0 |
+| 2 weeks | 1.75% ± 0.26% | 0 | 0 |
+
+The busy term: last writer wins loses 6.19% ± 0.40% with sound clocks and 6.84% ± 0.46%
+with clocks two weeks out; the other two lose nothing.
+
+Corrections thrown away for an older value, per submission: none from any resolver until
+the clocks are a day out; then last writer wins reverses 0.13% ± 0.05% of submissions at
+two weeks in the default term, and 0.70% ± 0.15% in the busy term. The other two never
+reverse one.
+
+Real conflicts raised for a person, at every clock error alike:
+
+| Term | Last writer wins | Server versions (this system) | Vector clocks |
+|---|---|---|---|
+| default | 0% | 98.9% ± 0.5% | 100% |
+| busy | 0% | 96.1% ± 0.7% | 100% |
+
+Pooled over the 30 terms of each kind, this system missed 28 of 2,512 real conflicts in the
+default term and 451 of 11,374 in the busy one, and every one of them was covered (above):
+none lost a value, and it raised no false alarm. Vector clocks kept on average 1.04 and
+1.18 numbers per cell, at most 4; this system keeps 1. For each seed, this system's and
+vector clocks' scores are the same at every clock error.
+
+**Conclusions for ADR 0006.**
+
+1. Trusting device clocks loses marks even when the clocks are right: every real
+   disagreement is settled silently, 1.6% to 6.2% of all submissions here. Worse clocks add
+   reversals of corrections on top, but only once they are a day or more out, because edits
+   to one cell are usually days apart.
+2. Server-incremented versions and vector clocks lose nothing at any clock error, because
+   neither reads a clock.
+3. A single server version catches almost every real conflict vector clocks catch, and
+   what it misses loses nothing. Each miss either corrects a value its device had already
+   seen, or meets a value already in an open conflict. It stores one number per cell
+   against a vector per value, because one server orders every write.
+
+**Limits.** The terms are synthetic. Their parameters (how often cover teachers mark, how
+often teachers disagree or correct, how often devices sync) are assumptions, not
+measurements from a school, though the sweep's conclusions hold in both terms tried. A
+cell is one mark, so the field-level merge is not tested here, and no conflict is ever
+settled within the simulation, so it does not measure how resolutions themselves
+behave.

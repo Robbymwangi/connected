@@ -150,8 +150,9 @@ Built and working end to end, offline first:
   Terraform and deploy workflows remain, disabled in GitHub, and `infra/README.md`
   says how to bring it back.
 
-Not built yet: the multi-device simulation (`docs/build-plan.md` 5.1) and the
-hardening pass (5.3). `docs/build-plan.md` has the item-by-item state.
+The multi-device simulation (`docs/build-plan.md` 5.1) is built in `simulation/`, and its
+results are the evidence ADR 0006 cites. Not built yet: the hardening pass (5.3).
+`docs/build-plan.md` has the item-by-item state.
 
 ## How to work here
 

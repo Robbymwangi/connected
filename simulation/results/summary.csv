@@ -1,0 +1,271 @@
+scenario,skew,resolver,seeds,rate,mean,half_width
+default,0.0,Last writer wins (device clocks),30,lost,0.016215412417398316,0.0025102274159554665
+default,0.0,Last writer wins (device clocks),30,reversed,0.0,0.0
+default,0.0,Last writer wins (device clocks),29,caught,0.0,0.0
+default,0.0,Last writer wins (device clocks),29,uncovered,0.9918056645858282,0.004094978019377738
+default,0.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+default,0.0,Server versions (this system),30,lost,0.0,0.0
+default,0.0,Server versions (this system),30,reversed,0.0,0.0
+default,0.0,Server versions (this system),29,caught,0.9888791830563616,0.004751422211496963
+default,0.0,Server versions (this system),29,uncovered,0.0,0.0
+default,0.0,Server versions (this system),30,false_alarm,0.0,0.0
+default,0.0,Vector clocks,30,lost,0.0,0.0
+default,0.0,Vector clocks,30,reversed,0.0,0.0
+default,0.0,Vector clocks,29,caught,1.0,0.0
+default,0.0,Vector clocks,29,uncovered,0.0,0.0
+default,0.0,Vector clocks,30,false_alarm,0.0,0.0
+default,60.0,Last writer wins (device clocks),30,lost,0.016215412417398316,0.0025102274159554665
+default,60.0,Last writer wins (device clocks),30,reversed,0.0,0.0
+default,60.0,Last writer wins (device clocks),29,caught,0.0,0.0
+default,60.0,Last writer wins (device clocks),29,uncovered,0.9918056645858282,0.004094978019377738
+default,60.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+default,60.0,Server versions (this system),30,lost,0.0,0.0
+default,60.0,Server versions (this system),30,reversed,0.0,0.0
+default,60.0,Server versions (this system),29,caught,0.9888791830563616,0.004751422211496963
+default,60.0,Server versions (this system),29,uncovered,0.0,0.0
+default,60.0,Server versions (this system),30,false_alarm,0.0,0.0
+default,60.0,Vector clocks,30,lost,0.0,0.0
+default,60.0,Vector clocks,30,reversed,0.0,0.0
+default,60.0,Vector clocks,29,caught,1.0,0.0
+default,60.0,Vector clocks,29,uncovered,0.0,0.0
+default,60.0,Vector clocks,30,false_alarm,0.0,0.0
+default,600.0,Last writer wins (device clocks),30,lost,0.016215412417398316,0.0025102274159554665
+default,600.0,Last writer wins (device clocks),30,reversed,0.0,0.0
+default,600.0,Last writer wins (device clocks),29,caught,0.0,0.0
+default,600.0,Last writer wins (device clocks),29,uncovered,0.9918056645858282,0.004094978019377738
+default,600.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+default,600.0,Server versions (this system),30,lost,0.0,0.0
+default,600.0,Server versions (this system),30,reversed,0.0,0.0
+default,600.0,Server versions (this system),29,caught,0.9888791830563616,0.004751422211496963
+default,600.0,Server versions (this system),29,uncovered,0.0,0.0
+default,600.0,Server versions (this system),30,false_alarm,0.0,0.0
+default,600.0,Vector clocks,30,lost,0.0,0.0
+default,600.0,Vector clocks,30,reversed,0.0,0.0
+default,600.0,Vector clocks,29,caught,1.0,0.0
+default,600.0,Vector clocks,29,uncovered,0.0,0.0
+default,600.0,Vector clocks,30,false_alarm,0.0,0.0
+default,3600.0,Last writer wins (device clocks),30,lost,0.016215412417398316,0.0025102274159554665
+default,3600.0,Last writer wins (device clocks),30,reversed,0.0,0.0
+default,3600.0,Last writer wins (device clocks),29,caught,0.0,0.0
+default,3600.0,Last writer wins (device clocks),29,uncovered,0.9918056645858282,0.004094978019377738
+default,3600.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+default,3600.0,Server versions (this system),30,lost,0.0,0.0
+default,3600.0,Server versions (this system),30,reversed,0.0,0.0
+default,3600.0,Server versions (this system),29,caught,0.9888791830563616,0.004751422211496963
+default,3600.0,Server versions (this system),29,uncovered,0.0,0.0
+default,3600.0,Server versions (this system),30,false_alarm,0.0,0.0
+default,3600.0,Vector clocks,30,lost,0.0,0.0
+default,3600.0,Vector clocks,30,reversed,0.0,0.0
+default,3600.0,Vector clocks,29,caught,1.0,0.0
+default,3600.0,Vector clocks,29,uncovered,0.0,0.0
+default,3600.0,Vector clocks,30,false_alarm,0.0,0.0
+default,21600.0,Last writer wins (device clocks),30,lost,0.016215453669977713,0.0025108770963650977
+default,21600.0,Last writer wins (device clocks),30,reversed,6.575918984678109e-06,1.2888801209969094e-05
+default,21600.0,Last writer wins (device clocks),29,caught,0.0,0.0
+default,21600.0,Last writer wins (device clocks),29,uncovered,0.9918056645858282,0.004094978019377738
+default,21600.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+default,21600.0,Server versions (this system),30,lost,0.0,0.0
+default,21600.0,Server versions (this system),30,reversed,0.0,0.0
+default,21600.0,Server versions (this system),29,caught,0.9888791830563616,0.004751422211496963
+default,21600.0,Server versions (this system),29,uncovered,0.0,0.0
+default,21600.0,Server versions (this system),30,false_alarm,0.0,0.0
+default,21600.0,Vector clocks,30,lost,0.0,0.0
+default,21600.0,Vector clocks,30,reversed,0.0,0.0
+default,21600.0,Vector clocks,29,caught,1.0,0.0
+default,21600.0,Vector clocks,29,uncovered,0.0,0.0
+default,21600.0,Vector clocks,30,false_alarm,0.0,0.0
+default,86400.0,Last writer wins (device clocks),30,lost,0.016267088055417697,0.0025287154695849633
+default,86400.0,Last writer wins (device clocks),30,reversed,4.514276225042164e-05,3.467358829871438e-05
+default,86400.0,Last writer wins (device clocks),29,caught,0.0,0.0
+default,86400.0,Last writer wins (device clocks),29,uncovered,0.9918056645858282,0.004094978019377738
+default,86400.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+default,86400.0,Server versions (this system),30,lost,0.0,0.0
+default,86400.0,Server versions (this system),30,reversed,0.0,0.0
+default,86400.0,Server versions (this system),29,caught,0.9888791830563616,0.004751422211496963
+default,86400.0,Server versions (this system),29,uncovered,0.0,0.0
+default,86400.0,Server versions (this system),30,false_alarm,0.0,0.0
+default,86400.0,Vector clocks,30,lost,0.0,0.0
+default,86400.0,Vector clocks,30,reversed,0.0,0.0
+default,86400.0,Vector clocks,29,caught,1.0,0.0
+default,86400.0,Vector clocks,29,uncovered,0.0,0.0
+default,86400.0,Vector clocks,30,false_alarm,0.0,0.0
+default,259200.0,Last writer wins (device clocks),30,lost,0.01659337252098673,0.002570993229227279
+default,259200.0,Last writer wins (device clocks),30,reversed,0.00037161570757067604,0.00023030072144693988
+default,259200.0,Last writer wins (device clocks),29,caught,0.0,0.0
+default,259200.0,Last writer wins (device clocks),29,uncovered,0.9918056645858282,0.004094978019377738
+default,259200.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+default,259200.0,Server versions (this system),30,lost,0.0,0.0
+default,259200.0,Server versions (this system),30,reversed,0.0,0.0
+default,259200.0,Server versions (this system),29,caught,0.9888791830563616,0.004751422211496963
+default,259200.0,Server versions (this system),29,uncovered,0.0,0.0
+default,259200.0,Server versions (this system),30,false_alarm,0.0,0.0
+default,259200.0,Vector clocks,30,lost,0.0,0.0
+default,259200.0,Vector clocks,30,reversed,0.0,0.0
+default,259200.0,Vector clocks,29,caught,1.0,0.0
+default,259200.0,Vector clocks,29,uncovered,0.0,0.0
+default,259200.0,Vector clocks,30,false_alarm,0.0,0.0
+default,604800.0,Last writer wins (device clocks),30,lost,0.017202363839419914,0.0025881533886178546
+default,604800.0,Last writer wins (device clocks),30,reversed,0.0009807158915769573,0.00043828861076248454
+default,604800.0,Last writer wins (device clocks),29,caught,0.0,0.0
+default,604800.0,Last writer wins (device clocks),29,uncovered,0.9918056645858282,0.004094978019377738
+default,604800.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+default,604800.0,Server versions (this system),30,lost,0.0,0.0
+default,604800.0,Server versions (this system),30,reversed,0.0,0.0
+default,604800.0,Server versions (this system),29,caught,0.9888791830563616,0.004751422211496963
+default,604800.0,Server versions (this system),29,uncovered,0.0,0.0
+default,604800.0,Server versions (this system),30,false_alarm,0.0,0.0
+default,604800.0,Vector clocks,30,lost,0.0,0.0
+default,604800.0,Vector clocks,30,reversed,0.0,0.0
+default,604800.0,Vector clocks,29,caught,1.0,0.0
+default,604800.0,Vector clocks,29,uncovered,0.0,0.0
+default,604800.0,Vector clocks,30,false_alarm,0.0,0.0
+default,1209600.0,Last writer wins (device clocks),30,lost,0.017534694765344045,0.0026304923598155865
+default,1209600.0,Last writer wins (device clocks),30,reversed,0.00130675275909223,0.0005126725817502808
+default,1209600.0,Last writer wins (device clocks),29,caught,0.0,0.0
+default,1209600.0,Last writer wins (device clocks),29,uncovered,0.9918056645858282,0.004094978019377738
+default,1209600.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+default,1209600.0,Server versions (this system),30,lost,0.0,0.0
+default,1209600.0,Server versions (this system),30,reversed,0.0,0.0
+default,1209600.0,Server versions (this system),29,caught,0.9888791830563616,0.004751422211496963
+default,1209600.0,Server versions (this system),29,uncovered,0.0,0.0
+default,1209600.0,Server versions (this system),30,false_alarm,0.0,0.0
+default,1209600.0,Vector clocks,30,lost,0.0,0.0
+default,1209600.0,Vector clocks,30,reversed,0.0,0.0
+default,1209600.0,Vector clocks,29,caught,1.0,0.0
+default,1209600.0,Vector clocks,29,uncovered,0.0,0.0
+default,1209600.0,Vector clocks,30,false_alarm,0.0,0.0
+busy,0.0,Last writer wins (device clocks),30,lost,0.06188916133596524,0.003990455602420501
+busy,0.0,Last writer wins (device clocks),30,reversed,0.0,0.0
+busy,0.0,Last writer wins (device clocks),30,caught,0.0,0.0
+busy,0.0,Last writer wins (device clocks),30,uncovered,0.9773450871768666,0.004487013145118729
+busy,0.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+busy,0.0,Server versions (this system),30,lost,0.0,0.0
+busy,0.0,Server versions (this system),30,reversed,0.0,0.0
+busy,0.0,Server versions (this system),30,caught,0.960844132245585,0.006477826188139903
+busy,0.0,Server versions (this system),30,uncovered,0.0,0.0
+busy,0.0,Server versions (this system),30,false_alarm,0.0,0.0
+busy,0.0,Vector clocks,30,lost,0.0,0.0
+busy,0.0,Vector clocks,30,reversed,0.0,0.0
+busy,0.0,Vector clocks,30,caught,1.0,0.0
+busy,0.0,Vector clocks,30,uncovered,0.0,0.0
+busy,0.0,Vector clocks,30,false_alarm,0.0,0.0
+busy,60.0,Last writer wins (device clocks),30,lost,0.06188916133596524,0.003990455602420501
+busy,60.0,Last writer wins (device clocks),30,reversed,0.0,0.0
+busy,60.0,Last writer wins (device clocks),30,caught,0.0,0.0
+busy,60.0,Last writer wins (device clocks),30,uncovered,0.9773450871768666,0.004487013145118729
+busy,60.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+busy,60.0,Server versions (this system),30,lost,0.0,0.0
+busy,60.0,Server versions (this system),30,reversed,0.0,0.0
+busy,60.0,Server versions (this system),30,caught,0.960844132245585,0.006477826188139903
+busy,60.0,Server versions (this system),30,uncovered,0.0,0.0
+busy,60.0,Server versions (this system),30,false_alarm,0.0,0.0
+busy,60.0,Vector clocks,30,lost,0.0,0.0
+busy,60.0,Vector clocks,30,reversed,0.0,0.0
+busy,60.0,Vector clocks,30,caught,1.0,0.0
+busy,60.0,Vector clocks,30,uncovered,0.0,0.0
+busy,60.0,Vector clocks,30,false_alarm,0.0,0.0
+busy,600.0,Last writer wins (device clocks),30,lost,0.06188362354920765,0.003992336370331785
+busy,600.0,Last writer wins (device clocks),30,reversed,0.0,0.0
+busy,600.0,Last writer wins (device clocks),30,caught,0.0,0.0
+busy,600.0,Last writer wins (device clocks),30,uncovered,0.9773450871768666,0.004487013145118729
+busy,600.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+busy,600.0,Server versions (this system),30,lost,0.0,0.0
+busy,600.0,Server versions (this system),30,reversed,0.0,0.0
+busy,600.0,Server versions (this system),30,caught,0.960844132245585,0.006477826188139903
+busy,600.0,Server versions (this system),30,uncovered,0.0,0.0
+busy,600.0,Server versions (this system),30,false_alarm,0.0,0.0
+busy,600.0,Vector clocks,30,lost,0.0,0.0
+busy,600.0,Vector clocks,30,reversed,0.0,0.0
+busy,600.0,Vector clocks,30,caught,1.0,0.0
+busy,600.0,Vector clocks,30,uncovered,0.0,0.0
+busy,600.0,Vector clocks,30,false_alarm,0.0,0.0
+busy,3600.0,Last writer wins (device clocks),30,lost,0.06187250150705607,0.003992787991891091
+busy,3600.0,Last writer wins (device clocks),30,reversed,0.0,0.0
+busy,3600.0,Last writer wins (device clocks),30,caught,0.0,0.0
+busy,3600.0,Last writer wins (device clocks),30,uncovered,0.9773450871768666,0.004487013145118729
+busy,3600.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+busy,3600.0,Server versions (this system),30,lost,0.0,0.0
+busy,3600.0,Server versions (this system),30,reversed,0.0,0.0
+busy,3600.0,Server versions (this system),30,caught,0.960844132245585,0.006477826188139903
+busy,3600.0,Server versions (this system),30,uncovered,0.0,0.0
+busy,3600.0,Server versions (this system),30,false_alarm,0.0,0.0
+busy,3600.0,Vector clocks,30,lost,0.0,0.0
+busy,3600.0,Vector clocks,30,reversed,0.0,0.0
+busy,3600.0,Vector clocks,30,caught,1.0,0.0
+busy,3600.0,Vector clocks,30,uncovered,0.0,0.0
+busy,3600.0,Vector clocks,30,false_alarm,0.0,0.0
+busy,21600.0,Last writer wins (device clocks),30,lost,0.061894157441979576,0.003990261808504843
+busy,21600.0,Last writer wins (device clocks),30,reversed,0.0,0.0
+busy,21600.0,Last writer wins (device clocks),30,caught,0.0,0.0
+busy,21600.0,Last writer wins (device clocks),30,uncovered,0.9773450871768666,0.004487013145118729
+busy,21600.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+busy,21600.0,Server versions (this system),30,lost,0.0,0.0
+busy,21600.0,Server versions (this system),30,reversed,0.0,0.0
+busy,21600.0,Server versions (this system),30,caught,0.960844132245585,0.006477826188139903
+busy,21600.0,Server versions (this system),30,uncovered,0.0,0.0
+busy,21600.0,Server versions (this system),30,false_alarm,0.0,0.0
+busy,21600.0,Vector clocks,30,lost,0.0,0.0
+busy,21600.0,Vector clocks,30,reversed,0.0,0.0
+busy,21600.0,Vector clocks,30,caught,1.0,0.0
+busy,21600.0,Vector clocks,30,uncovered,0.0,0.0
+busy,21600.0,Vector clocks,30,false_alarm,0.0,0.0
+busy,86400.0,Last writer wins (device clocks),30,lost,0.062066277134492115,0.003869633330596398
+busy,86400.0,Last writer wins (device clocks),30,reversed,0.0005180985215570542,0.0003566944669378882
+busy,86400.0,Last writer wins (device clocks),30,caught,0.0,0.0
+busy,86400.0,Last writer wins (device clocks),30,uncovered,0.9773450871768666,0.004487013145118729
+busy,86400.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+busy,86400.0,Server versions (this system),30,lost,0.0,0.0
+busy,86400.0,Server versions (this system),30,reversed,0.0,0.0
+busy,86400.0,Server versions (this system),30,caught,0.960844132245585,0.006477826188139903
+busy,86400.0,Server versions (this system),30,uncovered,0.0,0.0
+busy,86400.0,Server versions (this system),30,false_alarm,0.0,0.0
+busy,86400.0,Vector clocks,30,lost,0.0,0.0
+busy,86400.0,Vector clocks,30,reversed,0.0,0.0
+busy,86400.0,Vector clocks,30,caught,1.0,0.0
+busy,86400.0,Vector clocks,30,uncovered,0.0,0.0
+busy,86400.0,Vector clocks,30,false_alarm,0.0,0.0
+busy,259200.0,Last writer wins (device clocks),30,lost,0.06432307477354433,0.004108729516018866
+busy,259200.0,Last writer wins (device clocks),30,reversed,0.0029225557751801317,0.001006939602891467
+busy,259200.0,Last writer wins (device clocks),30,caught,0.0,0.0
+busy,259200.0,Last writer wins (device clocks),30,uncovered,0.9773450871768666,0.004487013145118729
+busy,259200.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+busy,259200.0,Server versions (this system),30,lost,0.0,0.0
+busy,259200.0,Server versions (this system),30,reversed,0.0,0.0
+busy,259200.0,Server versions (this system),30,caught,0.960844132245585,0.006477826188139903
+busy,259200.0,Server versions (this system),30,uncovered,0.0,0.0
+busy,259200.0,Server versions (this system),30,false_alarm,0.0,0.0
+busy,259200.0,Vector clocks,30,lost,0.0,0.0
+busy,259200.0,Vector clocks,30,reversed,0.0,0.0
+busy,259200.0,Vector clocks,30,caught,1.0,0.0
+busy,259200.0,Vector clocks,30,uncovered,0.0,0.0
+busy,259200.0,Vector clocks,30,false_alarm,0.0,0.0
+busy,604800.0,Last writer wins (device clocks),30,lost,0.06675335210532708,0.0044177133322187865
+busy,604800.0,Last writer wins (device clocks),30,reversed,0.005352435312974903,0.0012869005547410577
+busy,604800.0,Last writer wins (device clocks),30,caught,0.0,0.0
+busy,604800.0,Last writer wins (device clocks),30,uncovered,0.9773450871768666,0.004487013145118729
+busy,604800.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+busy,604800.0,Server versions (this system),30,lost,0.0,0.0
+busy,604800.0,Server versions (this system),30,reversed,0.0,0.0
+busy,604800.0,Server versions (this system),30,caught,0.960844132245585,0.006477826188139903
+busy,604800.0,Server versions (this system),30,uncovered,0.0,0.0
+busy,604800.0,Server versions (this system),30,false_alarm,0.0,0.0
+busy,604800.0,Vector clocks,30,lost,0.0,0.0
+busy,604800.0,Vector clocks,30,reversed,0.0,0.0
+busy,604800.0,Vector clocks,30,caught,1.0,0.0
+busy,604800.0,Vector clocks,30,uncovered,0.0,0.0
+busy,604800.0,Vector clocks,30,false_alarm,0.0,0.0
+busy,1209600.0,Last writer wins (device clocks),30,lost,0.0683747610381952,0.004553150521152543
+busy,1209600.0,Last writer wins (device clocks),30,reversed,0.00698480500038805,0.001486844640050019
+busy,1209600.0,Last writer wins (device clocks),30,caught,0.0,0.0
+busy,1209600.0,Last writer wins (device clocks),30,uncovered,0.9773450871768666,0.004487013145118729
+busy,1209600.0,Last writer wins (device clocks),30,false_alarm,0.0,0.0
+busy,1209600.0,Server versions (this system),30,lost,0.0,0.0
+busy,1209600.0,Server versions (this system),30,reversed,0.0,0.0
+busy,1209600.0,Server versions (this system),30,caught,0.960844132245585,0.006477826188139903
+busy,1209600.0,Server versions (this system),30,uncovered,0.0,0.0
+busy,1209600.0,Server versions (this system),30,false_alarm,0.0,0.0
+busy,1209600.0,Vector clocks,30,lost,0.0,0.0
+busy,1209600.0,Vector clocks,30,reversed,0.0,0.0
+busy,1209600.0,Vector clocks,30,caught,1.0,0.0
+busy,1209600.0,Vector clocks,30,uncovered,0.0,0.0
+busy,1209600.0,Vector clocks,30,false_alarm,0.0,0.0
