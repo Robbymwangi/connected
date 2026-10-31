@@ -41,7 +41,7 @@ where each one stands.
 | 3.1 to 3.4 sync: pull, push, local store, outbox | Done |
 | 3.5 Conflict resolution UI | Done, with the two timestamp anomaly flags added 23 October |
 | 4.1 to 4.5 analytics, dashboard, comments, report cards, assistant | Done |
-| 5.1 Distributed-systems simulation | **In progress**: trace, truth, last writer wins, and scoring in `simulation/`; this system's rules, vector clocks, and the sweep to come |
+| 5.1 Distributed-systems simulation | **In progress**: trace, truth, scoring, and three resolvers (last writer wins, this system's rules, vector clocks) in `simulation/`; the sweep to come |
 | 5.2 Deployment | Done; deployed, then taken down to save cost (`infra/README.md`) |
 | 5.3 Hardening | **In part**: offline and sync paths have Playwright coverage in CI, and the host takes PHP security updates (#190). Still to do: Playwright in `make check`, and a hardening pass |
 | 5.4, 5.5 Admin panel | Done, widened to school setup (#184) |

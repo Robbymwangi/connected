@@ -1,6 +1,6 @@
 import unittest
 
-from sim.truth import real_conflicts
+from sim.truth import real_conflicts, witnesses
 from tests.helpers import sub, trace_of
 
 
@@ -29,3 +29,17 @@ class RealConflictsTest(unittest.TestCase):
     def test_other_cells_never_conflict(self):
         trace = trace_of(sub(0, "a", 5, made=1, received=2), sub(1, "b", 9, made=1.5, received=5, cell="y"))
         self.assertEqual(real_conflicts(trace), set())
+
+
+class WitnessesTest(unittest.TestCase):
+    def test_a_conflict_knows_every_value_its_device_had_seen_in_the_cell(self):
+        # c saw a's 5 (since replaced by b's 9) and b's 9, but not d's 4.
+        trace = trace_of(
+            sub(0, "a", 5, made=1, received=2),
+            sub(1, "b", 9, made=3, received=4, pulled=2),
+            sub(2, "d", 4, made=4.5, received=6, pulled=4),
+            sub(3, "c", 7, made=5, received=8, pulled=5),
+        )
+        w = witnesses(trace)[3]
+        self.assertEqual([p.id for p in w.unseen], [2])
+        self.assertEqual([p.id for p in w.seen], [0, 1])
