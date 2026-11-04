@@ -1,0 +1,2 @@
+# Only sim/plots.py needs this; the simulation and its tests use the standard library.
+matplotlib==3.10.9
