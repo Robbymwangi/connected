@@ -1047,6 +1047,32 @@
                   "new": false,
                   "number": 5,
                   "score": "6.5"
+                },
+                {
+                  "id": "e15eebf4-05d8-5c06-aba3-7f852ccf89fa",
+                  "title": "Teachers are not told what the system records about them or sends elsewhere",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Unawareness",
+                  "description": "Nothing in the app explains that every edit is kept with the teacher's name and the time, that a conflict shows a colleague's values and notes, or that assistant questions and remark prompts go to a provider outside Kenya. The 'Privacy and Security' entry in the user menu is a placeholder with no page behind it (frontend/src/layout/UserMenu.tsx).\n\nLikelihood 3 (likely) x impact 2 (moderate) = 6.",
+                  "mitigation": "Not mitigated. Proposed: a short privacy notice reachable from that menu entry and shown once at first sign-in, stating what is recorded, why, for how long, and what leaves the school (Kenya Data Protection Act, 2019, duty to notify). It works offline, like every other screen.",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 94,
+                  "score": "6"
+                },
+                {
+                  "id": "8c87f7ad-7087-52d3-9b05-6032890f83a7",
+                  "title": "Third parties track teachers through the app",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Linkability",
+                  "description": "Fonts, scripts, images, or analytics loaded from other domains would tell those domains when and where each teacher uses the app, and could link it across sites.\n\nLikelihood 2 (possible) x impact 2 (moderate) = 4.",
+                  "mitigation": "The app loads nothing from another origin: fonts are self-hosted, there are no CDN scripts, no remote images, and no analytics (AGENTS.md, Frontend rules). The admin panel is held to the same rule (AdminPanelTest, 'loads the app's fonts and theme from the host and nothing from elsewhere').",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 95,
+                  "score": "4"
                 }
               ]
             }
@@ -1312,6 +1338,19 @@
                   "new": false,
                   "number": 12,
                   "score": "5.1"
+                },
+                {
+                  "id": "283e8e6b-d10b-51b5-9649-4cb4de5d5665",
+                  "title": "Every device holds the whole school's student records",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Disclosure of information",
+                  "description": "Read access is institution-wide by design, so each teacher's phone or laptop holds every student's name, gender, date of birth, enrolment history, marks, and report-card remarks, not only those of the classes that teacher works with. Most of these data subjects are children. A lost or shared device exposes the school, not a class.\n\nLikelihood 2 (possible) x impact 3 (severe) = 6.",
+                  "mitigation": "Not mitigated. The access model chose institution-wide reads so that a teacher covering a colleague can work offline without a permission change (docs/spec/access-model.md), which is a real need. Data minimisation asks whether every field must travel. Proposed: (1) stop syncing fields the device never displays, starting with date of birth if no screen uses it; (2) record the institution-wide copy as a deliberate trade-off in an ADR; (3) a screen lock as a condition of use.",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 93,
+                  "score": "6"
                 }
               ]
             }
@@ -1595,6 +1634,19 @@
                   "new": false,
                   "number": 26,
                   "score": "4.3"
+                },
+                {
+                  "id": "75d7dc85-4e48-5462-b044-29439fc2bdb9",
+                  "title": "A teacher learns about colleagues from their notifications",
+                  "status": "Mitigated",
+                  "severity": "Low",
+                  "type": "Detectability",
+                  "description": "Notifications (a conflict raised, an edit blocked, a report ready) are records about one teacher's work. Pulled by everyone, they would show who is in conflict with whom and whose edits were refused.\n\nLikelihood 2 (possible) x impact 1 (minor) = 2.",
+                  "mitigation": "Notifications are the one table filtered to its owner, on pull and on push; another user's notification behaves as an unknown id (SyncPull::fromLog; NotificationPushHandler; SyncPullTest).",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 96,
+                  "score": "2"
                 }
               ]
             }
@@ -1655,12 +1707,14 @@
                 "text": "Domain tables\n(Postgres)"
               },
               "topLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               },
               "bottomLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               }
             },
             "visible": true,
@@ -1674,7 +1728,7 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isALog": false,
               "isEncrypted": false,
               "isSigned": false,
@@ -1706,6 +1760,45 @@
                   "new": false,
                   "number": 28,
                   "score": "4.4"
+                },
+                {
+                  "id": "13b7eeb9-25a6-5b89-87f8-bd307d5db63a",
+                  "title": "A student's data cannot be erased",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Non-compliance",
+                  "description": "Synchronisable rows are only ever soft deleted, the panel offers no delete for students on purpose, the change log keeps every field, and every device holds a copy. When a family asks for erasure, or a student has long left, there is no way to remove or anonymise them.\n\nLikelihood 3 (likely) x impact 2 (moderate) = 6.",
+                  "mitigation": "Not mitigated, and the reason is sound: soft deletes are load-bearing for sync (AGENTS.md; update-against-delete must stay representable). Erasure therefore has to be anonymisation, not deletion. Proposed: an admin action that replaces a departed student's name and date of birth with placeholders through Syncable, so the change reaches every device, together with the log compaction above (Kenya Data Protection Act, 2019, section 40, rectification and erasure; to verify).",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 99,
+                  "score": "6"
+                },
+                {
+                  "id": "6e0baa98-7cb1-5d81-af3f-1eac9b5246d9",
+                  "title": "A family cannot find out what the school holds about their child",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Unawareness",
+                  "description": "Parents and students are not users of the system. A request to see a child's data has to be answered by the school, and the system offers no way to gather one student's records into a single answer.\n\nLikelihood 2 (possible) x impact 2 (moderate) = 4.",
+                  "mitigation": "Not mitigated. The school is the controller and answers requests itself; the system should make that possible. Proposed: an admin export of one student's records (profile, enrolments, results, remarks, report cards) (Kenya Data Protection Act, 2019, rights of a data subject; to verify).",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 100,
+                  "score": "4"
+                },
+                {
+                  "id": "8bfd0bd0-96c5-51a3-a803-7839ce850d6b",
+                  "title": "All school data is stored outside Kenya",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Non-compliance",
+                  "description": "Production keeps the database, the report cards, and the backups in AWS af-south-1, Cape Town, chosen as the closest region (ADR 0015, decision 6). Moving personal data out of Kenya needs a lawful basis, and the Data Protection (General) Regulations, 2021, require processing for listed strategic interests of the state to use a server in Kenya or keep a serving copy there; secondary sources list education services among them.\n\nLikelihood 2 (possible) x impact 3 (severe) = 6.",
+                  "mitigation": "Not mitigated. The likelihood is 'possible' only because it is not yet confirmed that a school's records fall under the strategic-interest list; if they do, this is a certain, severe finding. Proposed: put the question to the same advisory ADR 0013 is waiting on, and if it applies, keep a serving copy in a Kenyan data centre or host there (Kenya Data Protection Act, 2019, sections 48 to 50; Regulations 2021, regulation 26).",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 101,
+                  "score": "6"
                 }
               ]
             }
@@ -1777,6 +1870,32 @@
                   "new": false,
                   "number": 30,
                   "score": "3.1"
+                },
+                {
+                  "id": "2839b3bd-9663-57c6-858a-a3d043453d68",
+                  "title": "A permanent record of each teacher's work could be used to monitor staff",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Non-repudiation",
+                  "description": "sync_mutations keeps, for every push, the teacher, the record, the outcome, the device's time, and the server's time, indefinitely. That attribution exists for integrity and dispute resolution, but it is also a minute-by-minute history of when each teacher marked, how quickly, and how often they were overruled, which a school could use for appraisal it was never collected for.\n\nLikelihood 2 (possible) x impact 2 (moderate) = 4.",
+                  "mitigation": "Not mitigated. The project already refuses this use elsewhere: the assistant will not judge or compare teachers (ADR 0013, decision 7). Proposed: state the purpose of the sync logs (integrity, audit, and dispute resolution only) in the privacy notice, give them a retention period, and expose no per-teacher activity view.",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 97,
+                  "score": "4"
+                },
+                {
+                  "id": "adf0cd2c-5a7c-55f9-aef0-2cbc163bd31d",
+                  "title": "The change log keeps every value a record has ever held",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Non-compliance",
+                  "description": "sync_changes is append-only and never pruned. A student's name corrected after a typing mistake, a wrong date of birth, or a mark later changed all remain in it, in full, for as long as the database exists. Storage limitation requires personal data to be kept no longer than needed.\n\nLikelihood 3 (likely) x impact 2 (moderate) = 6.",
+                  "mitigation": "Not mitigated. Proposed: a retention period for both sync logs (for example, the current and previous academic year), with compaction that keeps the latest version of each record as the pull baseline. Devices that have not synced since the cut-off then re-bootstrap, which the pull protocol already supports (Kenya Data Protection Act, 2019, section 39, limitation to retention).",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 98,
+                  "score": "6"
                 }
               ]
             }
@@ -3538,8 +3657,8 @@
                 "text": "nginx"
               },
               "body": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "strokeDasharray": null
               }
             },
@@ -3554,7 +3673,7 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "handlesCardPayment": false,
               "handlesGoodsOrServices": false,
               "isWebApplication": false,
@@ -3598,6 +3717,19 @@
                   "new": false,
                   "number": 42,
                   "score": "8.1"
+                },
+                {
+                  "id": "5009f6a8-1123-5cb4-9adb-2d1867b4d32a",
+                  "title": "Server logs link addresses to the records requested",
+                  "status": "Open",
+                  "severity": "Low",
+                  "type": "Linkability",
+                  "description": "nginx's access log records each request's client address and path, and paths carry record ids (a report card's download, a class's roster), so the log links network addresses to students' records.\n\nLikelihood 2 (possible) x impact 1 (minor) = 2.",
+                  "mitigation": "Partly mitigated: logs stay on the host and are rotated by the system's default policy, and the application's own log keeps 14 days (config/logging.php). Recommended treatment: accept, and state the log retention in the privacy notice.",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 105,
+                  "score": "2"
                 }
               ]
             }
@@ -3616,8 +3748,8 @@
                 "text": "Admin panel\n(Filament, /admin)"
               },
               "body": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "strokeDasharray": null
               }
             },
@@ -3632,7 +3764,7 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "handlesCardPayment": false,
               "handlesGoodsOrServices": false,
               "isWebApplication": true,
@@ -3702,6 +3834,32 @@
                   "new": false,
                   "number": 53,
                   "score": "4.9"
+                },
+                {
+                  "id": "361218d1-8722-590a-895b-5b9070242af3",
+                  "title": "No record that a child's data may lawfully be processed",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Non-compliance",
+                  "description": "Almost every student is a child. The Act sets conditions for processing a child's personal data, which secondary summaries describe as including the consent of a parent or guardian. The panel creates student records with no field or step that records the basis on which the school holds them.\n\nLikelihood 2 (possible) x impact 3 (severe) = 6.",
+                  "mitigation": "Not mitigated. This is mainly the school's duty as controller, typically met at admission, outside the system. Proposed: confirm the requirement with the advisory, and if consent is the basis, a consent status on the student record that the panel shows (Kenya Data Protection Act, 2019, section 33, processing of personal data relating to a child; wording to verify).",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 102,
+                  "score": "6"
+                },
+                {
+                  "id": "2edfccf4-7a25-58ee-abc8-a4cfee77e338",
+                  "title": "Roles and duties under the Act are not documented",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Non-compliance",
+                  "description": "Large-scale processing of children's data, with a model provider involved, is the kind of processing a data protection impact assessment exists for. Nothing records who is the controller (the school), who is the processor (whoever runs ConnectED and its hosting), or what each has agreed.\n\nLikelihood 2 (possible) x impact 2 (moderate) = 4.",
+                  "mitigation": "Not mitigated in the repository, and largely organisational. This threat model is most of a DPIA's input. Proposed: a short DPIA and a processing agreement template between a school and the operator (Kenya Data Protection Act, 2019, data protection impact assessment and registration of controllers and processors; to verify).",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 103,
+                  "score": "4"
                 }
               ]
             }
@@ -3914,12 +4072,14 @@
                 "text": "Accounts and tokens\n(Postgres)"
               },
               "topLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               },
               "bottomLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               }
             },
             "visible": true,
@@ -3933,7 +4093,7 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isALog": false,
               "isEncrypted": false,
               "isSigned": false,
@@ -3952,6 +4112,19 @@
                   "new": false,
                   "number": 54,
                   "score": "4.4"
+                },
+                {
+                  "id": "63a7ccd4-abef-5a28-a9fc-e8a29c1f0e9d",
+                  "title": "Former staff's personal data is kept indefinitely",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Non-compliance",
+                  "description": "A teacher who leaves is deactivated, never deleted, so that their name still resolves on every mark, conflict, and remark they wrote. Their email address, and their name on every device, stay too.\n\nLikelihood 3 (likely) x impact 1 (minor) = 3.",
+                  "mitigation": "Partly mitigated by purpose: keeping the name is what makes the audit trail readable (docs/spec/data-model.md, decision 6). Not mitigated: nothing reduces the record to what that purpose needs. Proposed: clear the email of a deactivated account after a set period, keeping the name.",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 104,
+                  "score": "3"
                 }
               ]
             }
@@ -5170,6 +5343,32 @@
                   "new": false,
                   "number": 62,
                   "score": "4.3"
+                },
+                {
+                  "id": "51f3f7f5-7c23-5404-8909-c89fcf88f6e4",
+                  "title": "A small group's figures identify a child",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Identifiability",
+                  "description": "Comparing groups of students lets an answer describe one child without naming them, for example a group of two girls whose mean reveals each one's result.\n\nLikelihood 2 (possible) x impact 3 (severe) = 6.",
+                  "mitigation": "Girls and boys are compared as groups only, and both are withheld when either has fewer than five students, since the report's own totals less one group would give the other (ADR 0013, decision 7; ReportTools, gender_breakdown). The assistant never reports a student's sex.",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 108,
+                  "score": "6"
+                },
+                {
+                  "id": "e7091aac-e28c-5c17-aa37-d762bd7fa7c2",
+                  "title": "The provider builds a profile of one child across questions",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Linkability",
+                  "description": "If a child kept the same handle everywhere, the provider could link every question ever asked about them into one record.\n\nLikelihood 2 (possible) x impact 2 (moderate) = 4.",
+                  "mitigation": "Handles exist for one conversation, which holds at most four turns and expires after thirty quiet minutes; the next conversation numbers students afresh, so S3 today is not S3 tomorrow (Conversation, Handles; ADR 0013, decision 4).",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 109,
+                  "score": "4"
                 }
               ]
             }
@@ -5525,6 +5724,32 @@
                   "new": false,
                   "number": 70,
                   "score": "4.4"
+                },
+                {
+                  "id": "95f1608f-a926-59bb-a550-dd902dbd3b0a",
+                  "title": "A report card tells a family more than it needs to",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Disclosure of information",
+                  "description": "Report cards leave the system and are passed around. A card showing percentages, class position, or class size would rank children for their families and anyone the card is shown to.\n\nLikelihood 2 (possible) x impact 2 (moderate) = 4.",
+                  "mitigation": "Cards show performance levels only, never a percentage, position, rank, or class size (ADR 0012, decision 5; ReportCardTest, 'the card carries levels ... and nothing else').",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 111,
+                  "score": "4"
+                },
+                {
+                  "id": "28f3acac-feb5-5744-871f-7fbca08ad38c",
+                  "title": "Report cards are kept with no retention period",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Non-compliance",
+                  "description": "Every card ever issued, and every card withdrawn by an unlock, stays in the bucket, each naming a child and their school. Nothing defines how long the school needs them.\n\nLikelihood 3 (likely) x impact 2 (moderate) = 6.",
+                  "mitigation": "Not mitigated (see also the STRIDE threat on superseded cards). Proposed: a retention period agreed with the school, applied as an S3 lifecycle rule, and deletion of a card's object when it is unwound (Kenya Data Protection Act, 2019, section 39).",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 112,
+                  "score": "6"
                 }
               ]
             }
@@ -5587,6 +5812,19 @@
                   "new": false,
                   "number": 72,
                   "score": "3.1"
+                },
+                {
+                  "id": "e5e086f8-2a04-52ca-aea0-c53187b3e9ef",
+                  "title": "Sensitive information typed into a question reaches the provider",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Disclosure of information",
+                  "description": "A teacher may describe a child in a question ('the girl who has been unwell', 'the boy whose parents separated'). Only roster names are replaced with handles. Free text goes to the provider unfiltered, and the first model to see it is the scope gate itself, so even a question it refuses has already left the school.\n\nLikelihood 2 (possible) x impact 3 (severe) = 6.",
+                  "mitigation": "Partly mitigated: roster names are replaced before either model sees the question, questions are limited to 500 characters, and nothing in the screen invites personal detail. Not mitigated: health, family, or behavioural details typed in. Proposed: a one-line notice beside the question box saying questions are sent to an external service and should name no personal circumstances.",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 107,
+                  "score": "6"
                 }
               ]
             }
@@ -6085,8 +6323,8 @@
             "shape": "flow",
             "attrs": {
               "line": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "targetMarker": {
                   "name": "block"
                 },
@@ -6142,7 +6380,7 @@
               "outOfScope": false,
               "isTrustBoundary": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isBidirectional": true,
               "isEncrypted": true,
               "isPublicNetwork": true,
@@ -6160,6 +6398,19 @@
                   "new": false,
                   "number": 73,
                   "score": "6.8"
+                },
+                {
+                  "id": "c01edf28-9d55-5efb-88ce-9331a3c9c147",
+                  "title": "Pseudonymised student results leave Kenya without a recorded basis",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Non-compliance",
+                  "description": "Each assistant question sends percentages per student, under handles, to a provider outside Kenya. Pseudonymised data is still personal data for the school, which holds the mapping back to names. A transfer out of Kenya needs a lawful basis and appropriate safeguards.\n\nLikelihood 3 (likely) x impact 2 (moderate) = 6.",
+                  "mitigation": "Not mitigated, and already recorded as provisional: ADR 0013, decision 4 waits on an advisory about sending student data to a model provider. Proposed: the advisory, and recording the safeguards relied on (pseudonymisation, the provider's data-retention terms) in the DPIA (Kenya Data Protection Act, 2019, section 48, conditions for transfer out of Kenya).",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 106,
+                  "score": "6"
                 }
               ]
             },
@@ -6482,6 +6733,19 @@
                   "new": false,
                   "number": 74,
                   "score": "6.8"
+                },
+                {
+                  "id": "ace7b0a7-c38e-5696-8a6c-102cf81b51ae",
+                  "title": "A remark request identifies the student it is about",
+                  "status": "Mitigated",
+                  "severity": "Low",
+                  "type": "Identifiability",
+                  "description": "Each comment request is about one student, so anything identifying in it would link that child to their results at the provider.\n\nLikelihood 1 (rare) x impact 2 (moderate) = 2.",
+                  "mitigation": "The request carries no name, admission number, school, percentage, or position: only subjects, the term, levels, and the movement since earlier terms, about 'the student'. Its custom_id is a random generation id, not the student's (CommentPrompt, CommentFacts; CommentGenerationTest).",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 110,
+                  "score": "2"
                 }
               ]
             },
@@ -6650,6 +6914,19 @@
                   "new": false,
                   "number": 75,
                   "score": "5.3"
+                },
+                {
+                  "id": "9267e271-6fb4-5a74-9f48-00367e3efd0e",
+                  "title": "Downloaded report cards leave the system's control",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Unawareness",
+                  "description": "A teacher downloads a card to their own phone to send to a family. From then on it sits in the phone's downloads and in messaging apps, with no retention and no record of where it went.\n\nLikelihood 2 (possible) x impact 2 (moderate) = 4.",
+                  "mitigation": "Not mitigated, and largely outside the system. Recommended treatment: accept, with guidance in the privacy notice on how cards should be shared and deleted.",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 113,
+                  "score": "4"
                 }
               ]
             },
@@ -6870,6 +7147,19 @@
                   "new": false,
                   "number": 83,
                   "score": "2.7"
+                },
+                {
+                  "id": "a943fed7-887c-5a1b-be78-54f5c767bf27",
+                  "title": "Real children's data is used in development or tests",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Disclosure of information",
+                  "description": "Copying a school's database into development, a test fixture, or a demo would spread children's data to laptops, CI logs, and screenshots.\n\nLikelihood 1 (rare) x impact 3 (severe) = 3.",
+                  "mitigation": "Development and demo data are synthetic: the seeder composes names from fixed lists and generates marks, and fixtures use short invented ids (api/database/seeders/SchoolSeeder.php; AGENTS.md). Nothing in the repository reads from production.",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 115,
+                  "score": "3"
                 }
               ]
             }
@@ -7099,6 +7389,19 @@
                   "new": false,
                   "number": 87,
                   "score": "8.1"
+                },
+                {
+                  "id": "b2b1d4ee-dc11-507a-920d-3a3725a93ff2",
+                  "title": "A breach would not be noticed in time to report it",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Non-compliance",
+                  "description": "The Act requires a breach to be reported to the Data Commissioner within a short deadline (secondary sources give 72 hours) and to affected people. Production has no CloudTrail trail, ships no logs off the host, and raises no alert other than the budget alarm, so a breach is likely to be found late or not at all.\n\nLikelihood 2 (possible) x impact 3 (severe) = 6.",
+                  "mitigation": "Not mitigated. Proposed for 5.3: a CloudTrail trail to a locked bucket, the application and nginx logs shipped to CloudWatch with a short alarm list (failed sign-ins, 5xx spikes, panel sign-ins), and a one-page breach procedure naming who notifies whom (Kenya Data Protection Act, 2019, section 43, notification and communication of breach).",
+                  "modelType": "LINDDUN",
+                  "new": false,
+                  "number": 114,
+                  "score": "6"
                 }
               ]
             }
@@ -7590,6 +7893,6 @@
     ],
     "diagramTop": 5,
     "reviewer": "",
-    "threatTop": 92
+    "threatTop": 115
   }
 }

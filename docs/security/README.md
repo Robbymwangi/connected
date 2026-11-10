@@ -1,8 +1,9 @@
 # Threat model
 
 Status: the data flow diagrams and the personal data inventory are drafted, and the
-STRIDE pass is done for every diagram: 92 threats, 60 mitigated and 32 open. The
-LINDDUN pass is still to come.
+STRIDE and LINDDUN passes are done for every diagram: 115 threats, 67 mitigated and 48
+open (STRIDE 92, of which 32 open; LINDDUN 23, of which 16 open). The risk register is
+still to come.
 
 `threat-model.json` is an [OWASP Threat Dragon](https://owasp.org/www-project-threat-dragon/)
 model (format 2.x). Threat Dragon reads and writes this file directly, so it is the model
@@ -45,7 +46,7 @@ done.
 1. Agree the data flow diagrams and this inventory. Done.
 2. STRIDE over the diagrams, weighted towards the sync layer. Each threat marked
    mitigated cites the ADR, spec section, or test that mitigates it. **Done.**
-3. LINDDUN over the same diagrams, for personal data.
+3. LINDDUN over the same diagrams, for personal data. **Done.**
 4. A risk register, with each open threat becoming an issue for the hardening pass
    (`docs/build-plan.md` 5.3).
 
@@ -60,6 +61,39 @@ problem.
 
 Nothing is changed in the code by this analysis. An open threat is a finding for the
 hardening pass, where each becomes an issue.
+
+### Privacy threats are scored differently
+
+LINDDUN threats are scored by likelihood times impact, each from 1 to 3, because CVSS
+measures a technical compromise and cannot express a privacy harm such as unawareness or
+a missed legal duty. The Score column holds the product, and the description ends with
+how it was reached.
+
+- **Likelihood:** 1 rare, 2 possible, 3 likely (happens in normal use, or certain
+  because no control exists).
+- **Impact:** 1 minor, 2 moderate (several people's personal data, or a legal duty
+  unmet), 3 severe (children's data widely exposed, or a statutory duty with
+  regulatory consequences).
+- **Severity:** 1 to 2 Low, 3 to 4 Medium, 6 High, 9 Critical.
+
+The Type column says which method a threat belongs to: the six STRIDE categories, or the
+seven LINDDUN ones (Linkability, Identifiability, Non-repudiation, Detectability,
+Disclosure of information, Unawareness, Non-compliance).
+
+### Legal references
+
+Non-compliance threats cite the Kenya Data Protection Act, 2019, and the Data Protection
+(General) Regulations, 2021. The section numbers for children's data (33), retention
+(39), breach notification (43), and transfers out of Kenya (48 to 50) were checked
+against the Act's table of contents. The substance of those provisions, the numbers for
+the other duties, and whether a school's records fall under regulation 26's
+strategic-interest list (data held in Kenya) come from secondary summaries and are
+marked "to verify" in the threats. This is a reading of the law by the project, not
+legal advice; the advisory ADR 0013 is waiting on is the place to settle it.
+
+Sources: [the Act, as published by the ODPC](https://www.odpc.go.ke/wp-content/uploads/2024/02/TheDataProtectionAct__No24of2019.pdf);
+[the General Regulations, 2021](https://www.odpc.go.ke/wp-content/uploads/2024/03/THE-DATA-PROTECTION-GENERAL-REGULATIONS-2021-1.pdf);
+[Kenya Law, Legal Notice 263 of 2021](https://new.kenyalaw.org/akn/ke/act/ln/2021/263).
 
 ## The diagrams
 
