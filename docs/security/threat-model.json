@@ -3385,8 +3385,8 @@
                 "text": "School admin\n(back office)"
               },
               "body": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "strokeDasharray": null
               }
             },
@@ -3401,9 +3401,49 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "providesAuthentication": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "b9953a22-9b79-52b0-94ec-fb62656a5000",
+                  "title": "An admin's password is guessed or reused",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Spoofing",
+                  "description": "An attacker obtains an admin's password, by guessing or from a breach elsewhere, and signs in to the panel, where one account can change every school record and every teacher's access.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                  "mitigation": "In production the panel requires an authenticator app at sign-in, with recovery codes, so a password alone is not enough (AdminPanelProvider, multiFactorAuthentication required when the app is in production). The panel's sign-in is rate limited separately from the API's, passwords are at least twelve characters, and every failure reads the same (AdminPanelTest, 'the panel login is rate limited', 'fail the same way').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 34,
+                  "score": "8.1"
+                },
+                {
+                  "id": "b1b5a382-1a09-5a89-9852-5c561d642b5e",
+                  "title": "An admin denies a change made in the panel",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Repudiation",
+                  "description": "A student record is altered, a teacher is given the Director of Studies grant, or a teacher's devices are revoked, and afterwards nobody can show which admin did it.\n\nCVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "Not mitigated. A panel write goes through Syncable, so sync_changes records what changed and when, but the log row has no actor column (SyncLog::append), and revoking tokens writes nothing at all. Only the term calendar records who acted (terms.opened_by, ended_by). Proposed for 5.3: an actor on sync_changes, or a small admin action log, covering grants, deactivation, and device revocation.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 35,
+                  "score": "4.9"
+                },
+                {
+                  "id": "aaefa487-7c2b-5efa-90b2-fe915e562ed7",
+                  "title": "An admin gives themselves academic authority",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Elevation of privilege",
+                  "description": "Admin and teacher accounts are separate so that the back office cannot alter results (ADR 0014). An admin can still create a teacher account, grant it Director of Studies, sign in to the app with it, and then unlock assessments and change marks.\n\nCVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:N",
+                  "mitigation": "Not mitigated by design: the panel has one gate, an active admin account, with no per-action approval (ADR 0009, decision 3). The separation stops accidents, not a determined admin. What would expose it is the missing audit record above. Recommended treatment: accept the trust in admins, and add the audit record so the act is at least visible.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 36,
+                  "score": "6.5"
+                }
+              ]
             }
           },
           {
@@ -3420,8 +3460,8 @@
                 "text": "CloudFront"
               },
               "body": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "strokeDasharray": null
               }
             },
@@ -3436,12 +3476,52 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "handlesCardPayment": false,
               "handlesGoodsOrServices": false,
               "isWebApplication": false,
               "privilegeLevel": "",
-              "threats": []
+              "threats": [
+                {
+                  "id": "e6bba97a-2495-5bbc-830b-089a6d6d5c64",
+                  "title": "The site is flooded from the internet",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Denial of service",
+                  "description": "Anyone can send requests to the public address. Requests for /api and /admin are never cached, so each one reaches a single small host and its single small database.\n\nCVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+                  "mitigation": "Partly mitigated: CloudFront absorbs network-level floods, static files are served from the edge, and the login and assistant routes have their own limits. Not mitigated: there is no web application firewall or rate rule at the edge (infra/production/cdn.tf), and no general limit in the application. Proposed for 5.3: the per-user limiter from diagram 1, and a rate-based rule at the edge if the pilot goes public.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 37,
+                  "score": "7.5"
+                },
+                {
+                  "id": "b587342f-f323-5ca6-8894-ec7488d0e3a2",
+                  "title": "One user's API response is served to another from the cache",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Information disclosure",
+                  "description": "A shared cache that stored an authenticated response would hand one teacher's data, or one school's, to the next caller of the same address.\n\nCVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+                  "mitigation": "Caching is disabled for every path sent to the host, and all viewer headers are forwarded (infra/production/cdn.tf: the CachingDisabled policy on the API paths). Only the static frontend is cached.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 38,
+                  "score": "7.5"
+                },
+                {
+                  "id": "8ad38232-6d82-58bb-8d53-5bb31ce3784b",
+                  "title": "The panel or the app is framed by another site",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "A hostile page loads the admin panel in an invisible frame and tricks a signed-in admin into clicking a control, such as deactivating an account.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:N/I:H/A:N",
+                  "mitigation": "Not mitigated: no X-Frame-Options or frame-ancestors directive is sent, since no response headers policy exists. The session cookie's SameSite setting of lax limits what a framed cross-site page can do, but it is not a guarantee. Proposed for 5.3: frame-ancestors 'none' in the same headers policy as the CSP and HSTS.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 39,
+                  "score": "5.3"
+                }
+              ]
             }
           },
           {
@@ -3479,7 +3559,47 @@
               "handlesGoodsOrServices": false,
               "isWebApplication": false,
               "privilegeLevel": "",
-              "threats": []
+              "threats": [
+                {
+                  "id": "ad736563-5606-5460-83f5-7d4c4dbe01a4",
+                  "title": "The host is reached directly, around CloudFront",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Spoofing",
+                  "description": "An attacker finds the host's public address and sends requests straight to it, skipping HTTPS and anything enforced at the edge.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:L",
+                  "mitigation": "The host's security group accepts port 80 only from CloudFront's origin-facing address list (infra/production/network.tf), and nginx returns 403 to any request without the secret header CloudFront adds (deploy/nginx.conf). The header is the real gate, since that address list admits every CloudFront customer; it is generated by Terraform, and it travels unencrypted on the leg recorded below.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 40,
+                  "score": "5.6"
+                },
+                {
+                  "id": "32a67752-527e-5c45-b31e-706333f862e4",
+                  "title": "A forged X-Forwarded-For header evades the login limit",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Spoofing",
+                  "description": "The login rate limit is keyed by client address. A caller who could choose the address the application sees could reset the limit at will.\n\nCVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+                  "mitigation": "Laravel is set to trust only the proxy that connected, which is CloudFront, so the client address is the one CloudFront appended and a value the caller supplies is ignored (bootstrap/app.php, trustProxies). Verified by reading the configuration, not by a test against a deployed host.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 41,
+                  "score": "5.3"
+                },
+                {
+                  "id": "c0f1beb9-d3ba-55f2-a0b0-9595a5b7a32e",
+                  "title": "The host's operating system is compromised",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Elevation of privilege",
+                  "description": "A vulnerability in the operating system, nginx, or PHP gives an attacker a shell on the one host that holds the application's settings and reaches the database.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                  "mitigation": "No SSH is exposed; administration is through Session Manager (network.tf, server.tf). Security updates install unattended (deploy/apt-auto-upgrades.conf), the root volume is encrypted, the instance metadata service requires session tokens, and the host's role can read only its own parameters (server.tf).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 42,
+                  "score": "8.1"
+                }
+              ]
             }
           },
           {
@@ -3517,7 +3637,73 @@
               "handlesGoodsOrServices": false,
               "isWebApplication": true,
               "privilegeLevel": "Institution administrator",
-              "threats": []
+              "threats": [
+                {
+                  "id": "dad0f998-50aa-5a4e-ae78-667b4a823aac",
+                  "title": "A teacher account reaches the admin panel",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Elevation of privilege",
+                  "description": "A teacher signs in at /admin with their own password, or reuses a device token there, to manage accounts and grants.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+                  "mitigation": "The panel's gate is an active admin account, asked on every request and not only at sign-in, and the panel uses its own session guard, so a device token is not a panel credential and a panel session is not an API one (User::canAccessPanel; AdminPanelTest, 'a non-admin cannot reach the panel', 'a panel session is not an API credential').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 49,
+                  "score": "8.8"
+                },
+                {
+                  "id": "055509df-c17f-5716-8c7c-83da2d827305",
+                  "title": "An admin of one school reaches another school's records",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Elevation of privilege",
+                  "description": "An admin edits a record id in the address, or a Livewire update request, to list or change another institution's students and accounts.\n\nCVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:C/C:H/I:H/A:N",
+                  "mitigation": "The institution scope is applied as persistent panel middleware, so the first page load and every Livewire update after it are scoped to the admin's institution (AdminPanelProvider; AdminPanelTest, 'every Livewire request of the panel is scoped too', 'another institution's record is a 404 by its id').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 50,
+                  "score": "8.7"
+                },
+                {
+                  "id": "49184adf-051a-5990-ab50-2c1271f5cb28",
+                  "title": "A forged request acts with an admin's session",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "A signed-in admin visits a hostile page that submits a form to the panel in the background.\n\nCVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:H/A:N",
+                  "mitigation": "The panel runs Laravel's request forgery protection on every state-changing request, and the session cookie is HTTP-only, secure, and SameSite lax (AdminPanelProvider middleware; config/session.php; deploy/release.sh sets SESSION_SECURE_COOKIE).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 51,
+                  "score": "6.5"
+                },
+                {
+                  "id": "b62a31c2-0114-5aa2-9cea-bd67b773f91a",
+                  "title": "A setup change silently alters recorded results",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "An admin lowers a marking criterion's maximum, or removes it, after marks were entered against it, which would change every result computed from them.\n\nCVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "A criterion that has marks keeps its maximum and cannot be removed; only its name can be corrected (docs/spec/access-model.md, What admin accounts do; AdminPanelTest, 'a criterion with marks keeps its maximum'). Accounts are deactivated, never deleted, so history keeps its references.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 52,
+                  "score": "4.9"
+                },
+                {
+                  "id": "7fbfab04-8c1a-5463-bca4-20ae24c8df85",
+                  "title": "The school is locked out of its own panel",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Denial of service",
+                  "description": "An admin deactivates themselves or the only other admin, leaving nobody who can manage accounts.\n\nCVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:N/I:N/A:H",
+                  "mitigation": "An admin cannot deactivate themselves or the last active admin (User::deactivate; AdminPanelTest, 'an administrator cannot deactivate themselves').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 53,
+                  "score": "4.9"
+                }
+              ]
             }
           },
           {
@@ -3534,8 +3720,8 @@
                 "text": "Auth API\n(/login, /logout,\n/me)"
               },
               "body": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "strokeDasharray": null
               }
             },
@@ -3550,12 +3736,39 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "handlesCardPayment": false,
               "handlesGoodsOrServices": false,
               "isWebApplication": true,
               "privilegeLevel": "",
-              "threats": []
+              "threats": [
+                {
+                  "id": "a216ae38-604f-59c2-a68a-20aead75ce6a",
+                  "title": "An admin account obtains a device token",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Elevation of privilege",
+                  "description": "An admin signs in at the API with their panel password to get a token, combining back office and academic powers in one credential.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+                  "mitigation": "The API login looks up teacher accounts only, and answers an admin's correct password exactly as a wrong one; EnsureAccountIsActive refuses a token held by an admin account however it was issued (LoginController; SeparateAccountsTest).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 43,
+                  "score": "8.1"
+                },
+                {
+                  "id": "936f04b0-2649-5720-9746-9206bd20b51c",
+                  "title": "Response time reveals whether an email has an account",
+                  "status": "Open",
+                  "severity": "Low",
+                  "type": "Information disclosure",
+                  "description": "The login answers an unknown email without checking a password hash, and a known one after a slow hash check. Measuring the difference tells an attacker which addresses are real teacher accounts.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
+                  "mitigation": "Partly mitigated: the response body is identical, and the login limit makes measuring slow. Not mitigated: the timing itself (LoginController checks the hash only when the user exists). Proposed for 5.3: check a dummy hash when no user is found.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 44,
+                  "score": "3.7"
+                }
+              ]
             }
           },
           {
@@ -3572,8 +3785,8 @@
                 "text": "Online API\n(reads, unlock,\nterm close, reports)"
               },
               "body": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "strokeDasharray": null
               }
             },
@@ -3588,12 +3801,65 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "handlesCardPayment": false,
               "handlesGoodsOrServices": false,
               "isWebApplication": true,
               "privilegeLevel": "",
-              "threats": []
+              "threats": [
+                {
+                  "id": "debe42db-cc67-5959-9817-ee50bc2fe293",
+                  "title": "A teacher unlocks an assessment or closes a term without the grant",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Elevation of privilege",
+                  "description": "A teacher calls the unlock or term close route directly, to reopen final results or to issue report cards.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "Unlock is allowed only to a Director of Studies or the HOD of the assessment's subject (AssessmentPolicy::unlock), and term close only to a Director of Studies (ADR 0014, decisions 3 and 5). Having created the assessment does not grant it (WriteEndpointsTest, 'unlock returns 403 for a teacher without the grant'; TermCloseTest).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 45,
+                  "score": "6.5"
+                },
+                {
+                  "id": "edb4a33e-e72d-525b-ad47-9d092360df91",
+                  "title": "A route is called with another school's record id",
+                  "status": "Mitigated",
+                  "severity": "Critical",
+                  "type": "Elevation of privilege",
+                  "description": "A teacher puts another institution's assessment or report id in the address of an unlock or download request.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:N",
+                  "mitigation": "Route binding goes through the institution scope, so another school's record is simply not found (WriteEndpointsTest, 'unlock returns 404 for an assessment in another institution'; ReadEndpointsTest).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 46,
+                  "score": "9.6"
+                },
+                {
+                  "id": "c57a0311-7e80-5b39-891f-3ea2e4aa01bc",
+                  "title": "An unlock cannot be attributed",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Repudiation",
+                  "description": "Final results are reopened and changed, and the person who unlocked them denies it.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:L/A:N",
+                  "mitigation": "Each unlock writes an append-only unlock_notes row with the acting user taken from the token, never from the request, and a note is required once report cards exist (docs/spec/workflow.md, Unlock; WriteEndpointsTest, 'records the authenticated account rather than client-supplied audit fields').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 47,
+                  "score": "4.3"
+                },
+                {
+                  "id": "25b0a5f2-8b01-5f84-845c-b3f1681131b7",
+                  "title": "Read endpoints are unlimited and unpaged",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Denial of service",
+                  "description": "GET /api/students and the other list routes return every row of the institution in one response, and can be called without limit by any token.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:L",
+                  "mitigation": "Not mitigated: the same missing API rate limit as on diagram 1, and no pagination on these lists (StudentsController). At a pilot school's size the cost is small. Proposed for 5.3: covered by the per-user limiter; pagination only if a school outgrows it.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 48,
+                  "score": "4.3"
+                }
+              ]
             }
           },
           {
@@ -3673,7 +3939,21 @@
               "isSigned": false,
               "storesCredentials": true,
               "storesInventory": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "ce5180f0-7131-539c-8d08-65b75ec174ae",
+                  "title": "Stored credentials are read from the database",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "Someone who reads the users or token tables tries to recover passwords or reuse tokens.\n\nCVSS:3.1/AV:N/AC:H/PR:H/UI:N/S:U/C:H/I:N/A:N",
+                  "mitigation": "Passwords are stored only as hashes (User, the hashed cast), device tokens only as hashes of the value the device holds, and neither is ever sent to a device (hidden attributes; SyncPullTest). The database is private and encrypted at rest (infra/production/database.tf).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 54,
+                  "score": "4.4"
+                }
+              ]
             }
           },
           {
@@ -3784,7 +4064,21 @@
               "isEncrypted": true,
               "isPublicNetwork": true,
               "protocol": "HTTPS",
-              "threats": []
+              "threats": [
+                {
+                  "id": "d7986e6d-9a10-512e-a2c0-e2e2e37cc3b3",
+                  "title": "A password or token is read on the public network",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Information disclosure",
+                  "description": "A teacher signs in over school or mobile data, and someone on that network captures the password or the token returned.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+                  "mitigation": "The public leg is HTTPS only (infra/production/cdn.tf, redirect-to-https). The first-visit downgrade and the unencrypted origin leg are separate open threats, on diagram 1 and above.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 56,
+                  "score": "7.4"
+                }
+              ]
             },
             "id": "9a7f5c2e-8ac1-5e7d-87a9-bab9b1c3f5ea",
             "source": {
@@ -3861,7 +4155,21 @@
               "isEncrypted": true,
               "isPublicNetwork": true,
               "protocol": "HTTPS",
-              "threats": []
+              "threats": [
+                {
+                  "id": "73459537-4a55-54bc-abd2-8a0f56f8f4a9",
+                  "title": "An admin's session is stolen or left open",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Spoofing",
+                  "description": "A session cookie is captured, or an admin walks away from an office computer while signed in.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N",
+                  "mitigation": "The cookie is secure and HTTP-only, so it is sent only over HTTPS and is not readable by script; a session ends after 120 minutes idle (config/session.php), and a deactivated admin's session is refused on its next request (AdminPanelTest). Residual: within those two hours an unattended, unlocked computer is an open panel.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 57,
+                  "score": "6.8"
+                }
+              ]
             },
             "id": "96d4e643-5163-5a7f-9206-5d66a73b8e87",
             "source": {
@@ -3876,8 +4184,8 @@
             "shape": "flow",
             "attrs": {
               "line": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "targetMarker": {
                   "name": "block"
                 },
@@ -3933,12 +4241,26 @@
               "outOfScope": false,
               "isTrustBoundary": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isBidirectional": true,
               "isEncrypted": false,
               "isPublicNetwork": true,
               "protocol": "HTTP",
-              "threats": []
+              "threats": [
+                {
+                  "id": "9a299ef7-10c5-5ba2-bbc7-f8260d5d36bb",
+                  "title": "Traffic between CloudFront and the host is unencrypted",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Information disclosure",
+                  "description": "The leg from CloudFront to the host's public address is plain HTTP. It carries teachers' and admins' passwords, authenticator codes, bearer tokens, session cookies, every sync payload, and the origin secret itself. Anyone able to observe that path can read and alter all of it, and with the secret can call the host directly.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+                  "mitigation": "Not mitigated; a known, recorded decision: a certificate needs a domain, and there is none yet (ADR 0015, decision 7). The path runs between CloudFront and an AWS address, which narrows who could observe it but does not encrypt it. Proposed before any real school's data is loaded: a domain, a certificate on the host, and origin_protocol_policy set to https-only, which the ADR already describes as a Terraform change.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 55,
+                  "score": "7.4"
+                }
+              ]
             },
             "id": "d1bd4108-3a69-56ba-9219-03fb9055fdf4",
             "source": {
@@ -6791,6 +7113,6 @@
     ],
     "diagramTop": 5,
     "reviewer": "",
-    "threatTop": 33
+    "threatTop": 57
   }
 }
