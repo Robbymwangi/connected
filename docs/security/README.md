@@ -4,36 +4,66 @@ Status: first draft of the data flow diagram and the personal data inventory, fo
 review. No threats are recorded yet.
 
 `threat-model.json` is an [OWASP Threat Dragon](https://owasp.org/www-project-threat-dragon/)
-model (format 2.x). Open it in the Threat Dragon desktop app, or in the web app with
-"Open an existing threat model" and a local file. It is edited there from now on, and
-changes go through a merge request like any other file.
+model (format 2.x). Threat Dragon reads and writes this file directly, so it is the model
+itself and not an export of one. Changes go through a merge request like any other file.
+
+## Getting the report
+
+The report (cover sheet, each diagram, and a table of threats for every element) is
+produced by Threat Dragon from this file:
+
+1. Install the Threat Dragon desktop app from its
+   [releases page](https://github.com/OWASP/threat-dragon/releases).
+2. Open `docs/security/threat-model.json` ("Open an existing threat model", then the
+   local file).
+3. Choose "Report", tick the options wanted ("Show out of scope elements" off keeps the
+   tables short), and save it as a PDF.
+
+Each threat table has the columns Number, Title, Type, Severity, Status, Score,
+Description, and Mitigations. The tables are empty until step 2 of the plan below is
+done.
 
 ## The plan
 
-1. Agree the data flow diagram and this inventory. **This step.**
-2. STRIDE over the diagram, weighted towards the sync layer. Each threat marked
+1. Agree the data flow diagrams and this inventory. **This step.**
+2. STRIDE over the diagrams, weighted towards the sync layer. Each threat marked
    mitigated cites the ADR, spec section, or test that mitigates it.
-3. LINDDUN over a copy of the same diagram, for personal data.
+3. LINDDUN over the same diagrams, for personal data.
 4. A risk register, with each open threat becoming an issue for the hardening pass
    (`docs/build-plan.md` 5.3).
 
-## What the diagram shows
+## The diagrams
 
-One level 1 diagram with three trust boundaries: the teacher's device, the AWS account,
-and the application host inside it. The institution boundary is logical and is not
-drawn: every institution shares one database and one API, separated by `institution_id`
-under the Eloquent global scope.
+Five small diagrams rather than one large one, so that flows do not cross:
+
+| Diagram | Shows |
+| --- | --- |
+| 0. Context | Who and what the system talks to. A summary; carries no threats. |
+| 1. Teacher device and sync | The local store, outbox, sync runner, Sync API, and sync logs: the project's contribution. |
+| 2. API, accounts, and back office | CloudFront, nginx, login and tokens, the online routes, and the admin panel. |
+| 3. Reports, comments, and the model provider | The assistant, the queue worker, report card PDFs, and what is sent to the model. |
+| 4. Deployment | How code and settings reach production. |
+
+Three conventions hold across them:
+
+- Each element is modelled, and carries its threats, on exactly one diagram. Where it
+  appears on another it is dashed and marked out of scope, with a pointer to its home
+  diagram, so no threat is recorded twice.
+- The diagrams are of Threat Dragon's Generic type, which accepts both STRIDE and
+  LINDDUN threats on the same element. One set of diagrams serves both methods.
+- The institution boundary is logical and is not drawn: every institution shares one
+  database and one API, separated by `institution_id` under the Eloquent global scope.
 
 Production is modelled as declared in `infra/` (ADR 0015), although it is currently
 taken down.
 
-Not on the diagram, on purpose:
+Not on the diagrams, on purpose:
 
 - Parents and students. They are data subjects, not users; a report card reaches them
   on paper or forwarded by a teacher, outside the system.
-- Terraform's own plan and apply against the AWS control plane. The deploy workflow is
-  drawn; the infrastructure workflow shares its actor and its guard (only a run on
-  `main` can assume the apply role).
+- Terraform's own plan and apply against the AWS control plane. The GitHub Actions
+  element covers both the deploy and the infrastructure workflows, which share a guard
+  (only a run on `main` can assume the apply role).
 - Local development (Sail, RustFS) and the simulation in `simulation/`.
 
 ## Personal data inventory
@@ -61,10 +91,7 @@ are not rediscovered:
 - Rows are soft deleted and the change log is append-only, so nothing a device has
   synced is ever erased on the server today.
 
-## Open questions for the review
+## Assumptions
 
-- Is anything missing from the diagram: an external party, a store, or a flow?
-- Is the admission number stored anywhere? The specs mention it only as something
-  never sent to the model, and `students` has no such column.
-- Should the infrastructure workflow have its own element, or does the deploy actor
-  cover it?
+- No admission number is stored. `students` has no such column today; if one is added
+  later it joins the first row of the inventory and the model is revisited.
