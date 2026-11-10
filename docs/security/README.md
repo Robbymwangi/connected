@@ -19,6 +19,22 @@ produced by Threat Dragon from this file:
 3. Choose "Report", tick the options wanted ("Show out of scope elements" off keeps the
    tables short), and save it as a PDF.
 
+Without installing anything, the web app runs from its official image (the model was
+checked this way, against Threat Dragon 2.6.2):
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e ENCRYPTION_JWT_SIGNING_KEY=$(openssl rand -hex 32) \
+  -e ENCRYPTION_JWT_REFRESH_SIGNING_KEY=$(openssl rand -hex 32) \
+  -e ENCRYPTION_KEYS='[{"isPrimary":true,"id":0,"value":"'$(openssl rand -hex 16)'"}]' \
+  -e NODE_ENV=development -e SERVER_API_PROTOCOL=http \
+  threatdragon/owasp-threat-dragon:stable
+```
+
+Then open `http://localhost:3000`, choose "Login to Local Session", "Open an existing
+threat model", paste the file's contents, and choose "Import". "Report" then "Print"
+gives the PDF. A local session keeps the model in the browser; nothing is uploaded.
+
 Each threat table has the columns Number, Title, Type, Severity, Status, Score,
 Description, and Mitigations. The tables are empty until step 2 of the plan below is
 done.
