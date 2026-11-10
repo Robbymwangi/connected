@@ -5084,8 +5084,8 @@
                 "text": "Report assistant\n(/reports/assistant)"
               },
               "body": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "strokeDasharray": null
               }
             },
@@ -5100,12 +5100,78 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "handlesCardPayment": false,
               "handlesGoodsOrServices": false,
               "isWebApplication": true,
               "privilegeLevel": "",
-              "threats": []
+              "threats": [
+                {
+                  "id": "a9687720-29f2-587e-8bb2-3e4d8e3eb037",
+                  "title": "A question talks the assistant out of its job",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "A teacher types instructions into the question box: ignore your rules, answer about something else, write in the school's name, reveal student names, or compare teachers.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N",
+                  "mitigation": "Enforced by code, not only by the prompt (ADR 0013, decision 3). A separate gate call with no tools and no report data classifies the question first and fails closed. The answering model has only read-only report tools: no web, no code, no SQL. Its answer must fit a schema, every number in it must appear in a tool result of the same request, and an unanswerable or ungrounded answer is replaced by one fixed reply (ReportAssistant, Grounding; ReportAssistantTest, 'the gate fails closed', 'an ungrounded figure'). A red-team evaluation set exists as a command (EvaluateAssistant).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 58,
+                  "score": "5.4"
+                },
+                {
+                  "id": "36f3183d-51bb-51e8-bdd1-09b91c5efc4e",
+                  "title": "Text stored in the school's data steers the assistant",
+                  "status": "Open",
+                  "severity": "Low",
+                  "type": "Tampering",
+                  "description": "Tool results include assessment names, which any teacher writes freely. A name crafted as an instruction reaches the answering model inside a tool result, past the gate, which only judges the question, and could skew what a colleague is told about that report.\n\nCVSS:3.1/AV:N/AC:H/PR:L/UI:R/S:U/C:N/I:L/A:N",
+                  "mitigation": "Partly mitigated: the model can do nothing but answer, the grounding check still requires every figure to come from a tool, and an assessment name is limited in length. Not mitigated: no check treats stored text as untrusted before it reaches the model. Proposed: add this case to the evaluation set, and strip or quote assessment names in tool results if it succeeds.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 59,
+                  "score": "2.6"
+                },
+                {
+                  "id": "39cfb444-8a9a-5508-b1bb-bc93caedea2a",
+                  "title": "The assistant is pointed at another school or another scope",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Elevation of privilege",
+                  "description": "A caller sends another institution's stream, subject, or assessment id as the report scope, or asks the model to look somewhere else.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:N/A:N",
+                  "mitigation": "The scope is validated against the caller's institution exactly as the report summary validates it, every tool runs under the institution scope, and no tool takes a stream, subject, year, or school from the model (ReportAssistantController; ADR 0013, decisions 1 and 7; ReportAssistantTest, 'the scope is the report's').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 60,
+                  "score": "7.7"
+                },
+                {
+                  "id": "9bec1dee-f006-5f1b-9d53-06038cba3fb2",
+                  "title": "Another user's conversation is read or continued",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "A caller sends a conversation id that belongs to a colleague, to read their questions or to plant earlier turns.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+                  "mitigation": "History is held by the server and the client sends only the new question, so earlier turns cannot be forged. A conversation belongs to one user and one report scope; any other caller, or the same caller with other filters, starts afresh (Conversation::resume; ReportAssistantTest, 'history is held by the server').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 61,
+                  "score": "6.5"
+                },
+                {
+                  "id": "b1b41229-110c-5fd2-bf27-5f250cbfdb5d",
+                  "title": "The assistant is used to run up the model bill",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Denial of service",
+                  "description": "Every question is a live model call with up to twelve tool round trips. A script asking continuously would spend the school's budget and exhaust the provider's rate limit for everyone.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:L",
+                  "mitigation": "A teacher is limited to ten questions a minute and sixty an hour, a question to 500 characters, tool calls to twelve, and each call has a timeout (AppServiceProvider, RateLimiter 'assistant'; ReportAssistant; ReportAssistantTest, 'a teacher is limited to ten questions a minute').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 62,
+                  "score": "4.3"
+                }
+              ]
             }
           },
           {
@@ -5244,12 +5310,14 @@
                 "text": "Jobs and cache\n(Postgres)"
               },
               "topLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               },
               "bottomLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               }
             },
             "visible": true,
@@ -5263,13 +5331,40 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isALog": false,
               "isEncrypted": false,
               "isSigned": false,
               "storesCredentials": false,
               "storesInventory": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "6c4031da-f930-540e-b52e-fd1fa34bf16c",
+                  "title": "Assistant conversations outlive their expiry",
+                  "status": "Open",
+                  "severity": "Low",
+                  "type": "Information disclosure",
+                  "description": "A conversation's questions and its handle-to-student mapping are written to the cache table with a thirty minute expiry. The application stops reading them after that, but nothing deletes the rows.\n\nCVSS:3.1/AV:N/AC:H/PR:H/UI:N/S:U/C:L/I:N/A:N",
+                  "mitigation": "Partly mitigated: an expired row is never returned by the application, and the table is in the private, encrypted database. Not mitigated: there is no scheduler and no pruning command in the repository, so expired rows remain until overwritten. Proposed for 5.3: prune expired cache rows from the queue worker.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 67,
+                  "score": "2.2"
+                },
+                {
+                  "id": "5e020be2-3588-5136-94d9-cfbfd321f011",
+                  "title": "A job's payload is altered or carries personal data",
+                  "status": "Mitigated",
+                  "severity": "Low",
+                  "type": "Tampering",
+                  "description": "Queued jobs sit in a database table until a worker takes them, and failed ones stay in failed_jobs.\n\nCVSS:3.1/AV:N/AC:H/PR:H/UI:N/S:U/C:N/I:L/A:N",
+                  "mitigation": "A job carries only record ids and its institution, never names or marks, and is dispatched only by server code after the writing transaction commits (ADR 0007). The table is reachable only from the host.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 68,
+                  "score": "2.2"
+                }
+              ]
             }
           },
           {
@@ -5286,8 +5381,8 @@
                 "text": "Queue worker"
               },
               "body": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "strokeDasharray": null
               }
             },
@@ -5302,12 +5397,65 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "handlesCardPayment": false,
               "handlesGoodsOrServices": false,
               "isWebApplication": false,
               "privilegeLevel": "",
-              "threats": []
+              "threats": [
+                {
+                  "id": "806237e7-930d-5e19-9529-105c7dae29b8",
+                  "title": "A stale job issues a report card for a cycle that was unwound",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "A comment is accepted, its report job is queued, and before the job finishes an unlock unwinds the term. The job would otherwise publish a card built on results that are no longer final.\n\nCVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "The job rechecks at its final write, under the institution's lock, that the comment is still live and accepted, the term closure still live, and no card yet exists; otherwise it records nothing and deletes the object it wrote (GenerateReportCard; ReportCardTest, 'an unwind that lands while the PDF is being written'). A generation result is applied only to the latest generation of a live, pending comment (CommentGenerationTest).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 63,
+                  "score": "5.3"
+                },
+                {
+                  "id": "61096297-0076-5ed9-8951-12c34abd5468",
+                  "title": "A job runs without an institution and sees every school",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Elevation of privilege",
+                  "description": "Outside a request the institution scope filters nothing, by design, so that seeders and commands work. A queued job that forgot to set its institution would read and write across every school.\n\nCVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:N",
+                  "mitigation": "Each job carries its institution and runs inside CurrentInstitution::actingFor, including its failure handlers; the binding is fresh per job on a worker (GenerateReportCard, SubmitCommentBatch, CollectCommentBatch; CommentGenerationTest, 'a job runs as its institution'). Residual: this is a convention each new job must follow, not something the framework enforces.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 64,
+                  "score": "8.2"
+                },
+                {
+                  "id": "13be5be4-5441-545f-8658-7a145142a76b",
+                  "title": "Text in a name or remark injects markup into the PDF",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "A student's name or a teacher's remark containing HTML is rendered into the report card and changes its appearance, or makes the renderer fetch a remote file.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:L/A:N",
+                  "mitigation": "The card is a Blade view with escaped output only, the renderer has remote loading disabled (GenerateReportCard::render, isRemoteEnabled false), and a remark is limited to 600 characters with no control characters (CommentPushHandler).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 65,
+                  "score": "4.3"
+                },
+                {
+                  "id": "4ce1659f-b77a-5a96-b93c-bf29ddc869d5",
+                  "title": "Remarks are regenerated without limit",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Denial of service",
+                  "description": "A class teacher or Director of Studies can send the regenerate command for a comment as often as they like while it is not accepted. Each one submits a new request to the model provider.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:L",
+                  "mitigation": "Not mitigated: regenerate has no count or rate limit, and the sync route it arrives on has none either (diagram 1). The damage is bounded by who may send it and by the batch price of a short remark. Proposed for 5.3: covered by the per-user sync limiter; a per-comment cap if cost shows it is needed.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 66,
+                  "score": "4.3"
+                }
+              ]
             }
           },
           {
@@ -5324,12 +5472,14 @@
                 "text": "Report card PDFs\n(S3 bucket)"
               },
               "topLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               },
               "bottomLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               }
             },
             "visible": true,
@@ -5343,13 +5493,40 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isALog": false,
               "isEncrypted": false,
               "isSigned": false,
               "storesCredentials": false,
               "storesInventory": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "a482913a-d63d-59d0-bf72-eb9177477948",
+                  "title": "Report cards are read from the bucket by someone outside the school",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "Each PDF names a child and their school and carries their levels and remark.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
+                  "mitigation": "The bucket is private with all public access blocked, readable and writable only by the host's role (infra/production/storage.tf). Keys are named by the report's id, never by the student, so a key reveals nothing and cannot be guessed. A download needs a presigned URL from the API, issued only inside the institution and valid for ten minutes (ReportsController; ReportCardTest, 'within the institution only').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 69,
+                  "score": "5.9"
+                },
+                {
+                  "id": "2fd2681a-4aba-5420-9f8d-5be5aa5c14d5",
+                  "title": "Superseded report cards are never deleted",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "When an unlock unwinds a term, its report rows are soft deleted and new cards are issued later, but the old PDFs stay in the bucket. Over time it accumulates cards that were withdrawn, each naming a child.\n\nCVSS:3.1/AV:N/AC:H/PR:H/UI:N/S:U/C:H/I:N/A:N",
+                  "mitigation": "Partly mitigated: a soft-deleted report cannot be downloaded through the API, and the bucket is private. Not mitigated: nothing removes the object (the only delete is for a job's own failed write, in GenerateReportCard), and the bucket has no lifecycle rule. Proposed: delete the object when its report is unwound, or a lifecycle rule; decide retention in the LINDDUN pass.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 70,
+                  "score": "4.4"
+                }
+              ]
             }
           },
           {
@@ -5366,8 +5543,8 @@
                 "text": "Model provider\n(Anthropic API)"
               },
               "body": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "strokeDasharray": null
               }
             },
@@ -5382,9 +5559,36 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "providesAuthentication": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "33088a27-3286-5eff-8256-4d4835872200",
+                  "title": "A student's name reaches the model provider in a question",
+                  "status": "Open",
+                  "severity": "Low",
+                  "type": "Information disclosure",
+                  "description": "The assistant replaces a roster student's name with a handle before either model sees the question. A name typed in lower case, misspelt, shared by two students, or belonging to someone off the roster is not caught, and leaves the school with whatever the teacher wrote about that child.\n\nCVSS:3.1/AV:N/AC:H/PR:L/UI:R/S:C/C:L/I:N/A:N",
+                  "mitigation": "Partly mitigated, and documented as provisional: full names in any case and unshared name parts written with a capital are replaced; no school name is ever sent; tool results carry handles only (Handles::conceal; ADR 0013, decision 4; ReportAssistantTest, 'a student's name typed into the question reaches neither model'). The decision waits on the advisory about sending student data to a provider.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 71,
+                  "score": "3.0"
+                },
+                {
+                  "id": "b9d22729-b6a9-5367-9a42-1a629efd2161",
+                  "title": "The model writes something false or unsuitable",
+                  "status": "Mitigated",
+                  "severity": "Low",
+                  "type": "Tampering",
+                  "description": "A generated remark invents a fact about a child, or an assistant answer states a wrong figure, and it is taken as the school's word.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:N/I:L/A:N",
+                  "mitigation": "A generated remark is only a draft: a person must accept each one, there is no accept-all, and only an accepted remark produces a card (docs/spec/workflow.md, Comments). The comment prompt carries levels and trends only, so there is little to invent from. Assistant figures must match a tool result or the fixed reply is shown. Stand-in text is labelled as such.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 72,
+                  "score": "3.1"
+                }
+              ]
             }
           },
           {
@@ -5453,7 +5657,21 @@
               "isEncrypted": true,
               "isPublicNetwork": true,
               "protocol": "HTTPS",
-              "threats": []
+              "threats": [
+                {
+                  "id": "b0cf7640-f272-53c6-9660-bbea87796ce5",
+                  "title": "The assistant is called without a signed-in teacher",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Spoofing",
+                  "description": "Someone calls the assistant route directly to query a school's results or spend its budget.\n\nCVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+                  "mitigation": "The route sits behind the same token check and active-account check as every API route, and without a model key configured it answers 503 and the app shows its labelled stand-in (routes/api.php; ReportAssistantTest, 'without a key there is no assistant').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 76,
+                  "score": "5.3"
+                }
+              ]
             },
             "id": "f21d983a-520a-51d3-a430-5acab7d09366",
             "source": {
@@ -5607,7 +5825,21 @@
               "isEncrypted": false,
               "isPublicNetwork": false,
               "protocol": "PostgreSQL",
-              "threats": []
+              "threats": [
+                {
+                  "id": "c6dc5719-7219-587e-b7c7-92844b24ded3",
+                  "title": "A job is dispatched for a change that never committed",
+                  "status": "Mitigated",
+                  "severity": "Low",
+                  "type": "Tampering",
+                  "description": "A term close or an accepted remark fails after its job was queued, and the worker acts on rows that do not exist or hold other values.\n\nCVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:L/A:N",
+                  "mitigation": "Jobs are dispatched after commit, so a worker never reads a row its own transaction has not written, and no job holds the institution's lock across a call to the provider (ADR 0007, decisions 2 and 4; ReportCardTest, 'accepting a comment queues its student's report card, after commit').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 77,
+                  "score": "3.1"
+                }
+              ]
             },
             "id": "403a3e1f-eb71-55ac-af84-ee9d19a0c558",
             "source": {
@@ -5915,7 +6147,21 @@
               "isEncrypted": true,
               "isPublicNetwork": true,
               "protocol": "HTTPS",
-              "threats": []
+              "threats": [
+                {
+                  "id": "af3bf534-c116-57a7-bb09-9e082fa29ed5",
+                  "title": "Identifiable student data is sent to the provider by the assistant",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "Answering questions about results means sending results. Sent as they are stored, they would give a third party named children's marks.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:C/C:H/I:N/A:N",
+                  "mitigation": "Students are handles for the length of one conversation, mapped back to names only on the server, and the mapping expires with the history. Tools never return a name or an admission number, and no school name is sent (ADR 0013, decision 4). What does leave is percentages under a handle; whether that is acceptable is the provisional decision above, and belongs to the LINDDUN pass.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 73,
+                  "score": "6.8"
+                }
+              ]
             },
             "id": "caea6c5a-f243-54ad-ba48-77790763dcf6",
             "source": {
@@ -6223,7 +6469,21 @@
               "isEncrypted": true,
               "isPublicNetwork": true,
               "protocol": "HTTPS",
-              "threats": []
+              "threats": [
+                {
+                  "id": "818d63e5-ced4-50fe-9b80-20a129bbea9f",
+                  "title": "Identifiable student data is sent to the provider for remarks",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "A remark is written per child, so each request is about one student.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:C/C:H/I:N/A:N",
+                  "mitigation": "The prompt is built in one place from facts that hold no name, admission number, school, percentage, or position: only the subject, the term, the level, and the movement since earlier terms, about 'the student' (CommentPrompt, CommentFacts; ADR 0012, decision 5; CommentGenerationTest, 'nothing identifying in it').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 74,
+                  "score": "6.8"
+                }
+              ]
             },
             "id": "885358f4-fec4-5f0d-8b3e-1f242d856abb",
             "source": {
@@ -6315,8 +6575,8 @@
             "shape": "flow",
             "attrs": {
               "line": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "targetMarker": {
                   "name": "block"
                 },
@@ -6372,12 +6632,26 @@
               "outOfScope": false,
               "isTrustBoundary": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isBidirectional": false,
               "isEncrypted": true,
               "isPublicNetwork": true,
               "protocol": "HTTPS",
-              "threats": []
+              "threats": [
+                {
+                  "id": "ad30d3cc-65f3-5e91-b210-e96632d89777",
+                  "title": "A presigned report card link is passed on",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "The link is the only credential for the PDF. Anyone it is forwarded to, or who finds it in a browser history or a chat within ten minutes, can download that child's card without signing in, and the download is not recorded by the application.\n\nCVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:N/A:N",
+                  "mitigation": "Partly mitigated: the link expires after ten minutes, is issued only to a signed-in teacher of the institution, and is fetched over HTTPS. Not mitigated: within that window it works for anyone, and no record is kept of who asked for which card. Recommended treatment: accept the ten minute window; record download requests if the LINDDUN pass calls for it.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 75,
+                  "score": "5.3"
+                }
+              ]
             },
             "id": "89033bb1-32ef-5407-b944-7a2dc0ad6271",
             "source": {
@@ -7113,6 +7387,6 @@
     ],
     "diagramTop": 5,
     "reviewer": "",
-    "threatTop": 57
+    "threatTop": 77
   }
 }

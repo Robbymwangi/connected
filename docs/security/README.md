@@ -1,8 +1,8 @@
 # Threat model
 
 Status: the data flow diagrams and the personal data inventory are drafted, and the
-STRIDE pass is done for diagrams 1 and 2: 57 threats, 36 mitigated and 21 open.
-Diagrams 3 and 4 and the LINDDUN pass are still to come.
+STRIDE pass is done for diagrams 1 to 3: 77 threats, 50 mitigated and 27 open.
+Diagram 4 and the LINDDUN pass are still to come.
 
 `threat-model.json` is an [OWASP Threat Dragon](https://owasp.org/www-project-threat-dragon/)
 model (format 2.x). Threat Dragon reads and writes this file directly, so it is the model
@@ -44,8 +44,8 @@ done.
 
 1. Agree the data flow diagrams and this inventory. Done.
 2. STRIDE over the diagrams, weighted towards the sync layer. Each threat marked
-   mitigated cites the ADR, spec section, or test that mitigates it. **Diagrams 1 and 2
-   done; 3 and 4 next.**
+   mitigated cites the ADR, spec section, or test that mitigates it. **Diagrams 1 to 3
+   done; 4 next.**
 3. LINDDUN over the same diagrams, for personal data.
 4. A risk register, with each open threat becoming an issue for the hardening pass
    (`docs/build-plan.md` 5.3).
