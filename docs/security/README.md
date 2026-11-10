@@ -2,8 +2,8 @@
 
 Status: the data flow diagrams and the personal data inventory are drafted, and the
 STRIDE and LINDDUN passes are done for every diagram: 115 threats, 67 mitigated and 48
-open (STRIDE 92, of which 32 open; LINDDUN 23, of which 16 open). The risk register is
-still to come.
+open (STRIDE 92, of which 32 open; LINDDUN 23, of which 16 open). The open threats are
+grouped into work items in [`risk-register.md`](risk-register.md).
 
 `threat-model.json` is an [OWASP Threat Dragon](https://owasp.org/www-project-threat-dragon/)
 model (format 2.x). Threat Dragon reads and writes this file directly, so it is the model
@@ -48,7 +48,8 @@ done.
    mitigated cites the ADR, spec section, or test that mitigates it. **Done.**
 3. LINDDUN over the same diagrams, for personal data. **Done.**
 4. A risk register, with each open threat becoming an issue for the hardening pass
-   (`docs/build-plan.md` 5.3).
+   (`docs/build-plan.md` 5.3). **Done:** [`risk-register.md`](risk-register.md); the
+   issues are not yet opened.
 
 ## How threats are scored
 
