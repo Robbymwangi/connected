@@ -6774,8 +6774,8 @@
                 "text": "GitHub Actions\n(deploy and infra)"
               },
               "body": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "strokeDasharray": null
               }
             },
@@ -6790,9 +6790,88 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "providesAuthentication": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "7ee5df8d-7208-55ef-b232-3d91029978e3",
+                  "title": "A leaked cloud key gives control of the AWS account",
+                  "status": "Mitigated",
+                  "severity": "Critical",
+                  "type": "Spoofing",
+                  "description": "A long-lived AWS access key stored as a repository secret leaks through a log, a fork, or a laptop, and works from anywhere until someone notices.\n\nCVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+                  "mitigation": "No AWS key exists to leak: workflows sign in through GitHub's OIDC, AWS checks the token's audience and subject, and the credentials last for the run only (infra/bootstrap/main.tf; ADR 0015, decision 5). GitHub holds role names, not keys.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 78,
+                  "score": "10.0"
+                },
+                {
+                  "id": "93fa3c93-8d57-560e-bf85-3809a2ec6205",
+                  "title": "The application deploy runs as an account administrator",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Elevation of privilege",
+                  "description": "The deploy workflow needs to copy a file to one bucket, send one command to one host, sync one bucket, and invalidate one distribution. It assumes the apply role, which has AdministratorAccess because Terraform creates roles. Anything that subverts a deploy run therefore holds the whole account: every school's data, the database, and the ability to delete production.\n\nCVSS:3.1/AV:N/AC:H/PR:H/UI:N/S:C/C:H/I:H/A:H",
+                  "mitigation": "Partly mitigated: only a run on main can assume the role (OIDC subject ref:refs/heads/main), and main accepts only reviewed merges (CONTRIBUTING.md, the branch ruleset). Not mitigated: the deploy is not separated from Terraform's apply. Proposed for 5.3: a third, narrow deploy role holding only the actions listed above, for deploy.yml.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 79,
+                  "score": "8.0"
+                },
+                {
+                  "id": "7583a0d1-4c9b-5e9e-8df0-0173286f9d2b",
+                  "title": "A third-party action is replaced upstream",
+                  "status": "Open",
+                  "severity": "Critical",
+                  "type": "Tampering",
+                  "description": "The workflows use actions by version tag (aws-actions/configure-aws-credentials@v4, shivammathur/setup-php@v2, hashicorp/setup-terraform@v3, and others). A tag can be moved, so a compromised action maintainer can run their own code inside a deploy, with the administrator role's credentials in the same job.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:C/C:H/I:H/A:H",
+                  "mitigation": "Not mitigated: no action is pinned to a commit SHA. Proposed for 5.3: pin each action to a full commit SHA, with the tag in a comment, and let Dependabot propose updates.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 80,
+                  "score": "9.0"
+                },
+                {
+                  "id": "c5531f96-67d1-577d-bb41-8528e4befbe2",
+                  "title": "A compromised dependency ships in a release",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Tampering",
+                  "description": "A package in composer.json or package.json, or one of their dependencies, publishes a malicious version, which is then built into the API or the PWA and runs with the school's data.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:H/I:H/A:N",
+                  "mitigation": "Partly mitigated: releases install exactly the locked versions (composer install from composer.lock, npm ci from package-lock.json), so nothing changes without a lockfile change in a reviewed merge request. Not mitigated: no dependency audit runs in check.yml and no Dependabot configuration exists, so a known vulnerable version is not flagged. Proposed for 5.3: composer audit and npm audit in check, and Dependabot for security updates.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 81,
+                  "score": "8.0"
+                },
+                {
+                  "id": "5966d8e1-882e-5d2a-b87e-f61c38015fe6",
+                  "title": "Any pull request can read production secrets and report cards",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "The plan role may be assumed by any workflow of this repository running for a pull request (OIDC subject pull_request), and it holds AWS ReadOnlyAccess, which includes reading every S3 object. A pull request runs the workflow files of its own branch, so a collaborator can add a step to a workflow and, before any review, read the Terraform state (which holds the Laravel key and the origin secret) and every report card PDF.\n\nCVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:C/C:H/I:N/A:N",
+                  "mitigation": "Not mitigated. What limits it: forks do not receive an OIDC token, so only someone with push access to the repository can do this, and the state and reports buckets are otherwise private (ADR 0015, decisions 3 and 5). Proposed for 5.3: replace ReadOnlyAccess with a policy that can plan but denies s3:GetObject on the reports bucket and limits the state bucket to the state object; or restrict the plan role to workflow runs of infra.yml through the job_workflow_ref claim. To verify against AWS's current ReadOnlyAccess before relying on it.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 82,
+                  "score": "6.8"
+                },
+                {
+                  "id": "5660a6c7-8d47-5c77-808c-5e6684e93ac8",
+                  "title": "Nobody can tell which code was running when",
+                  "status": "Mitigated",
+                  "severity": "Low",
+                  "type": "Repudiation",
+                  "description": "After an incident, the team needs to know which commit was live on the host at a given moment, and who caused it to deploy.\n\nCVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:N/I:L/A:N",
+                  "mitigation": "Each deploy is a GitHub Actions run tied to a reviewed merge, the release directory on the host is named by commit, run, and attempt, and the Systems Manager command carries the commit in its comment (deploy.yml). AWS keeps 90 days of management events by default. Residual: no CloudTrail trail is declared in infra/, so nothing is kept beyond those 90 days.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 83,
+                  "score": "2.7"
+                }
+              ]
             }
           },
           {
@@ -6834,7 +6913,21 @@
               "isSigned": false,
               "storesCredentials": false,
               "storesInventory": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "04be30eb-011f-516a-a73d-6b9746363c65",
+                  "title": "The PWA in its bucket is replaced",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Tampering",
+                  "description": "Whatever is in the frontend bucket becomes the code every teacher's device runs, with their token and the whole school's records.\n\nCVSS:3.1/AV:N/AC:H/PR:H/UI:N/S:C/C:H/I:H/A:N",
+                  "mitigation": "The bucket is private with public access blocked; only CloudFront may read it, through origin access control, and only the apply role may write it, from a run on main (infra/production/storage.tf). Residual: the apply role's breadth, recorded above.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 90,
+                  "score": "7.7"
+                }
+              ]
             }
           },
           {
@@ -6927,12 +7020,14 @@
                 "text": "Application release\n(code on the host)"
               },
               "topLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               },
               "bottomLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               }
             },
             "visible": true,
@@ -6946,13 +7041,66 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isALog": false,
               "isEncrypted": false,
               "isSigned": false,
               "storesCredentials": false,
               "storesInventory": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "93a7565f-6220-5eec-9042-b9d3cdcef4c5",
+                  "title": "The release archive is swapped in the bucket before the host unpacks it",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Tampering",
+                  "description": "The deploy uploads release.tar.gz to the reports bucket, under _releases/, then asks the host to download and unpack it and run deploy/release.sh as root. The application's own role may write any object in that bucket. Code that has already compromised the application (running as www-data) could replace the archive in that window and have its own script run as root.\n\nCVSS:3.1/AV:N/AC:H/PR:H/UI:N/S:C/C:H/I:H/A:H",
+                  "mitigation": "Not mitigated: the archive is not checked after download, and it shares a bucket the application can write. The window is short and needs an existing compromise of the application. Proposed for 5.3: have the workflow pass the archive's SHA-256 in the command and verify it on the host before unpacking; or stage releases in a bucket or prefix the application role cannot write.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 84,
+                  "score": "8.0"
+                },
+                {
+                  "id": "ad1ea50b-1ccf-5f0d-af5e-3bbc83f3ab8b",
+                  "title": "A broken release takes the API down",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Denial of service",
+                  "description": "A release whose install, migration, or cache step fails, or that does not answer once live, leaves teachers unable to sync.\n\nCVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:N/I:N/A:H",
+                  "mitigation": "Everything that can fail runs while the previous release is still serving; the switch is one atomic rename; and if a service will not reload or /up does not answer, release.sh switches back. Migrations are additive only, so the previous release works against the new schema, and the five newest releases are kept for a manual rollback (deploy/release.sh; ADR 0015, decision 4).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 85,
+                  "score": "4.9"
+                },
+                {
+                  "id": "1667decc-b97a-5951-822a-9bd4bfec99c5",
+                  "title": "An older commit deploys over a newer one",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "Two merges close together trigger two deploys that finish out of order, and production ends up running the older code against the newer schema.\n\nCVSS:3.1/AV:N/AC:H/PR:H/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "Deploys share one concurrency group, and a first attempt goes ahead only if its commit is still the tip of main; a run by hand must be on main with check passed on that commit (deploy.yml, the gate job).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 86,
+                  "score": "4.4"
+                },
+                {
+                  "id": "a315c225-5d26-5498-83ea-4754dca4abdb",
+                  "title": "A release goes live on a vulnerable runtime",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Elevation of privilege",
+                  "description": "The host's PHP has a known remote code execution flaw, and a deploy makes the application live on it.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                  "mitigation": "release.sh refuses to deploy on PHP older than a stated minimum carrying the known fixes, and security updates install unattended (deploy/release.sh, step 0; deploy/apt-auto-upgrades.conf).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 87,
+                  "score": "8.1"
+                }
+              ]
             }
           },
           {
@@ -6994,7 +7142,34 @@
               "isSigned": false,
               "storesCredentials": true,
               "storesInventory": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "339cbf90-29a7-5924-9de2-6266fe7094a6",
+                  "title": "The application's secrets are read on the host",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "The .env holds the database password, the Laravel key, and the model provider key, and is read by every PHP process.\n\nCVSS:3.1/AV:L/AC:L/PR:H/UI:N/S:U/C:H/I:N/A:N",
+                  "mitigation": "Written fresh on each deploy from Parameter Store (secrets as SecureString) and Secrets Manager, owned by root, readable by the web server's group only (mode 640), and never in the repository or in GitHub (deploy/release.sh, step 1; ADR 0015, decision 5). Residual: anything running as www-data can read it, which no file permission can prevent while the application needs it.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 88,
+                  "score": "4.4"
+                },
+                {
+                  "id": "056817bb-7525-5235-a492-5ee3ca8fd3bc",
+                  "title": "A setting is changed to weaken production",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "APP_DEBUG is turned on, which prints secrets in error pages, or the session cookie loses its secure flag.\n\nCVSS:3.1/AV:N/AC:H/PR:H/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "release.sh writes the security-relevant settings itself (APP_ENV production, APP_DEBUG false, SESSION_SECURE_COOKIE true, DB_SSLMODE require) ahead of the parameters, and the parameters are declared in Terraform, so a change to them is a reviewed merge request (infra/production/parameters.tf).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 89,
+                  "score": "4.4"
+                }
+              ]
             }
           },
           {
@@ -7217,7 +7392,21 @@
               "isEncrypted": true,
               "isPublicNetwork": true,
               "protocol": "HTTPS",
-              "threats": []
+              "threats": [
+                {
+                  "id": "57498357-fb07-58e0-8a42-c82c5dcd2bb7",
+                  "title": "A bad frontend release is stuck on devices",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Denial of service",
+                  "description": "The service worker caches the app, so a broken build could keep running on devices that rarely go online, with no way to push a fix.\n\nCVSS:3.1/AV:N/AC:H/PR:H/UI:N/S:U/C:N/I:N/A:H",
+                  "mitigation": "Hashed assets are cached for a year, but index.html, the service worker, and the manifest are served no-cache, and CloudFront is invalidated on each deploy, so a fix reaches a device on its next visit online. Old assets are kept for devices still on the previous version (deploy.yml, upload the PWA).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 91,
+                  "score": "4.4"
+                }
+              ]
             },
             "id": "9527e02d-29ee-53af-8b6e-c925cb191682",
             "source": {
@@ -7294,7 +7483,21 @@
               "isEncrypted": true,
               "isPublicNetwork": true,
               "protocol": "AWS SSM",
-              "threats": []
+              "threats": [
+                {
+                  "id": "d289de13-807e-5e7c-934e-8839ad60e26d",
+                  "title": "The deploy command is intercepted on its way to the host",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "The instruction to unpack and run a release travels from GitHub to the host.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "It is an AWS API call over HTTPS, signed with the run's short-lived credentials, delivered to the host's Systems Manager agent; nothing is exposed for SSH (deploy.yml; infra/production/network.tf).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 92,
+                  "score": "5.9"
+                }
+              ]
             },
             "id": "bceecc5a-554e-5c11-a7b9-755275139594",
             "source": {
@@ -7387,6 +7590,6 @@
     ],
     "diagramTop": 5,
     "reviewer": "",
-    "threatTop": 77
+    "threatTop": 92
   }
 }
