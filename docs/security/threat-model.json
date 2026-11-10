@@ -867,8 +867,8 @@
                 "text": "Teacher\n(incl. HOD, DOS)"
               },
               "body": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "strokeDasharray": null
               }
             },
@@ -883,9 +883,49 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "providesAuthentication": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "7535432b-a102-5a3c-b636-545e8d20f601",
+                  "title": "Password guessing against a teacher account",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Spoofing",
+                  "description": "An attacker tries passwords for a known teacher email at POST /api/login until one works, then holds a token that reads the whole institution and can grade anything.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+                  "mitigation": "Two login rate limits apply together: five a minute per email and address, and twenty a minute per address (AppServiceProvider, RateLimiter 'login'). A wrong password and a deactivated account get the same answer, so the response does not confirm an account exists (LoginController; AuthenticationTest). Residual: teachers have no second factor and there is no lockout beyond the rate limit.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 1,
+                  "score": "7.4"
+                },
+                {
+                  "id": "2b6984e6-ffd2-5924-8ed4-959520023324",
+                  "title": "Someone else uses a signed-in device as the teacher",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Spoofing",
+                  "description": "A colleague, a student, or a thief picks up an unlocked or shared phone on which a teacher is signed in. The stored token speaks for the teacher with no further check, so that person can read every record and enter or change marks under the teacher's name.\n\nCVSS:3.1/AV:P/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+                  "mitigation": "Not mitigated in the app. Device tokens have no expiry (config/sanctum.php, expiration null) and the app has no idle lock or re-authentication. What exists: an admin can revoke a teacher's devices in the panel, and EnsureAccountIsActive stops a deactivated account's token. Proposed for 5.3: a token lifetime with renewal on sync, and a password prompt before finalize and conflict resolution.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 2,
+                  "score": "6.1"
+                },
+                {
+                  "id": "4dcf67da-f099-53e3-bb85-b5e002aee853",
+                  "title": "A teacher denies entering or changing a mark",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Repudiation",
+                  "description": "After a disputed result, a teacher claims they never made an edit, or that it was made at another time.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:L/A:N",
+                  "mitigation": "The author of a write is the token's user, never a payload field: last_edited_by is server-owned and a payload carrying it is invalid (SyncPush, SERVER_OWNED). Every decided push is recorded in sync_mutations with user, verdict, payload hash, and the server's received_at, and that table refuses updates and deletes (SyncMutation, booted). Residual: the record names an account, not a person, so it is only as strong as the device threat above.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 3,
+                  "score": "4.3"
+                }
+              ]
             }
           },
           {
@@ -902,12 +942,14 @@
                 "text": "App shell cache\n(Workbox precache)"
               },
               "topLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               },
               "bottomLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               }
             },
             "visible": true,
@@ -921,13 +963,27 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isALog": false,
               "isEncrypted": false,
               "isSigned": false,
               "storesCredentials": false,
               "storesInventory": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "39bf85a7-e8b8-5c17-8a6b-4a3729a465bd",
+                  "title": "Cached app code is replaced on the device",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "Someone with control of the browser profile replaces the precached JavaScript, so the app the teacher opens offline is not the one that was deployed.\n\nCVSS:3.1/AV:L/AC:H/PR:H/UI:N/S:U/C:H/I:H/A:N",
+                  "mitigation": "Not mitigated, and not something the app can prevent: whoever controls the browser controls the code it runs. The server's checks hold regardless, since it trusts nothing the client sends. Recommended treatment: accept, and record it as a stated assumption that the device's browser is not compromised.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 8,
+                  "score": "5.7"
+                }
+              ]
             }
           },
           {
@@ -944,8 +1000,8 @@
                 "text": "PWA\n(React app and\nservice worker)"
               },
               "body": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "strokeDasharray": null
               }
             },
@@ -960,12 +1016,39 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "handlesCardPayment": false,
               "handlesGoodsOrServices": false,
               "isWebApplication": true,
               "privilegeLevel": "",
-              "threats": []
+              "threats": [
+                {
+                  "id": "ed36321e-9c19-5a43-8e70-e296977e9e3b",
+                  "title": "Injected script runs inside the app",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "A cross-site scripting flaw, a compromised dependency, or a malicious browser extension runs script in the app's origin. That script can read the bearer token and every local record from IndexedDB, and can queue mutations as the teacher.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N",
+                  "mitigation": "Partly mitigated. React escapes rendered text and the source uses no dangerouslySetInnerHTML, and there are no remote scripts, fonts, or images (AGENTS.md, Frontend rules). Not mitigated: no Content-Security-Policy is sent, neither as a meta tag in frontend/index.html nor as a CloudFront response headers policy (infra/production/cdn.tf). Proposed for 5.3: a strict CSP (self only) set at CloudFront.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 4,
+                  "score": "6.8"
+                },
+                {
+                  "id": "d56d263d-3e37-580a-8f61-a8f5d9a8d42c",
+                  "title": "A modified client performs actions the interface hides",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Elevation of privilege",
+                  "description": "A teacher edits the client, or calls the API directly, to finalize an assessment that is not theirs, resolve a conflict they are not party to, or act as HOD or Director of Studies.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "Every permission is decided on the server; the interface only hides what would be refused. Assessment lifecycle: AssessmentPolicy (creator or assigned teacher). Conflicts: ConflictPolicy, with the actor taken from the token. In a push, authorization runs before the version rules (SyncPush::decide), so an unauthorized entry is answered forbidden. Tests: AssessmentPolicyTest, SyncPushConflictCommandsTest, SyncPushFinalizeTest.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 5,
+                  "score": "6.5"
+                }
+              ]
             }
           },
           {
@@ -982,12 +1065,14 @@
                 "text": "Session\n(Dexie: sessions)"
               },
               "topLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               },
               "bottomLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               }
             },
             "visible": true,
@@ -1001,13 +1086,40 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isALog": false,
               "isEncrypted": false,
               "isSigned": false,
               "storesCredentials": true,
               "storesInventory": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "c6fa498c-18fe-5050-a747-a0e2a4809920",
+                  "title": "The bearer token is read from the device",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Information disclosure",
+                  "description": "Malware, another user of the same computer account, a copied browser profile, or injected script reads the token from the sessions store. It is stored as plain text and works from any machine until revoked.\n\nCVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+                  "mitigation": "Not mitigated on the device: a browser offers a web app no protected key store, and the token must be readable offline. Limits on the damage: revocation at logout and by an admin, and EnsureAccountIsActive on every request. The missing control is expiry: a stolen token never ages out (config/sanctum.php). Proposed for 5.3: a token lifetime.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 6,
+                  "score": "7.1"
+                },
+                {
+                  "id": "ce29064d-5a0b-569f-94e4-19c72c9be910",
+                  "title": "The stored session is edited to claim another user or role",
+                  "status": "Mitigated",
+                  "severity": "Low",
+                  "type": "Tampering",
+                  "description": "A user edits the session record in IndexedDB to change the user id or the roles it lists.\n\nCVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:N/I:L/A:N",
+                  "mitigation": "The server never reads identity or roles from the device: the institution and the actor come from the token (docs/spec/sync-protocol.md, Authorization and scoping). An edited session changes only what the local interface shows.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 7,
+                  "score": "3.3"
+                }
+              ]
             }
           },
           {
@@ -1024,12 +1136,14 @@
                 "text": "Outbox\n(Dexie: outbox)"
               },
               "topLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               },
               "bottomLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               }
             },
             "visible": true,
@@ -1043,13 +1157,66 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isALog": false,
               "isEncrypted": false,
               "isSigned": false,
               "storesCredentials": false,
               "storesInventory": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "7b482f36-7005-5b5b-bd0e-e4842a8ec94f",
+                  "title": "A forged base version is used to overwrite a newer edit",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "A teacher edits an outbox entry's baseVersion so that their value replaces a colleague's later one without a conflict being raised.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "A base ahead of the server is invalid; a base behind it goes to rule 4, which merges only disjoint fields and otherwise raises a conflict; only a base equal to the current version applies (SyncPush::decide, StaleBase; SyncPushConflictsTest). Stating the current version does let any teacher overwrite a mark, which is the access model's choice (marks are unrestricted), not a bypass: the write is versioned, logged, and attributed to that teacher.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 13,
+                  "score": "6.5"
+                },
+                {
+                  "id": "242c97c4-0a5e-5d0d-84ad-1bd162654d54",
+                  "title": "A queued entry carries fields the server owns",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "An entry is edited to include version, institutionId, lastEditedBy, createdBy, or receivedAt, to move a row to another school or attribute an edit to someone else.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "Rejected outright as invalid, not silently stripped, and so is any unknown field name (SyncPush::envelope; SyncPushTest, 'a server-owned field is invalid'). institution_id is also immutable at the model (BelongsToInstitution, updating hook).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 14,
+                  "score": "6.5"
+                },
+                {
+                  "id": "6180e11d-dc9d-552b-8e76-04e7e737a0cf",
+                  "title": "The device clock is set wrong to backdate an edit",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Repudiation",
+                  "description": "A teacher changes the device's clock so an edit appears to predate a deadline or another teacher's edit.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:L/A:N",
+                  "mitigation": "Order is never decided by time. Conflicts are detected by a stale base version (ADR 0001), and the device's time travels only as the informational `at`; the server's own received_at is what the log trusts (docs/spec/sync-protocol.md, Audit timestamps).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 15,
+                  "score": "4.3"
+                },
+                {
+                  "id": "ff2a2672-e62e-51fe-bdd3-2f8b6577749e",
+                  "title": "Unsynced work is tied to one browser profile",
+                  "status": "Open",
+                  "severity": "Low",
+                  "type": "Denial of service",
+                  "description": "A teacher's queued marks exist only in that browser until a sync succeeds. Clearing site data, or reinstalling the browser, discards them with no warning from the app.\n\nCVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:L",
+                  "mitigation": "Partly mitigated: the Sync screen shows pending entries, and failed entries keep their values. Nothing warns before data is cleared, which the app cannot intercept. Recommended treatment: accept, with user guidance to sync before handing a device on.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 16,
+                  "score": "3.3"
+                }
+              ]
             }
           },
           {
@@ -1066,12 +1233,14 @@
                 "text": "Local records\n(Dexie tables)"
               },
               "topLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               },
               "bottomLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               }
             },
             "visible": true,
@@ -1085,13 +1254,66 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isALog": false,
               "isEncrypted": false,
               "isSigned": false,
               "storesCredentials": false,
               "storesInventory": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "950388dc-266c-5c72-8a6e-c20ebd407bf9",
+                  "title": "A lost or stolen device exposes the whole school's records",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "Each device holds every student's name, gender, date of birth, marks, and remarks for the institution, not only the teacher's own classes, because read access is institution-wide. Whoever takes the device and gets past its lock screen has all of it.\n\nCVSS:3.1/AV:P/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+                  "mitigation": "Not mitigated in the app: the local store is not encrypted beyond what the device provides, and there is no remote wipe. An admin can revoke the device's token, which stops further pulls but does not remove what is already there. Proposed: guidance that devices use a screen lock, and a decision in the LINDDUN pass on whether a device needs the whole institution.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 9,
+                  "score": "4.6"
+                },
+                {
+                  "id": "f5ad5381-e4c0-5da5-b7b7-1810567d7585",
+                  "title": "Records stay on the device after sign-out",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "A teacher signs out of a shared computer. Sign-out clears the session only (performSignOut, authSession.ts); the teacher's local database remains (localDatabaseFor keeps one per user). The next person at that browser can open it in the developer tools.\n\nCVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+                  "mitigation": "Not mitigated. Keeping the database is deliberate where the outbox still holds unsynced work, but nothing removes it once the outbox is empty. Proposed for 5.3: delete the user's local database at sign-out when the outbox has nothing pending, and warn before signing out with unsynced entries.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 10,
+                  "score": "6.2"
+                },
+                {
+                  "id": "850fda82-efc5-5270-8420-0dece7096d10",
+                  "title": "Local records are edited to show false marks",
+                  "status": "Mitigated",
+                  "severity": "Low",
+                  "type": "Tampering",
+                  "description": "A user edits marks or an assessment's status directly in IndexedDB, bypassing the outbox.\n\nCVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:N/I:L/A:N",
+                  "mitigation": "The local copy is never authoritative. Only outbox entries are pushed, and each is decided by the server against its own row. An edit that bypasses the outbox changes what that one device displays and nothing else; the next pull of that record replaces it.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 11,
+                  "score": "3.3"
+                },
+                {
+                  "id": "62dc5970-ff6d-5d18-af15-ef8d6c47b7f0",
+                  "title": "The browser evicts the local store and unsynced marks are lost",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Denial of service",
+                  "description": "On a device short of storage, the browser may evict the origin's IndexedDB. Marks entered offline and not yet pushed exist nowhere else.\n\nCVSS:3.1/AV:L/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+                  "mitigation": "Not mitigated: the app does not request persistent storage (no navigator.storage.persist call in frontend/src). Proposed for 5.3: request persistence at sign-in and show the answer on the Sync screen.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 12,
+                  "score": "5.1"
+                }
+              ]
             }
           },
           {
@@ -1222,8 +1444,8 @@
                 "text": "Sync API\n(GET and POST\n/sync)"
               },
               "body": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "strokeDasharray": null
               }
             },
@@ -1238,12 +1460,143 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "handlesCardPayment": false,
               "handlesGoodsOrServices": false,
               "isWebApplication": true,
               "privilegeLevel": "",
-              "threats": []
+              "threats": [
+                {
+                  "id": "d137eb4d-7b4a-562f-9ce0-18647d91db50",
+                  "title": "A deactivated or revoked account keeps syncing",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Spoofing",
+                  "description": "A teacher who has left the school, or whose device was reported lost, still holds a token issued earlier.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+                  "mitigation": "EnsureAccountIsActive runs on every authenticated route and refuses a deactivated account, so the token stops at once and not only at the next login; an admin can revoke a teacher's devices. Both sync verbs also require the token's sync ability (routes/api.php; SyncPullTest, SyncPushTest).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 17,
+                  "score": "8.1"
+                },
+                {
+                  "id": "af54ad0a-b027-5ca7-95a9-f06afee52c69",
+                  "title": "A teacher reads or writes another school's records",
+                  "status": "Mitigated",
+                  "severity": "Critical",
+                  "type": "Elevation of privilege",
+                  "description": "A teacher of school A sends record ids, or an institutionId, belonging to school B in a push, or pulls with a tampered cursor, to cross the tenant boundary in the shared database.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:N",
+                  "mitigation": "The institution comes only from the token (ResolveInstitution), and every model carries a global scope that returns nothing when no institution is resolved inside a request (CurrentInstitution, fail closed). SyncPush refuses to run unless the request is resolved to the user's institution. Another school's id behaves as unknown: forbidden. The pull cursor is unsigned on purpose, since it can only misdirect the caller's own sync (SyncCursor). Tests: InstitutionScopeTest, SyncPullTest ('another institution never appears'), SyncPushTest ('a create whose id exists in another institution is forbidden').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 18,
+                  "score": "9.6"
+                },
+                {
+                  "id": "d4cb4704-ab40-5525-8701-29ab0dfa4492",
+                  "title": "A create reveals that an id exists in another school",
+                  "status": "Open",
+                  "severity": "Low",
+                  "type": "Information disclosure",
+                  "description": "Primary keys are global, so a create at base version 0 is refused as forbidden only when the id already exists in another institution. A caller could use that difference to test whether an id exists elsewhere.\n\nCVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:C/C:L/I:N/A:N",
+                  "mitigation": "Accepted in the specification, and recorded here so the acceptance is visible: ids are unguessable UUIDs, and the answer reveals existence only, never content (docs/spec/sync-protocol.md, Authorization and scoping). Recommended treatment: accept.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 19,
+                  "score": "3.5"
+                },
+                {
+                  "id": "786f63a7-d30c-563a-9327-67e9a808f0f2",
+                  "title": "A mark is written into a finalized assessment",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "A device that was offline when an assessment was finalized, or a teacher acting deliberately, pushes a mark edit that would change results already final.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "The handler locks the assessment row first and rejects the entry as edit-blocked before the mark's own version is considered, and the teacher gets an edit-blocked notification (MarkPushHandler::check; docs/spec/workflow.md; SyncPushFinalizeTest). Unlocking is a separate online action for an HOD or Director of Studies.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 20,
+                  "score": "6.5"
+                },
+                {
+                  "id": "201ab4dc-da01-507a-a212-2418a7dd7dde",
+                  "title": "A mark is pushed with references that do not belong together",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "An entry names a student who is not in the class, a criterion from another subject, a score above the criterion's maximum, or an id that is not the cell's own.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "Checked on creation: the record id must be the deterministic UUIDv5 of the cell, the assessment, student, and criterion must resolve inside the institution, the student must be enrolled in the assessment's class and year, and the criterion must belong to its subject; the cell is validated against the criterion's maximum (MarkPushHandler::creation; SyncPushMarksTest).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 21,
+                  "score": "6.5"
+                },
+                {
+                  "id": "6244b00f-47cb-51c9-a41f-533cae811103",
+                  "title": "A mutation is replayed or its id reused",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "A dropped response makes a device resend, or someone resends a captured request, or reuses a known mutation id with different content.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:L/A:N",
+                  "mitigation": "Each mutation id is decided once and recorded (sync_mutations). A resend with the same payload hash gets the stored outcome and writes nothing; the same id with a different payload is invalid; an id first used by another user or school is invalid and reveals nothing of what was stored (SyncPush::replayOf; SyncPushTest, 'a resend of an accepted entry is replayed').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 22,
+                  "score": "4.3"
+                },
+                {
+                  "id": "d1903131-6dad-54e5-b015-0d074bb9a276",
+                  "title": "A push claims to act as another user",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Elevation of privilege",
+                  "description": "An entry sets finalizedBy, a proposal's byId, or an acceptance's acceptedById to a colleague's id, to finalize or settle a conflict in their name.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "A field naming who performed this mutation must equal the token's user, or the entry is invalid; a field referring to earlier history must match what the server already holds (docs/spec/sync-protocol.md, the two-part rule; ConflictPushHandler; SyncPushConflictCommandsTest).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 23,
+                  "score": "6.5"
+                },
+                {
+                  "id": "b034480b-33e4-52c5-a7d0-8fd10ef0aef5",
+                  "title": "A pull returns credentials or another user's notifications",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "The change log is institution-wide, so a careless serialisation could send password hashes, authenticator secrets, or another teacher's personal notifications to every device.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+                  "mitigation": "Hidden attributes never enter the sync log, so no device receives them (User model; SyncPullTest, 'never a hidden attribute'). Notifications are filtered to the caller on pull and on push (SyncPull::fromLog; NotificationPushHandler; SyncPullTest, 'notifications are pulled only by the user they belong to').",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 24,
+                  "score": "6.5"
+                },
+                {
+                  "id": "9085cf18-96dd-5c61-aea4-b594686ae705",
+                  "title": "One account floods the sync endpoints",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Denial of service",
+                  "description": "Any teacher token can call GET and POST /api/sync without limit. Each push entry takes the institution's advisory lock, so a steady stream of 100-entry batches delays every other teacher's push in that school; each rejected entry also writes a sync_mutations row, so the log grows without bound; and a full bootstrap pull can be requested repeatedly.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:H",
+                  "mitigation": "Not mitigated. No rate limit applies to these routes: the API group has no throttle (bootstrap/app.php does not enable it), and only the login and assistant limiters are defined (AppServiceProvider). What bounds a single request: 100 entries per batch (SyncPushController), a 10 MB body (deploy/nginx.conf), and a pull limit of 1000. Proposed for 5.3: a per-user limiter on both sync verbs, generous enough for a device draining a long offline outbox.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 25,
+                  "score": "6.5"
+                },
+                {
+                  "id": "7ce087ed-779e-5242-8e40-521d60edfcef",
+                  "title": "Reads leave no record",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Repudiation",
+                  "description": "A token, stolen or not, pulls the whole institution's records. Afterwards nothing in the application shows which account pulled, when, or how much.\n\nCVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N",
+                  "mitigation": "Not mitigated in the application: pushes are recorded in sync_mutations but pulls are not recorded anywhere, and the token row holds only a last-used time. Proposed: decide in the LINDDUN pass whether a pull record is wanted, since it is itself personal data about teachers.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 26,
+                  "score": "4.3"
+                }
+              ]
             }
           },
           {
@@ -1327,7 +1680,34 @@
               "isSigned": false,
               "storesCredentials": false,
               "storesInventory": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "e86eab8c-d719-5863-a391-130fc84bd4fc",
+                  "title": "Two concurrent writes silently overwrite each other",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "Two devices push to the same record at the same moment, and the later write replaces the earlier with no conflict raised: the lost update the project exists to prevent.\n\nCVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "Three layers. Each entry runs in its own transaction behind the institution's advisory lock (SyncLog::transaction). The record is locked before it is read (lockRecord). And the UPDATE itself requires the row's version to equal the one read, so a write against a moved row changes nothing (Syncable; ADR 0001). The multi-device simulation exercises this (simulation/, ADR 0006).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 27,
+                  "score": "5.3"
+                },
+                {
+                  "id": "181099e7-056b-560f-8b46-f457305cd423",
+                  "title": "The database is read directly or from a backup",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "Someone reaches PostgreSQL without going through the application, or obtains a snapshot.\n\nCVSS:3.1/AV:N/AC:H/PR:H/UI:N/S:U/C:H/I:N/A:N",
+                  "mitigation": "The instance is not publicly accessible and is encrypted at rest, with access by security group from the host only (infra/production/database.tf: publicly_accessible false, storage_encrypted true). Its password is created and rotated by RDS in Secrets Manager and never passes through the repository (ADR 0015, decision 5).",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 28,
+                  "score": "4.4"
+                }
+              ]
             }
           },
           {
@@ -1344,12 +1724,14 @@
                 "text": "Sync logs\n(sync_changes,\nsync_mutations)"
               },
               "topLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               },
               "bottomLine": {
-                "strokeWidth": 1.5,
-                "strokeDasharray": null
+                "strokeWidth": 2.5,
+                "strokeDasharray": null,
+                "stroke": "red"
               }
             },
             "visible": true,
@@ -1363,13 +1745,40 @@
               "isTrustBoundary": false,
               "outOfScope": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isALog": true,
               "isEncrypted": false,
               "isSigned": false,
               "storesCredentials": false,
               "storesInventory": false,
-              "threats": []
+              "threats": [
+                {
+                  "id": "6793ff2c-2541-5049-a8b4-2620f8f4e199",
+                  "title": "The change log is altered to hide an edit",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "Someone with database access, or a defect in server code, updates or deletes rows of sync_changes, so a past change to a mark no longer appears in the history that conflicts and audits rely on.\n\nCVSS:3.1/AV:N/AC:H/PR:H/UI:N/S:U/C:N/I:H/A:N",
+                  "mitigation": "Partly mitigated. sync_mutations refuses updates and deletes at the model, but sync_changes has no such guard, and neither is protected in the database itself: the application's own database user can rewrite both. Proposed for 5.3: the same model guard on SyncChange, and a database rule or trigger that refuses UPDATE and DELETE on both tables.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 29,
+                  "score": "4.4"
+                },
+                {
+                  "id": "230133b2-f3a1-5ab3-b74a-2659537a8022",
+                  "title": "The logs grow without limit",
+                  "status": "Open",
+                  "severity": "Low",
+                  "type": "Denial of service",
+                  "description": "sync_changes and sync_mutations are append-only and never pruned. Over years, or under the flooding threat above, they fill a small database instance.\n\nCVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:N/A:L",
+                  "mitigation": "Not mitigated: no retention or compaction exists. The indexes keep reads fast as the tables grow (docs/spec/data-model.md), and the budget alarm would show the cost. Proposed: a stated retention for sync_mutations and a compaction rule for sync_changes, decided together with the LINDDUN pass.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 30,
+                  "score": "3.1"
+                }
+              ]
             }
           },
           {
@@ -2141,7 +2550,21 @@
               "isEncrypted": true,
               "isPublicNetwork": true,
               "protocol": "HTTPS",
-              "threats": []
+              "threats": [
+                {
+                  "id": "2129c0b3-180c-5fba-b919-b0867f98121f",
+                  "title": "A push is read or altered on the public network",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Tampering",
+                  "description": "On school or mobile networks, someone between the device and CloudFront reads the bearer token and the marks in a push, or changes them.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+                  "mitigation": "The public leg is HTTPS only: CloudFront redirects HTTP to HTTPS (infra/production/cdn.tf, viewer_protocol_policy), and a service worker only runs on a secure origin. The leg from CloudFront to the host is plain HTTP and is a separate, open threat recorded on diagram 2.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 31,
+                  "score": "7.4"
+                }
+              ]
             },
             "id": "bf48f983-5f73-5ee8-97df-e8fc7ae6155a",
             "source": {
@@ -2223,7 +2646,21 @@
               "isEncrypted": true,
               "isPublicNetwork": true,
               "protocol": "HTTPS",
-              "threats": []
+              "threats": [
+                {
+                  "id": "22ed6e65-a877-5dc6-9de4-a50a4767db74",
+                  "title": "The change log is read in transit",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "A pull response carries students' personal data and marks for the whole institution.\n\nCVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
+                  "mitigation": "HTTPS on the public leg, as for the push. The CloudFront to host leg is recorded on diagram 2.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 32,
+                  "score": "5.9"
+                }
+              ]
             },
             "id": "5d9dd10c-f2b3-542a-866d-11befbecee23",
             "source": {
@@ -2243,8 +2680,8 @@
             "shape": "flow",
             "attrs": {
               "line": {
-                "stroke": "#333333",
-                "strokeWidth": 1.5,
+                "stroke": "red",
+                "strokeWidth": 2.5,
                 "targetMarker": {
                   "name": "block"
                 },
@@ -2300,12 +2737,26 @@
               "outOfScope": false,
               "isTrustBoundary": false,
               "reasonOutOfScope": "",
-              "hasOpenThreats": false,
+              "hasOpenThreats": true,
               "isBidirectional": true,
               "isEncrypted": true,
               "isPublicNetwork": true,
               "protocol": "HTTPS",
-              "threats": []
+              "threats": [
+                {
+                  "id": "e5500f5f-1d48-5ddf-9524-f49883301372",
+                  "title": "A first visit is downgraded to HTTP",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Spoofing",
+                  "description": "On a hostile network, a teacher's first request to the site is intercepted before the redirect to HTTPS, and they are served a look-alike sign-in page that collects their password.\n\nCVSS:3.1/AV:A/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N",
+                  "mitigation": "Partly mitigated: CloudFront redirects to HTTPS, and once the service worker is installed the app shell loads from the device. Not mitigated: no Strict-Transport-Security header is sent, so a browser that has never visited has nothing telling it to refuse HTTP. Proposed for 5.3: HSTS in a CloudFront response headers policy, together with the CSP.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 33,
+                  "score": "6.4"
+                }
+              ]
             },
             "id": "b0732a0b-cef1-5c57-9082-668522a79647",
             "source": {
@@ -6340,6 +6791,6 @@
     ],
     "diagramTop": 5,
     "reviewer": "",
-    "threatTop": 0
+    "threatTop": 33
   }
 }

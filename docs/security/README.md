@@ -1,7 +1,8 @@
 # Threat model
 
-Status: first draft of the data flow diagram and the personal data inventory, for
-review. No threats are recorded yet.
+Status: the data flow diagrams and the personal data inventory are drafted, and the
+STRIDE pass is done for diagram 1 (the sync layer): 33 threats, 19 mitigated and 14
+open. Diagrams 2 to 4 and the LINDDUN pass are still to come.
 
 `threat-model.json` is an [OWASP Threat Dragon](https://owasp.org/www-project-threat-dragon/)
 model (format 2.x). Threat Dragon reads and writes this file directly, so it is the model
@@ -41,12 +42,25 @@ done.
 
 ## The plan
 
-1. Agree the data flow diagrams and this inventory. **This step.**
+1. Agree the data flow diagrams and this inventory. Done.
 2. STRIDE over the diagrams, weighted towards the sync layer. Each threat marked
-   mitigated cites the ADR, spec section, or test that mitigates it.
+   mitigated cites the ADR, spec section, or test that mitigates it. **Diagram 1 done;
+   2 to 4 next.**
 3. LINDDUN over the same diagrams, for personal data.
 4. A risk register, with each open threat becoming an issue for the hardening pass
    (`docs/build-plan.md` 5.3).
+
+## How threats are scored
+
+Each threat carries a CVSS 3.1 base score in the Score column, with its vector at the
+end of the description, and the severity is the score's standard band (Low below 4.0,
+Medium below 7.0, High below 9.0, Critical from 9.0). The score describes the threat as
+if nothing stopped it; the Status column says whether something does. A mitigated
+threat with a high score is therefore a control worth being able to explain, not a
+problem.
+
+Nothing is changed in the code by this analysis. An open threat is a finding for the
+hardening pass, where each becomes an issue.
 
 ## The diagrams
 
